@@ -4,9 +4,34 @@
 
 ## 交付状态
 
-第一版云存档代码、配置工具、操作手册和本地验证已完成；随后根据用户要求，将 Access 邮箱验证码改为游戏专用密码。用户已自行完成 ggzz.fun 接入 Cloudflare，并提供了成功截图。**本次没有代用户创建或修改 Cloudflare/GitHub 资源，没有发布到 play.ggzz.fun。** 正式上线按 [新手手册](cloud-save-user-guide.md) 操作；真实密码登录、私有仓库权限及目标手机浏览器由上线验收确认。
+第一版云存档代码、配置工具、操作手册和本地验证已完成；随后根据用户要求，将 Access 邮箱验证码改为游戏专用密码。初次密码版本交付时没有代用户创建资源或部署。**用户随后已完成 play.ggzz.fun 发布，Cloudflare 部署记录和 GAME_AUTH、GITHUB_SAVE_TOKEN 两项 Secret 名称已核实存在，未读取 Secret 值。** 用户截图显示已进入游戏，但云存档提示 GitHub 无法连接；已在真实 Worker 运行时复现并修复代码兼容问题，修复版也已成功发布，处理记录见下一节。Secret 存在与网页可用均不能替代 GitHub 权限和真实同步验收。
 
 本地测试使用独立临时浏览器资料和生成的测试存档，没有读取或替换用户真实进度。
+
+## 上线后的 GitHub 连接故障
+
+2026-09-20，用户确认在 https://play.ggzz.fun 看到“GitHub 暂时无法连接，本地进度仍保留”。核查 Cloudflare 部署和 Secret 名称后，在 Miniflare/workerd 运行时复现了两处错误：
+
+1. GithubStore 将原生 fetch 保存为对象属性，再以 this.fetcher 调用，导致 Illegal invocation；Node 下的假 fetch 没有真实运行时的接收者约束，旧测试未发现。
+2. 修正调用上下文后，redirect: error 又被该 Worker 运行时拒绝。应使用 manual 并显式拒绝 3xx，不能用 follow 向可能变化的目标继续发送 Authorization。
+
+修复范围是 Worker 的 GitHub 出站调用和相应运行时测试，保持存档协议与现有数据不变。分支查询和 ref 参数原本已进行 URL 编码，lgz/save1 等名称本身合法，不要求换成 main。更新沿用现有 wrangler.local.json、CLOUD_SLOT_ID、GAME_AUTH 和 GITHUB_SAVE_TOKEN，不重建仓库、不重设密码、不替换 token。
+
+代码已修复，原最小 workerd 复现从退出码 1 变为退出码 0。新增的真实运行时用例覆盖连接检查、空槽位、创建、含中文存档的读取，以及带斜杠分支的编码；对 301、302、303、307、308 的连接检查、读取、写入都要求拒绝，不将 token 发送至 Location 目标。重定向对应 GITHUB_REDIRECT，页面提示核对 GitHub 用户名和仓库名后重新部署。
+
+本次修复的验证与发布记录：
+
+| 检查 | 结果 |
+| --- | --- |
+| Worker strict TypeScript | 通过 |
+| Worker 自动测试 | **48/48 通过**，包含新增真实 workerd 运行时回归 |
+| Wrangler dry-run | 通过；扫描 8,604 个静态资源条目，Worker 打包约 65.16 KiB |
+| 实际部署 | 成功发布 Worker pokeclicker-cloud-save，自定义域名 play.ggzz.fun |
+| 发布版本 | 7543d032-ad6a-4c5f-ae64-4d8eb25aa4e1 |
+| 前端资产 | Wrangler 显示 No updated asset files to upload；本次未修改游戏资产 |
+| 真实 GitHub 连接与上传 | 等待用户在原游戏页检查连接；未代用户上传真实存档 |
+
+部署沿用用户已有本机 Cloudflare 授权，没有生成游戏密码，没有修改 Secret、token、CLOUD_SLOT_ID 或分支，也没有写入真实存档。真实存档首次上传、另一设备恢复和切换仍需按 [新手手册第九节](cloud-save-user-guide.md) 验收；没有成功回执前保持自动同步关闭并保留本地导出。
 
 ## 已实现的行为
 
@@ -58,7 +83,7 @@
 
 ## 密码改造后的验证
 
-本节记录本次密码改造的验证结果；下面标注“改造前”的测试和截图只说明旧版本云存档行为，不能当作新登录链的通过证据。
+本节记录首次密码改造交付时的验证结果，不包含之后发现的 Worker GitHub 出站兼容问题；下面标注“改造前”的测试和截图只说明旧版本云存档行为，不能当作新登录链的通过证据。
 
 已完成的本次自动检查：
 
@@ -71,7 +96,7 @@
 | Worker Node 测试 | **46/46 通过**，含 11 项认证测试、10 项工具测试及数据、冲突、存储等回归 |
 | Wrangler dry-run | **退出码 0**；识别 8,604 个静态资源条目、两个 Rate Limit 绑定及 ASSETS；仅检查发布包，未部署 |
 
-没有生成或设置用户真实游戏密码，没有读取用户 GitHub token，也没有部署到用户账号；测试使用独立测试凭据和存档。
+首次密码版本的本地验收没有生成或设置用户真实游戏密码，没有读取用户 GitHub token，也没有部署到用户账号；测试使用独立测试凭据和存档。用户之后的部署与故障处理单独记录于本文开头。
 
 新增客户端用例验证认证过期不导航、不刷新、检查连接前暂停自动重试；退出需确认并保存本地、网络或保存失败保留当前页、取消不改变自动同步。认证与工具用例覆盖全站门禁、缺配置、Cookie、密码会话、退出与轮换、同源校验、请求体与限流，以及向导、Secret 工具的安全输入输出。实际覆盖以测试源码为准，不以这些测试代替真实账号上线验收。
 
@@ -134,12 +159,12 @@
 
 本地截图在 output/playwright/cloud-save-desktop-final.png 和 cloud-save-mobile-final.png，属于忽略的验收产物，不提交测试存档。浏览器原项目的翻译回退存在 zh/zh-CN 404；初次空云槽位 404、模拟冲突 409 和模拟故障 503 是预期响应。这批历史浏览器验收不覆盖本次游戏密码门禁，也不等于真实 GitHub、手机 Safari 或长期挂机性能验收。
 
-## 上线前仍需用户完成
+## 已上线后的配置保留与真实验收
 
 - ggzz.fun 接入已由用户完成；确认 Cloudflare 保留根域、clw、memos 三条各自的原 DNS 记录。
-- 创建专用 GitHub 私有仓库与仅该仓库 Contents 读写的 token。
+- 现有 GitHub 仓库和分支保持不变；已确认 GITHUB_SAVE_TOKEN Secret 名称存在，真实有效期和权限以成功连接、上传验收为准。
 - 不再开通 Zero Trust。如已创建 Access 应用，仅解除 play.ggzz.fun 的旧邮箱门禁，保留其他业务规则。
-- 运行配置向导、检查和部署，再运行 cloud:password 生成游戏密码，运行 cloud:secret 录入 GitHub token。
+- 网站已发布、两项 Secret 已存在；这次代码修复只需更新 Worker，无需重跑向导或密钥生成命令。
 - 保存游戏密码到密码管理器，保留 wrangler.local.json 和 CLOUD_SLOT_ID；无需团队地址、AUD 或允许邮箱。
 - 按手册在真实两台设备完成首次上传、恢复和切换，确认后再开启自动同步。
 

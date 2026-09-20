@@ -21,7 +21,9 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "esbuild": "0.28.2",
     "fake-indexeddb": "^6.2.5",
+    "miniflare": "5.20260918.0-alpha",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "wrangler": "^4.34.0"

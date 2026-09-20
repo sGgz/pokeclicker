@@ -61,7 +61,8 @@ export class GithubStore {
     private root: string;
     private path: string;
 
-    constructor(private env: GithubConfig, private fetcher: typeof fetch = fetch) {
+    // Workerd requires the native fetch receiver; do not invoke it as a class method.
+    constructor(private env: GithubConfig, private fetcher: typeof fetch = (input, init) => fetch(input, init)) {
         this.root = 'https://api.github.com/repos/' + encodeURIComponent(env.GITHUB_OWNER) + '/' + encodeURIComponent(env.GITHUB_SAVE_REPO);
         this.path = '/contents/saves/' + env.CLOUD_SLOT_ID + '.json';
     }
@@ -71,7 +72,8 @@ export class GithubStore {
         try {
             response = await this.fetcher(this.root + path, {
                 ...init,
-                redirect: 'error',
+                // Workerd supports manual/follow only. Handle redirects without forwarding the token.
+                redirect: 'manual',
                 signal: AbortSignal.timeout(20000),
                 headers: {
                     Accept: 'application/vnd.github+json',
@@ -83,6 +85,9 @@ export class GithubStore {
             });
         } catch {
             throw new ApiError(503, 'GITHUB_UNAVAILABLE', 'GitHub 暂时无法连接，本地进度仍保留。');
+        }
+        if (response.status >= 300 && response.status < 400) {
+            throw new ApiError(503, 'GITHUB_REDIRECT', '存档仓库地址发生跳转，请核对 GitHub 用户名和仓库名后重新部署。');
         }
         if (response.status === 429 || (response.status === 403
             && (response.headers.has('retry-after') || response.headers.get('x-ratelimit-remaining') === '0'))) {

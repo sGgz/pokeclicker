@@ -1,6 +1,6 @@
 # PokéClicker 项目架构与 GitHub 私有仓库云存档设计
 
-> 状态：云存档第一版已完成本地验收；2026-09-20 按用户要求将 Access 邮箱门禁替换为游戏专用密码。尚未部署到用户账号。
+> 状态：云存档第一版已完成本地验收；2026-09-20 按用户要求将 Access 邮箱门禁替换为游戏专用密码。用户随后已将网站部署到 play.ggzz.fun，并设置两项 Secret；GitHub 连接故障的 Worker 运行时兼容修复已发布，真实同步验收进展见实现记录。
 > 认证决策变更：原 Access + OTP 决策已被本文第 5 节替代，不再需要 Zero Trust 团队、邮箱、AUD 或付款方式配置。
 > 实际交付与验证见 [实现记录](cloud-save-implementation.md)；部署和使用见 [新手操作手册](cloud-save-user-guide.md)。
 > 下文原代码分析描述的是实施前基线，当前行为以实现记录为准。
@@ -230,6 +230,10 @@ interface CloudSaveEnvelope {
 
 通过 GET /repos/{owner}/{repo}/contents/saves/{id}.json?ref={branch} 读取，PUT 同一路径写入 UTF-8 JSON 的 Base64，更新带原文件 sha、固定 branch。参数和权限见 [Contents API](https://docs.github.com/en/rest/repos/contents)。
 
+分支使用配置中的原始名称，允许 lgz/save1 这类带斜杠名称；GET 的 ref 查询参数及分支查询路径分别使用 encodeURIComponent 编码，PUT 的 JSON branch 保留原字符串。用户无需为部署改成 main，也不应预先手工 URL 编码。
+
+GitHub 适配器必须在真实 Workers 运行时验证：原生 fetch 不能以 GithubStore 对象作为 this 调用，默认请求应通过包装函数调用全局 fetch；仅在 Node 中注入假请求函数不足以发现这种兼容问题。重定向采用运行时支持的 manual，并明确拒绝 3xx；禁止自动 follow，避免将 Authorization 转发到重定向目标。仓库转移或改名造成重定向时，应更新固定仓库配置后重试，不追踪 Location。
+
 该读取接口在文件超过 1 MB 后不能继续假定 content 含完整 Base64。先取得元信息与 blob SHA，必要时按同一个不可变 SHA 调用 [Git Blobs API](https://docs.github.com/en/rest/git/blobs) 获取 raw 正文；不要从可变分支分别读取 SHA 与正文，不持久缓存有时效的 download_url。
 
 只有确认仓库、分支可访问后，才将路径缺失视为空槽位。私有仓库权限丢失也可能返回 404，应报告配置问题，不能直接创建新档。
@@ -374,7 +378,7 @@ npm test
 npx cross-env NODE_ENV=production gulp website
 ```
 
-这是拟议部署流程，尚未在本次评审中执行。现有 npm run website 会调用 tl:update，不能在宣称可复现时忽略该行为。Worker 有自己的依赖安装、测试和 Wrangler 部署步骤，不复用浏览器 bundle。
+这是初次评审时拟议的部署流程，当时未执行；后续已实现 cloud:build 与 cloud:deploy，用户也已完成发布，实际记录见实现文档。现有 npm run website 会调用 tl:update，不能在宣称可复现时忽略该行为。Worker 有自己的依赖安装、测试和 Wrangler 部署步骤，不复用浏览器 bundle。
 
 当前源码资产目录实测 8,456 个文件、77,083,690 字节，最大单文件 576,593 字节；该统计不含翻译子模块和完整构建产物。Cloudflare Workers 免费静态资源文件数上限当前为 20,000，付费为 100,000，见 [Workers Limits](https://developers.cloudflare.com/workers/platform/limits/)。据源码规模推测适合静态托管，但上线前仍要统计 docs/ 实际文件数和最大单文件大小。
 
@@ -484,7 +488,7 @@ KV 是最终一致性，跨节点更新可能 60 秒或更久才可见，直接�
 
 本次完成代码级静态分析：启动链、核心模块关系、本地存档三段格式、导入导出、多槽位入口、版本迁移、离线结算、构建脚本、CI 与资源统计。外部行为以文内 Cloudflare、GitHub 和 MDN 官方链接为依据；配额和平台配置按 2026-09-20 查询结果记录，实施时复核。
 
-没有访问用户真实存档、GitHub 私有存档仓库或 Cloudflare 账号；没有实现接口、创建远程资源或部署。因此不能把本设计视为实际运行验证，也不能给出实测存档大小、延迟和费用。
+初次设计评审时，没有访问用户真实存档、GitHub 私有存档仓库或 Cloudflare 账号，也没有实现接口、创建远程资源或部署。这是实施前的历史记录，不能把该阶段设计视为实际运行验证，也不能据此给出实测存档大小、延迟和费用。
 
 评审环境没有 node_modules，翻译子模块尚未初始化，本机 Node 为 25.2.1，与项目声明的 ^24.0.0 不一致。本次仅新增设计文档，不安装依赖或改动源代码，未运行游戏 npm test/生产构建；这些检查列入实施阶段验收。交付前检查 Markdown 结构、内部代码链接、行号范围、空白错误以及 Git 改动范围。
 
@@ -494,3 +498,5 @@ KV 是最终一致性，跨节点更新可能 60 秒或更久才可见，直接�
 已按主方案实现 Workers Static Assets + GitHub 私有仓库，随后按用户要求将原 Access 门禁替换为游戏专用密码；域名向导默认 play.ggzz.fun，只收集域名与仓库信息。自动同步默认关闭，重新绑定也会关闭；备份包由命令行工具转换为原版 .txt，首版不提供网页内历史浏览。队列保存一个不可变在途请求和一份最新进度；确认旧请求后如仍有新进度，会提示等待后再次同步。
 
 使用 Web Locks 协调同域所有本地槽位，一次只允许一个运行中的游戏页，比仅锁云槽位更保守；没有 IndexedDB 时可玩本地游戏，但不能使用依赖恢复副本的云导入操作。密码改造前的第一版曾通过 54 项原游戏测试、28 项云端/恢复/工具测试、生产构建、Worker dry-run 与浏览器验收；这些历史数字不代替本次密码改造的验收。本次结果及真实账号尚未验收的限制见 [实现记录](cloud-save-implementation.md)。
+
+用户上线后反馈 GitHub 连接失败，后续在 workerd 中复现了默认 fetch 调用上下文和 redirect: error 两处兼容问题。既有 Node 测试和本地浏览器中的替身未覆盖真实出站请求，因此将 Workers 运行时回归纳入检查范围。该修复不改变存档格式、CLOUD_SLOT_ID 或分支配置，也不要求轮换 GAME_AUTH 和 GITHUB_SAVE_TOKEN；网站发布成功与真实 GitHub 读写、两台设备恢复分别记录验收结果。
