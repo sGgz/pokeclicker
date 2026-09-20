@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pokeclicker Cloud 操作手册</title>
+    <style>
+        :root { color-scheme: light; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #f4f6fa; color: #202a3b; font: 16px/1.8 "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif; }
+        main { max-width: 940px; margin: 0 auto; padding: 32px 28px 64px; }
+        header { padding: 28px 30px; border: 1px solid #d9e2ee; border-radius: 14px; background: #fff; }
+        h1 { margin: 0 0 10px; font-size: 30px; line-height: 1.4; }
+        h2 { margin: 0 0 18px; font-size: 23px; line-height: 1.45; }
+        h3 { margin: 24px 0 8px; font-size: 18px; }
+        p { margin: 12px 0; }
+        a { color: #124b99; text-underline-offset: 3px; }
+        a:focus-visible { outline: 3px solid #ef9d28; outline-offset: 4px; }
+        nav { margin-top: 20px; padding: 20px 24px; border: 1px solid #d9e2ee; border-radius: 12px; background: #edf3fb; }
+        nav ol { columns: 2; column-gap: 32px; margin: 8px 0 0; padding-left: 24px; }
+        nav li { break-inside: avoid; margin: 5px 0; }
+        section { margin-top: 24px; padding: 26px 30px; background: #fff; border: 1px solid #d9e2ee; border-radius: 12px; }
+        ol, ul { padding-left: 26px; }
+        li { margin: 10px 0; }
+        strong { font-weight: 700; }
+        .meta { margin-top: 8px; color: #546378; font-size: 14px; }
+        .note { padding: 14px 18px; border-left: 4px solid #2865ac; border-radius: 4px; background: #eef5ff; }
+        .care { padding: 14px 18px; border-left: 4px solid #bf7514; border-radius: 4px; background: #fff5e6; }
+        .path { display: block; padding: 12px 16px; border: 1px solid #d9e2ee; border-radius: 6px; background: #f5f7fb; overflow-wrap: anywhere; font-family: Consolas, monospace; }
+        .steps { font-size: 18px; font-weight: 700; }
+        table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 15px; }
+        th, td { border: 1px solid #d9e2ee; padding: 12px 14px; text-align: left; vertical-align: top; }
+        th { background: #eef3f9; }
+        td:first-child { width: 28%; font-weight: 700; }
+        footer { padding-top: 28px; text-align: center; color: #546378; font-size: 14px; }
+        @media (max-width: 640px) {
+            main { padding: 16px 12px 40px; }
+            header, section { padding: 20px 18px; }
+            h1 { font-size: 25px; }
+            h2 { font-size: 21px; }
+            nav ol { columns: 1; }
+            th, td { padding: 9px; }
+        }
+    </style>
+</head>
+<body>
+<main id="top">
+    <header>
+        <h1>Pokeclicker Cloud 操作手册</h1>
+        <p>游戏装在电脑里，断网也能玩本地进度。联网后，用现有游戏密码与 <strong>play.ggzz.fun</strong> 网页共用云存档。</p>
+        <p class="meta">桌面程序 1.0.0 · 游戏 0.10.26 · Windows x64 · 这份帮助已随程序安装，断网也能查看。</p>
+        <p class="note"><strong>换设备前：</strong>旧设备点“同步后换设备” → 等到成功 → 关闭旧端 → 在新端检查并接续云档。<strong>关闭窗口只保存本地，不保证上传云端。</strong></p>
+    </header>
+
+    <nav aria-label="操作手册目录">
+        <strong>按你现在要做的事情阅读</strong>
+        <ol>
+            <li><a href="#prepare">第一次使用：先备份两边的进度</a></li>
+            <li><a href="#login">登录现有云存档</a></li>
+            <li><a href="#cloud">云档更新：下载到新客户端</a></li>
+            <li><a href="#official">官方客户端更新：导入旧存档</a></li>
+            <li><a href="#switch">核对一次往返，再开启自动同步</a></li>
+            <li><a href="#offline">断网游玩与重新连接</a></li>
+            <li><a href="#problems">冲突、登录过期与退出</a></li>
+            <li><a href="#update">升级、备份、重装和卸载</a></li>
+        </ol>
+    </nav>
+
+    <section id="prepare">
+        <h2>1. 第一次使用：先备份两边的进度</h2>
+        <p>这个新客户端与从官网下载的原 PokéClicker 客户端使用不同的数据目录。第一次看不到原来的训练家，是正常现象；它不会自动读取或覆盖原客户端。</p>
+        <ol>
+            <li>在桌面新建一个文件夹，取名“宝可梦存档备份”。</li>
+            <li>打开原官方客户端，在游戏里点 <strong>Start Menu → Save / Enter Code → Download Save</strong>，保留得到的 <strong>.txt</strong>。选档页也可通过卡片 <strong>⋮ → Download (backup)</strong> 导出。</li>
+            <li>把文件复制进备份文件夹，文件名前加“官方客户端”和当天日期，保留结尾的 .txt；然后关闭原客户端。</li>
+            <li>打开平时使用的 <strong>play.ggzz.fun</strong> 网页，展开“云存档”，点 <strong>导出本地备份</strong>，同样保存一份，文件名前加“网页”和日期。</li>
+            <li>核对训练家、地区、宝可梦和大致游戏时间，决定要接着玩哪一份。如果网页进度就是要用的，点 <strong>同步后换设备</strong>，等待成功，再关闭网页。</li>
+        </ol>
+        <p class="care"><strong>“在云端”不等于“比另一台电脑新”。</strong>两边都玩过时不会自动合并金币、背包和收获。不确定就先留备份，别盲点覆盖。</p>
+        <p>之后只选一条路线：云档更新走 <a href="#cloud">第 3 节</a>；官方客户端更新走 <a href="#official">第 4 节</a>。如果你已经有确认过的最新云档，官方客户端里是旧进度，直接恢复云档即可。</p>
+    </section>
+
+    <section id="login">
+        <h2>2. 登录现有云存档</h2>
+        <ol>
+            <li>让电脑联网，在游戏选档页或游戏中展开 <strong>云存档</strong> 面板。首次验证前，先不要勾选自动同步。</li>
+            <li>点 <strong>登录云存档</strong>。程序弹出独立密码窗口，原游戏窗口会保留。</li>
+            <li>输入你现在登录 <strong>play.ggzz.fun</strong> 使用的<strong>游戏专用密码</strong>，点密码窗口里的登录按钮。</li>
+            <li>登录成功后点密码窗口里的 <strong>返回游戏</strong>，主窗口会自动检查连接。也可再点 <strong>检查连接</strong>；确认连接成功，再下载或上传存档。</li>
+        </ol>
+        <p>不用填域名、仓库、分支和 GitHub token，也不用重新设置 Cloudflare。这里填的是游戏专用密码，不是 GitHub 或 Cloudflare 账号密码。</p>
+        <p>桌面版、Chrome、Edge 分别登录。网页登录过不代表桌面也登录了。每次登录最多保持 7 天，程序加密保存有期限的会话，不保存明文游戏密码。</p>
+        <p>忘记密码时，不用重装或删除数据；按项目完整手册第十四节，在有 Cloudflare 管理权限的电脑上运行原来的 <strong>cloud:password</strong> 流程重设。改密后，所有设备用新密码重新登录，本地与云端存档保留。</p>
+    </section>
+
+    <section id="cloud">
+        <h2>3. 云档更新：下载到新客户端</h2>
+        <p>适用：你已经在网页成功上传，或另一台使用本定制版的电脑刚刚同步成功；想在这台电脑接着玩。</p>
+        <ol>
+            <li>确认旧设备已点 <strong>同步后换设备</strong> 并等待成功，随后关闭旧端。</li>
+            <li>在新客户端完成登录，点 <strong>检查连接</strong>。</li>
+            <li>在选档页的云存档面板，将 <strong>选择本地存档</strong> 设为 <strong>恢复云档时新建本地槽位</strong>，再点 <strong>下载云档到本机</strong>。</li>
+            <li>点 <strong>备份并恢复</strong>，等程序重新载入，在新卡片上核对训练家、游戏时间和版本。</li>
+            <li>点击恢复出来的训练家卡片，进入游戏，核对地区、宝可梦、背包等关键进度。</li>
+        </ol>
+        <p class="note">第一次不用先创建空档，也不用先上传。下载失败就先处理连接问题，别用空档覆盖已有云档。云档已经正确恢复后，不必再导入官方客户端里的旧进度。</p>
+    </section>
+
+    <section id="official">
+        <h2>4. 官方客户端更新：导入旧存档</h2>
+        <p>适用：你最后是在官方客户端里玩的，那里有你想保留的新进度，云档反而比较旧。先完成双方备份，再走这里。</p>
+        <ol>
+            <li>确认原官方客户端已经导出 .txt 并关闭。</li>
+            <li>在新客户端选档页点 <strong>Import Save</strong>，选中刚导出的 .txt。</li>
+            <li>点击导入后的卡片进入游戏，核对训练家和进度。如果报游戏版本过新，先保留文件并更新定制版，不要强行继续。</li>
+            <li>在云存档面板的 <strong>选择本地存档</strong> 下拉框，选中这份导入档。</li>
+            <li>点 <strong>上传 / 立即同步</strong>，按提示确认 <strong>关联此存档</strong>。</li>
+            <li>如果提示冲突，再比较双方。确认当前本地就是要保留的进度，才点 <strong>使用本地进度覆盖云端</strong>。</li>
+            <li>等到明确显示 <strong>云端已确认保存</strong>，再继续做下一节的往返验证。</li>
+        </ol>
+        <p>“检查连接成功”“本地已保存”和“请求已经发出”都不等于云端保存成功。若提示稍后重试，按提示等待，不连续点击。</p>
+        <p>本程序外壳版本是 <strong>1.0.0</strong>，游戏版本是 <strong>0.10.26</strong>。存档是否兼容看游戏版本；不能把更高游戏版本的档导入旧版后强行覆盖云端。</p>
+    </section>
+
+    <section id="switch">
+        <h2>5. 核对一次往返，再开启自动同步</h2>
+        <p>第一次亲自做一次“桌面 → 网页 → 桌面”，验证实际账号和两台设备。先关闭自动同步，一次只在一端游玩。</p>
+        <ol>
+            <li><strong>桌面端：</strong>正常玩一小会儿，记住可核对的进度，然后点 <strong>同步后换设备</strong>。等成功后关闭客户端。</li>
+            <li><strong>网页端：</strong>用 Chrome 或 Edge 打开 play.ggzz.fun。第一次使用的浏览器先登录、下载恢复云档；已关联的浏览器检查最新云档再进入。</li>
+            <li>核对进度一致，再玩一小会儿；网页点 <strong>同步后换设备</strong>，等成功后关闭网页。</li>
+            <li><strong>回桌面端：</strong>打开本程序，检查云档，进入已关联的存档，确认刚才网页里的进度已经接上。</li>
+            <li>两个方向都核对成功后，按需勾选 <strong>每 10 分钟自动同步</strong>。每台设备分别设置。</li>
+        </ol>
+        <p class="steps">以后每次换设备：同步后换设备 → 等成功 → 关闭旧端 → 新端检查云档。</p>
+        <p>自动同步不能保证窗口关闭时刚好上传；它也可能受网络、休眠和游戏内关闭自动保存影响。需要立即换电脑时，仍按上面的顺序手动确认。</p>
+    </section>
+
+    <section id="offline">
+        <h2>6. 断网游玩与重新连接</h2>
+        <p>只要本机已经有存档，断网也能打开客户端。游戏、主题和翻译已经在包内，不要求浏览器先缓存网站。首次安装、没有本地档时，需要先联网下载云档，或者导入已有 .txt。</p>
+        <ol>
+            <li>断网时点已关联的存档，云档检查可能失败。确认这台电脑的本地进度就是要玩的，按提示点 <strong>继续本地游戏</strong>。</li>
+            <li>正常游玩，本地继续按原游戏规则自动保存；云端暂时没有这些新变化。</li>
+            <li>准备关闭时，可以先点 <strong>导出本地备份</strong> 留一份 .txt。正常关闭会先保存本地，但不保证上传。</li>
+            <li>网络恢复后，点 <strong>检查连接</strong>。如果登录过期，先点 <strong>登录云存档</strong>，输入当前游戏密码，再检查连接。</li>
+            <li>点 <strong>上传 / 立即同步</strong>，等云端确认。若提示确认的是较早快照、仍有新进度，按提示等待后再同步。</li>
+        </ol>
+        <p class="care">离线电脑上有新进度时，别同时在另一设备继续同一份云档。重新联网发现双方都变了，会暂停自动同步并让你选择一份，不会自动把两边收获相加。</p>
+        <p>最小化窗口可以继续本机运行；电脑休眠、关机或游戏关闭后不会继续实时战斗。下次打开按原游戏规则计算离线收益，云端只保管存档。</p>
+    </section>
+
+    <section id="problems">
+        <h2>7. 冲突、登录过期与退出</h2>
+        <table>
+            <thead><tr><th scope="col">遇到的情况</th><th scope="col">处理方法</th></tr></thead>
+            <tbody>
+                <tr><td>进度冲突</td><td>先导出本地备份，必要时下载恢复备份包。想继续另一设备的最新档，选“使用这份云端进度”；确定本机进度要保留，才选“使用本地进度覆盖云端”。</td></tr>
+                <tr><td>登录过期</td><td>点“登录云存档”，独立窗口登录成功后点“返回游戏”，再检查连接、手动同步。不用刷新、重装或清理数据。</td></tr>
+                <tr><td>云档来自更新版本</td><td>先导出本地备份，安装包含相应游戏版本的新定制客户端。不要用旧版覆盖新档。</td></tr>
+                <tr><td>连接失败、限流</td><td>保留本地档，按提示等待再试。不要连点，也不要仅因网络失败就重设密码或 token。</td></tr>
+                <tr><td>重复双击没有新窗口</td><td>本程序只允许一个实例；切回已经打开的 Pokeclicker Cloud 窗口即可。</td></tr>
+                <tr><td>本地保存失败</td><td>保留当前窗口和能导出的备份，处理磁盘或存储问题。不要删除应用数据目录来“修复”。</td></tr>
+            </tbody>
+        </table>
+        <p><strong>想退出登录：</strong>先同步成功或导出本地备份，再点“退出登录”，确认“保存本地并退出”。程序清除本机云会话、关闭自动同步，保留本地游戏；你仍可以离线玩。退出不上传云端、不删档，也不退出其他设备。</p>
+        <p>下次要同步时重新登录即可。出问题只需保留报错文字和操作步骤，不要把游戏密码、GitHub token、会话文件或完整存档公开发送。</p>
+    </section>
+
+    <section id="update">
+        <h2>8. 升级、备份、重装和卸载</h2>
+        <p>本客户端采用<strong>手动安装新版本</strong>，不会从官方仓库自动覆盖云存档功能。网页更新不等于电脑里的游戏文件也更新了。</p>
+        <ol>
+            <li>更新前先“同步后换设备”并等成功，再“导出本地备份”保留一份 .txt。</li>
+            <li>完全关闭本程序，双击新的定制安装包，按默认步骤安装；不用先卸载，更不要手工删除应用数据。</li>
+            <li>打开新版，核对进度，再检查连接；需要登录时仍用原游戏专用密码。</li>
+            <li>ZIP 版把新压缩包完整解压到新文件夹后启动。不要在压缩包里面直接运行，不要只复制一个 EXE。</li>
+        </ol>
+        <h3>本地存档放在哪里</h3>
+        <p>按 <strong>Win + R</strong>，粘贴下面一行，按回车，可查看本定制版数据目录：</p>
+        <code class="path">%APPDATA%\PokeclickerCloud</code>
+        <p>不要删除其中的 Local Storage、IndexedDB 或整个目录。安装版与 ZIP 版在同一个 Windows 账户下使用这同一个目录；ZIP 版“免安装”不代表把程序文件夹复制到别的电脑就带走了存档。</p>
+        <p>日常备份优先用“导出本地备份”的 .txt。想额外备份整个数据目录时，先关闭客户端，再复制整个文件夹。加密登录会话不能代替另一台电脑上的重新登录；跨电脑优先使用云档或 .txt。</p>
+        <h3>卸载与重装</h3>
+        <p>卸载前先留 .txt 备份和成功的云同步回执，再从 Windows“设置 → 应用 → 已安装的应用”卸载 Pokeclicker Cloud。不要同时手工删除上面的数据目录；数据保留时，重装可继续使用。</p>
+        <p>个人定制安装包没有代码签名证书，Windows 可能显示未知发布者。只使用本次交付的可信文件；系统直接阻止运行时保留提示排查，不需要关闭整机安全防护。</p>
+        <h3>还能用 Chrome 或原官方客户端吗</h3>
+        <p><strong>Chrome 可以正常访问网页版。</strong>原官方客户端也可继续使用，但它没有这里的云同步功能，需要通过普通 .txt 手动转档。两个客户端不会自动共享本地数据。以后主要用本定制客户端和自建网页，可以减少手工传文件。</p>
+    </section>
+
+    <footer>
+        <p><a href="#top">回到顶部</a></p>
+        <p>完整部署、密码重设与历史恢复步骤：项目中的 design/cloud-save-user-guide.md。</p>
+    </footer>
+</main>
+</body>
+</html>

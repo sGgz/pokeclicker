@@ -11,6 +11,8 @@ import type { RemoteSave, SavePayload } from './protocol';
 import Notifier from '../notifications/Notifier';
 import SaveSelector from '../SaveSelector';
 import Settings from '../settings';
+import { desktopBridge } from './desktop';
+import type { DesktopResult } from './desktop';
 
 export default class CloudSave {
     private static storage: CloudStorage;
@@ -43,6 +45,14 @@ export default class CloudSave {
     }
 
     private static async setup(): Promise<void> {
+        const desktop = desktopBridge();
+        document.querySelectorAll<HTMLElement>('[data-cloud-desktop]').forEach((element) => {
+            element.hidden = !desktop;
+        });
+        document.querySelectorAll<HTMLElement>('[data-cloud-web]').forEach((element) => {
+            element.hidden = !!desktop;
+        });
+        desktop?.onBeforeClose(() => this.beforeDesktopClose());
         document.querySelectorAll<HTMLButtonElement>('[data-cloud-action]').forEach((button) => {
             button.addEventListener('click', () => {
                 void this.action(button.dataset.cloudAction);
@@ -121,7 +131,11 @@ export default class CloudSave {
         }
         const logout = document.querySelector<HTMLButtonElement>('[data-cloud-action="logout"]');
         if (logout) {
-            logout.disabled = this.busy || this.serverSlot === null;
+            logout.disabled = this.busy || (!desktopBridge() && this.serverSlot === null);
+        }
+        const login = document.querySelector<HTMLButtonElement>('[data-cloud-action="login"]');
+        if (login) {
+            login.disabled = this.busy;
         }
         const conflict = document.getElementById('cloud-save-conflict');
         if (conflict) {
@@ -356,6 +370,33 @@ export default class CloudSave {
         return !this.stopped;
     }
 
+    private static async beforeDesktopClose(): Promise<DesktopResult> {
+        if (this.busy) {
+            return { ok: false, message: '正在处理存档或登录，请完成当前操作后再关闭窗口。' };
+        }
+        this.busy = true;
+        try {
+            await this.initialize();
+            if (this.running && this.activeKey !== null && !this.stopped) {
+                player._lastSeen = Date.now();
+                Save.store(player);
+            }
+            await this.captureQueue;
+            await this.engine?.wait();
+            if (this.blocked) {
+                throw new Error('本地备份尚未完成。请先使用“导出本地备份”保存进度，再处理关闭窗口。');
+            }
+            return { ok: true };
+        } catch (error) {
+            const message = this.errorMessage(error);
+            this.reportError(message);
+            return { ok: false, message };
+        } finally {
+            this.busy = false;
+            this.render();
+        }
+    }
+
     private static async connection(): Promise<string> {
         const slot = await this.api.status();
         if (this.engine.state.slotId && this.engine.state.slotId !== slot) {
@@ -438,11 +479,16 @@ export default class CloudSave {
         this.retryAt = 0;
         this.message(remaining
             ? '上一份快照已确认，但仍有更新的本地进度。请 15 秒后再点一次同步，暂不要换设备。'
-            : switchDevice ? '同步成功，可以关闭此页面并换设备。当前游戏已暂停；继续游玩请刷新页面。' : '云端已确认保存。');
+            : switchDevice
+                ? desktopBridge()
+                    ? '同步成功，可以关闭客户端并换设备。当前游戏已暂停；继续在本机游玩请关闭并重新打开客户端。'
+                    : '同步成功，可以关闭此页面并换设备。当前游戏已暂停；继续游玩请刷新页面。'
+                : '云端已确认保存。');
     }
 
     private static async logout(): Promise<void> {
-        if (this.serverSlot === null) {
+        const desktop = desktopBridge();
+        if (!desktop && this.serverSlot === null) {
             throw new Error('请先检查连接，确认当前地址已启用云存档。');
         }
         if (!await Notifier.confirm({
@@ -461,6 +507,12 @@ export default class CloudSave {
         }
         this.message('本地进度已保存，正在退出登录；这次操作不会上传云端。');
         await this.api.logout();
+        if (desktop) {
+            this.serverSlot = null;
+            this.loginRequired = true;
+            this.message('云存档已退出登录，自动同步已关闭。本地游戏可继续使用；换设备前请重新登录并完成同步。');
+            return;
+        }
         // Keep playing on network failure; only pause after the server confirms logout.
         if (this.running && !this.stopped) {
             player._lastSeen = Date.now();
@@ -547,7 +599,20 @@ export default class CloudSave {
             if (!this.engine) {
                 throw new Error('本地备份空间不可用，请先导出原版存档。');
             }
-            if (action === 'check') {
+            if (action === 'login') {
+                const desktop = desktopBridge();
+                if (!desktop) {
+                    throw new Error('请通过“重新登录”链接打开登录页面。');
+                }
+                this.message('请在登录窗口输入游戏密码；当前本地游戏会保留。');
+                const result = await desktop.login();
+                if (!result.ok) {
+                    this.message(result.message || '已取消登录。本地游戏可继续使用。');
+                    return;
+                }
+                await this.connection();
+                this.message('登录成功，已连接云存档。上传或恢复前请确认要使用的进度。');
+            } else if (action === 'check') {
                 await this.connection();
                 this.message('连接成功，可以上传本地进度或下载云档。');
             } else if (action === 'backups') {

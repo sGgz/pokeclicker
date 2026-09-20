@@ -27,7 +27,11 @@
     "cloud:login": "npm --prefix cloud-save-worker run login",
     "cloud:secret": "npm --prefix cloud-save-worker run secret",
     "cloud:password": "npm --prefix cloud-save-worker run password",
-    "cloud:preview": "npm --prefix cloud-save-worker run deploy:check -- --config wrangler.local.json"
+    "cloud:preview": "npm --prefix cloud-save-worker run deploy:check -- --config wrangler.local.json",
+    "desktop:install": "npm --prefix desktop ci",
+    "desktop:test": "npm --prefix desktop test",
+    "desktop:start": "npm --prefix desktop start",
+    "desktop:build": "npm run cloud:build && npm --prefix desktop run package"
   },
   "repository": {
     "type": "git",

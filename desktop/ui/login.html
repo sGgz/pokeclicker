@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>登录云存档</title>
+<style>
+body{font:16px/1.7 "Segoe UI","Microsoft YaHei",sans-serif;background:#f5f8fc;color:#183049;margin:0;padding:32px}h1{font-size:24px;margin:0 0 12px}p{margin:12px 0}label{display:block;font-weight:600}input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #9fadc0;border-radius:6px;font-size:17px;margin:8px 0}button{font:inherit;padding:10px 22px;background:#1761b0;color:white;border:0;border-radius:6px;cursor:pointer}button:disabled{opacity:.5}small{display:block;color:#52647a;margin-top:20px}#status{min-height:28px;color:#9b341c}a{color:#1761b0}
+</style><script src="login.js" defer></script></head>
+<body><h1>登录你的云存档</h1><p>云端地址：<strong>play.ggzz.fun</strong></p><p>输入和网页版相同的游戏专用密码。登录只连接云端，不会上传或覆盖任何进度。</p>
+<form id="login-form"><label for="password">游戏专用密码</label><input id="password" type="password" maxlength="64" autocomplete="off" autofocus required spellcheck="false"><button id="submit" type="submit">登录云存档</button></form>
+<p id="status" role="status" aria-live="polite"></p><button id="done" type="button" hidden>返回游戏</button>
+<small>不需要 GitHub token。关闭此窗口仍可玩本地游戏。登录状态在本机加密保存，有效期最长 7 天；过期后重新输入密码即可。</small></body></html>

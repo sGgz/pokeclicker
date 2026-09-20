@@ -1,0 +1,66 @@
+{
+  "name": "pokeclicker-cloud-desktop",
+  "version": "1.0.0",
+  "description": "Local Pokeclicker game with private cloud save sync",
+  "author": "Pokeclicker contributors; private cloud desktop customization",
+  "license": "ISC",
+  "private": true,
+  "main": "src/main.cjs",
+  "scripts": {
+    "stage": "node scripts/stage.cjs",
+    "start": "npm run stage && electron .",
+    "test": "node --test test/*.test.cjs",
+    "smoke": "node scripts/smoke.cjs",
+    "package": "npm run stage && electron-builder --win nsis zip --x64 --publish never"
+  },
+  "devDependencies": {
+    "bootswatch": "4.6.2",
+    "electron": "44.4.3",
+    "electron-builder": "26.15.3",
+    "playwright": "1.62.1"
+  },
+  "build": {
+    "appId": "fun.ggzz.pokeclicker.cloud",
+    "productName": "Pokeclicker Cloud",
+    "executableName": "PokeclickerCloud",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "../output/desktop"
+    },
+    "files": [
+      "src/**",
+      "ui/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".stage/game",
+        "to": "game"
+      }
+    ],
+    "win": {
+      "icon": "../src/assets/images/pokeclickerlogo.png",
+      "artifactName": "PokeclickerCloud-${version}-win-${arch}.${ext}",
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "nsis": {
+      "artifactName": "PokeclickerCloud-Setup-${version}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Pokeclicker Cloud",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": false,
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ]
+    }
+  }
+}

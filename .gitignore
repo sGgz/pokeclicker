@@ -22,3 +22,8 @@ cloud-save-worker/wrangler.local.json
 
 # Local browser acceptance artifacts
 output/playwright/
+
+# Generated desktop game bundle, installers, and isolated test profiles
+desktop/.stage/
+output/desktop/
+output/desktop-tests/

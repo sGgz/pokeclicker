@@ -2,6 +2,7 @@
     <summary class="font-weight-bold">云存档 · <span id="cloud-save-summary">本地模式</span></summary>
     <p id="cloud-save-status" class="mt-2 mb-1" role="status" aria-live="polite">正在检查本地备份。</p>
     <p class="small mb-2">本地保存不会自动出现在其他设备。换设备前请点击“同步后换设备”，并等待成功提示。</p>
+    <p class="small mb-2" data-cloud-desktop hidden>桌面版：游戏和本机存档在这台电脑上，断网也能玩。关闭窗口会保存本地进度，云存档仍需联网同步。</p>
     <p class="small mb-2">最后云端保存：<span id="cloud-save-time">尚未同步</span></p>
     <p id="cloud-save-pending" class="small mb-2"></p>
     <label for="cloud-save-local">选择本地存档</label>
@@ -13,7 +14,8 @@
         <button type="button" class="btn btn-outline-primary m-1" data-cloud-action="restore">下载云档到本机</button>
         <button type="button" class="btn btn-outline-dark m-1" data-cloud-action="export">导出本地备份</button>
         <button type="button" class="btn btn-outline-dark m-1" data-cloud-action="backups">下载恢复备份包</button>
-        <a class="btn btn-outline-dark m-1" href="/login" target="_blank" rel="noopener">重新登录</a>
+        <a class="btn btn-outline-dark m-1" href="/login" target="_blank" rel="noopener" data-cloud-web>重新登录</a>
+        <button type="button" class="btn btn-outline-dark m-1" data-cloud-action="login" data-cloud-desktop hidden>登录云存档</button>
         <button type="button" class="btn btn-outline-danger m-1" data-cloud-action="logout" disabled>退出登录</button>
     </div>
     <label class="d-block mt-2">
@@ -26,5 +28,6 @@
         <button type="button" class="btn btn-primary m-1" data-cloud-action="remote">使用这份云端进度</button>
         <button type="button" class="btn btn-warning m-1" data-cloud-action="local">使用本地进度覆盖云端</button>
     </div>
-    <p class="small mt-2 mb-0">登录过期时点“重新登录”，在新标签页输入游戏密码，再回到本页检查连接；不要刷新当前游戏。退出登录只保存本地进度，不会上传云端。GitHub token 只在 Cloudflare 后台设置，不要填写到网页中。</p>
+    <p class="small mt-2 mb-0" data-cloud-web>登录过期时点“重新登录”，在新标签页输入游戏密码，再回到本页检查连接；不要刷新当前游戏。退出登录只保存本地进度，不会上传云端。GitHub token 只在 Cloudflare 后台设置，不要填写到网页中。</p>
+    <p class="small mt-2 mb-0" data-cloud-desktop hidden>首次使用或登录过期时点“登录云存档”，在弹出的窗口输入游戏密码。退出登录会关闭自动同步，本地游戏可继续使用。GitHub token 只在 Cloudflare 后台设置，不要填写到客户端中。</p>
 </details>
