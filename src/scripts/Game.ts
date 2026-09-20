@@ -100,6 +100,7 @@ class Game implements TmpGameType {
                 // Load our save object or the default save data
                 this[key].fromJSON(saveObject[saveKey] || this[key].toJSON());
             } catch (error) {
+                CloudSave.blockUploads('某个游戏模块未能正确读取存档，请先导出备份并刷新页面。');
                 console.error('Unable to load sava data from JSON for:', key, '\nError:\n', error);
             }
         });
@@ -398,6 +399,7 @@ class Game implements TmpGameType {
 
     stop() {
         cancelAnimationFrame(this.frameRequest);
+        this.worker?.terminate();
         window.onbeforeunload = () => {};
     }
 

@@ -1,0 +1,28 @@
+<details id="cloud-save-panel" class="container my-2 p-3 border rounded bg-light text-dark">
+    <summary class="font-weight-bold">云存档 · <span id="cloud-save-summary">本地模式</span></summary>
+    <p id="cloud-save-status" class="mt-2 mb-1" role="status" aria-live="polite">正在检查本地备份。</p>
+    <p class="small mb-2">本地保存不会自动出现在其他设备。换设备前请点击“同步后换设备”，并等待成功提示。</p>
+    <p class="small mb-2">最后云端保存：<span id="cloud-save-time">尚未同步</span></p>
+    <p id="cloud-save-pending" class="small mb-2"></p>
+    <label for="cloud-save-local">选择本地存档</label>
+    <select id="cloud-save-local" class="form-control mb-2" aria-label="选择要上传或恢复的本地存档"></select>
+    <div class="d-flex flex-wrap">
+        <button type="button" class="btn btn-outline-dark m-1" data-cloud-action="check">检查连接</button>
+        <button type="button" class="btn btn-primary m-1" data-cloud-action="upload">上传 / 立即同步</button>
+        <button type="button" class="btn btn-success m-1" data-cloud-action="switch">同步后换设备</button>
+        <button type="button" class="btn btn-outline-primary m-1" data-cloud-action="restore">下载云档到本机</button>
+        <button type="button" class="btn btn-outline-dark m-1" data-cloud-action="export">导出本地备份</button>
+        <button type="button" class="btn btn-outline-dark m-1" data-cloud-action="backups">下载恢复备份包</button>
+    </div>
+    <label class="d-block mt-2">
+        <input id="cloud-save-auto" type="checkbox" /> 每 10 分钟自动同步（完成首次手动验证后再开启）
+    </label>
+    <div id="cloud-save-conflict" class="alert alert-warning mt-2" hidden>
+        <strong>检测到进度冲突，自动同步已暂停。</strong>
+        <p id="cloud-save-comparison" class="mb-2"></p>
+        <p class="small">不会合并金币和背包。两份进度都会先备份，再使用你选择的一份。</p>
+        <button type="button" class="btn btn-primary m-1" data-cloud-action="remote">使用这份云端进度</button>
+        <button type="button" class="btn btn-warning m-1" data-cloud-action="local">使用本地进度覆盖云端</button>
+    </div>
+    <p class="small mt-2 mb-0">登录过期时请刷新页面重新验证邮箱。GitHub token 只在 Cloudflare 后台设置，不要填写到网页中。</p>
+</details>

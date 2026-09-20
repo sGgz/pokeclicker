@@ -13,3 +13,12 @@ report.*.json
 docs/
 coverage/
 .stylelintcache
+
+# Private cloud-save configuration and local runtime data
+cloud-save-worker/.dev.vars*
+cloud-save-worker/.env*
+cloud-save-worker/.wrangler/
+cloud-save-worker/wrangler.local.json
+
+# Local browser acceptance artifacts
+output/playwright/

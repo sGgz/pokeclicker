@@ -9,15 +9,30 @@ class App {
     static readonly isUsingClient = typeof navigator === 'object' && typeof navigator.userAgent === 'string' && navigator.userAgent.indexOf('Electron') >= 0;
     static translation = new Translate(Settings.getSetting('translation.language'));
 
-    static start() {
-        // Hide tooltips that stay on game load
-        $('.tooltip').tooltip('hide');
+    private static starting = false;
 
-        if (!App.debug) {
-            Object.freeze(GameConstants);
+    static async start() {
+        if (this.starting) {
+            return;
         }
+        this.starting = true;
+        const key = Save.key;
+        try {
+            if (!await CloudSave.prepareStart(key, '$VERSION')) {
+                this.starting = false;
+                return;
+            }
+            Save.key = key;
+            document.getElementById('cloud-save-game-container').appendChild(document.getElementById('cloud-save-panel'));
+            document.querySelector('#saveSelector')?.remove();
+            // Hide tooltips that stay on game load
+            $('.tooltip').tooltip('hide');
 
-        Preload.load(App.debug).then(() => {
+            if (!App.debug) {
+                Object.freeze(GameConstants);
+            }
+
+            await Preload.load(App.debug);
             ko.options.deferUpdates = true;
 
             console.log(`[${GameConstants.formatDate(new Date())}] %cLoading Game Data..`, 'color:#8e44ad;font-weight:900;');
@@ -47,6 +62,7 @@ class App {
 
             App.game.start();
             GameLoadState.updateLoadState(GameLoadState.states.running);
+            CloudSave.started();
 
             // Check if Mobile and deliver a warning around mobile compatability / performance issues
             const isMobile: boolean = /Mobile/.test(navigator.userAgent);
@@ -67,7 +83,13 @@ class App {
                 });
             }
 
-        });
+        } catch (error) {
+            CloudSave.blockUploads(error instanceof Error ? error.message : '游戏启动失败，请刷新页面。');
+            Preload.hideSplashScreen();
+            if (!App.game) {
+                this.starting = false;
+            }
+        }
     }
 }
 

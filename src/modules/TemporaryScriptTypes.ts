@@ -162,7 +162,7 @@ export type TmpSaveType = {
     counter: number;
     key: string;
     store: (player: TmpPlayerType) => void;
-    getSaveObject: () => void;
+    getSaveObject: () => Record<string, unknown>;
     load: () => TmpPlayerType;
     download: () => void;
     copySaveToClipboard: () => void;

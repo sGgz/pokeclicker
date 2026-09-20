@@ -8,9 +8,27 @@ class Save {
     static key = '';
 
     public static store(player: Player, showNotification = false) {
-        localStorage.setItem(`player${Save.key}`, JSON.stringify(player));
-        localStorage.setItem(`save${Save.key}`, JSON.stringify(this.getSaveObject()));
-        localStorage.setItem(`settings${Save.key}`, JSON.stringify(Settings.toJSON()));
+        if (!CloudSave.canSave()) {
+            return;
+        }
+        const keys = ['player', 'save', 'settings'].map(prefix => prefix + Save.key);
+        const previous = keys.map(key => localStorage.getItem(key));
+        const snapshot: [string, string, string] = [
+            JSON.stringify(player),
+            JSON.stringify(this.getSaveObject()),
+            JSON.stringify(Settings.toJSON()),
+        ];
+        try {
+            keys.forEach((key, index) => localStorage.setItem(key, snapshot[index]));
+        } catch (error) {
+            try {
+                keys.forEach((key, index) => previous[index] === null
+                    ? localStorage.removeItem(key) : localStorage.setItem(key, previous[index]));
+            } catch {}
+            CloudSave.blockUploads('本地保存失败，可能是浏览器空间不足。');
+            throw error;
+        }
+        CloudSave.afterLocalSave(Save.key, snapshot);
 
         this.counter = 0;
         if (showNotification) {
@@ -102,6 +120,7 @@ class Save {
     }
 
     public static async delete(): Promise<void> {
+        const key = Save.key;
         const confirmDelete = await Notifier.prompt({
             title: 'Delete save file',
             message: 'Are you sure you want delete your save file?\n\nTo confirm, type "DELETE"',
@@ -110,9 +129,15 @@ class Save {
         });
 
         if (confirmDelete == 'DELETE') {
-            localStorage.removeItem(`player${Save.key}`);
-            localStorage.removeItem(`save${Save.key}`);
-            localStorage.removeItem(`settings${Save.key}`);
+            try {
+                await CloudSave.beforeDelete(key);
+            } catch (error) {
+                CloudSave.reportError(error instanceof Error ? error.message : '存档删除失败。');
+                return;
+            }
+            localStorage.removeItem(`player${key}`);
+            localStorage.removeItem(`save${key}`);
+            localStorage.removeItem(`settings${key}`);
             // Prevent the old save from being saved again
             window.onbeforeunload = () => {};
             location.reload();
@@ -197,42 +222,17 @@ class Save {
         return res;
     }
 
-    public static loadFromFile(file) {
-        const fileToRead = file;
-        const fr = new FileReader();
-        fr.readAsText(fileToRead);
-
-        setTimeout(() => {
-            try {
-                const decoded = SaveSelector.atob(fr.result as string);
-                console.debug('decoded:', decoded);
-                const json = JSON.parse(decoded);
-                console.debug('json:', json);
-                if (decoded && json && json.player && json.save) {
-                    localStorage.setItem(`player${Save.key}`, JSON.stringify(json.player));
-                    localStorage.setItem(`save${Save.key}`, JSON.stringify(json.save));
-                    if (json.settings) {
-                        localStorage.setItem(`settings${Save.key}`, JSON.stringify(json.settings));
-                    } else {
-                        localStorage.removeItem(`settings${Save.key}`);
-                    }
-                    // Prevent the old save from being saved again
-                    window.onbeforeunload = () => {};
-                    location.reload();
-                } else {
-                    Notifier.notify({
-                        message: 'This is not a valid decoded savefile',
-                        type: NotificationConstants.NotificationOption.danger,
-                    });
-                }
-            } catch (err) {
-                Notifier.notify({
-                    message: 'This is not a valid savefile',
-                    type: NotificationConstants.NotificationOption.danger,
-                });
-            }
-        }, 1000);
+    public static async loadFromFile(file: File) {
+        if (!file) {
+            return;
+        }
+        try {
+            await CloudSave.importFile(file);
+        } catch (error) {
+            CloudSave.reportError(error instanceof Error ? error.message : '存档导入失败。');
+        }
     }
+
 }
 
 Save satisfies TmpSaveType;

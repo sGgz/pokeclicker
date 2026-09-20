@@ -13,6 +13,7 @@
     "src/libs",
     "src/specs",
     "src/modules",
-    "other"
+    "other",
+    "cloud-save-worker"
   ]
 }

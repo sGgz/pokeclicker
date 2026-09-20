@@ -18,7 +18,15 @@
     "publish": "npm test && node publish.js",
     "tl:init": "git submodule update --init",
     "tl:update": "git submodule update --remote",
-    "clean": "npm ci && npm run tl:init"
+    "clean": "npm ci && npm run tl:init",
+    "cloud:build": "npm run tl:init && npm test && cross-env NODE_ENV=production gulp website",
+    "cloud:check": "npm --prefix cloud-save-worker run check && npm --prefix cloud-save-worker test",
+    "cloud:deploy": "npm --prefix cloud-save-worker run deploy -- --config wrangler.local.json",
+    "cloud:setup": "node cloud-save-worker/scripts/setup.mjs",
+    "cloud:recover": "node cloud-save-worker/scripts/recover.mjs",
+    "cloud:login": "npm --prefix cloud-save-worker run login",
+    "cloud:secret": "npm --prefix cloud-save-worker run secret",
+    "cloud:preview": "npm --prefix cloud-save-worker run deploy:check -- --config wrangler.local.json"
   },
   "repository": {
     "type": "git",

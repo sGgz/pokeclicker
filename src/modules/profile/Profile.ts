@@ -97,7 +97,6 @@ export default class Profile implements Saveable {
                 Notifier.notify({ message: 'What a lovely profile!' });
                 return;
             }
-            document.querySelector('#saveSelector').remove();
             Save.key = key;
             App.start();
         });

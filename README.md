@@ -13,6 +13,16 @@ You can reach out on discord to discuss your ideas and how to implement them: ht
 > [!NOTE]
 > PokéClicker is still in development!
 
+## 私人云存档（Cloudflare + GitHub）
+
+本分支增加了个人云存档：Cloudflare 托管游戏和邮箱登录，GitHub 私有仓库保存进度。
+
+- [新手部署与日常使用手册](design/cloud-save-user-guide.md)（按 ggzz.fun 编写）
+- [项目架构与云存档设计](design/cloud-save-design.md)
+- [实现和验收记录](design/cloud-save-implementation.md)
+
+GitHub token 只录入 Worker Secret。先完成手册中的账号配置与验收，再开启自动同步。
+
 # Developer instructions
 
 ## Guidelines

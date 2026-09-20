@@ -1,0 +1,23 @@
+{
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "pokeclicker-cloud-save",
+    "main": "src/index.ts",
+    "compatibility_date": "2026-09-20",
+    "workers_dev": false,
+    "preview_urls": false,
+    "assets": {
+        "directory": "../docs",
+        "binding": "ASSETS",
+        "run_worker_first": ["/api/*"]
+    },
+    "vars": {
+        "GITHUB_OWNER": "",
+        "GITHUB_SAVE_REPO": "pokeclicker-saves",
+        "GITHUB_SAVE_BRANCH": "main",
+        "CLOUD_SLOT_ID": "66cf8d51-2bac-4a66-a608-5f08a77ed50a",
+        "ACCESS_TEAM_DOMAIN": "",
+        "ACCESS_AUD": "",
+        "ALLOWED_EMAIL": "",
+        "ALLOWED_ORIGIN": ""
+    }
+}

@@ -7,7 +7,7 @@ let player;
 /**
  * Start the application when all html elements are loaded.
  */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     try {
         Settings.loadDefault();
         document.body.className = `no-select ${Settings.getSetting('theme').observableValue()} ${Settings.getSetting('backgroundImage').observableValue()}`;
@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('use-our-client-message').style.display = 'block';
     }
     // Load list of saves
+    await CloudSave.initialize('$VERSION');
     SaveSelector.loadSaves();
 });
 
