@@ -6,3 +6,4 @@
 *.css       text eol=lf
 *.scss      text eol=lf
 *.less      text eol=lf
+build-windows.cmd text eol=crlf

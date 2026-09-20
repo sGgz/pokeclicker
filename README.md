@@ -15,13 +15,18 @@ You can reach out on discord to discuss your ideas and how to implement them: ht
 
 ## 私人云存档（Cloudflare + GitHub）
 
-本分支增加了个人云存档：Cloudflare 托管游戏和邮箱登录，GitHub 私有仓库保存进度。
+本分支增加了个人云存档：Cloudflare 托管网页、游戏专用密码登录和存档 API，GitHub 私有仓库保存进度。Windows 定制客户端可离线运行，联网后与网页共用云档。
 
 - [新手部署与日常使用手册](design/cloud-save-user-guide.md)（按 ggzz.fun 编写）
 - [项目架构与云存档设计](design/cloud-save-design.md)
 - [实现和验收记录](design/cloud-save-implementation.md)
+- [Windows 客户端与开发说明](desktop/README.md)
 
 GitHub token 只录入 Worker Secret。先完成手册中的账号配置与验收，再开启自动同步。
+
+**更新源码后打包 Windows 客户端：** 首次在打包电脑安装 Node.js（建议 24 LTS）和 Git，保留本分支云存档功能的完整 Git 项目，然后双击根目录的 **build-windows.cmd**。脚本准备依赖、执行检查并打包；成功后打开 `output/desktop-builds/game-游戏版本_时间-随机后缀/`，双击这个新文件夹里的 **开始游戏.cmd** 即可运行，也可使用其中的 Setup 安装包或完整 ZIP。先关闭正在运行的游戏；普通游玩电脑只需成品，不需安装构建工具。
+
+日常打包不用手输多条命令。脚本只构建本机已有代码，不拉取更新、不自动改版本，也不部署网页；不要把项目覆盖成官方原版或使用 GitHub 源码页的 Download ZIP。已有 Node **18 或更高版本**可以保留；不是 24 时，脚本从官方准备并校验项目内 Node 24，不改全局版本。Node 低于 18 或尚未安装时，先按提示安装 Node 24 LTS。详细首次准备、输出位置和报错处理见[手册第 16.10 节](design/cloud-save-user-guide.md#1610-更新源码后双击打包自己的-windows-客户端)。
 
 # Developer instructions
 

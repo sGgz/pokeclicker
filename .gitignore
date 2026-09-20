@@ -27,3 +27,7 @@ output/playwright/
 desktop/.stage/
 output/desktop/
 output/desktop-tests/
+
+# One-click Windows builder: portable runtime, caches, logs and versioned releases
+.desktop-build/
+output/desktop-builds/
