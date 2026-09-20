@@ -29,9 +29,9 @@
 | 实际部署 | 成功发布 Worker pokeclicker-cloud-save，自定义域名 play.ggzz.fun |
 | 发布版本 | 7543d032-ad6a-4c5f-ae64-4d8eb25aa4e1 |
 | 前端资产 | Wrangler 显示 No updated asset files to upload；本次未修改游戏资产 |
-| 真实 GitHub 连接与上传 | 等待用户在原游戏页检查连接；未代用户上传真实存档 |
+| 真实 GitHub 连接与首次上传 | 用户补建分支、修正 token 的私有仓库权限后，截图显示“已关联”“云端已确认保存”，云端保存时间为 2026/9/20 17:50:52；未直接读取用户真实存档内容 |
 
-部署沿用用户已有本机 Cloudflare 授权，没有生成游戏密码，没有修改 Secret、token、CLOUD_SLOT_ID 或分支，也没有写入真实存档。真实存档首次上传、另一设备恢复和切换仍需按 [新手手册第九节](cloud-save-user-guide.md) 验收；没有成功回执前保持自动同步关闭并保留本地导出。
+部署沿用用户已有本机 Cloudflare 授权，没有生成游戏密码，没有修改 Secret、token、CLOUD_SLOT_ID 或分支，也没有代用户写入真实存档。用户之后已自行完成首次上传，另一设备恢复和往返切换尚未验收。用户确认另一台电脑使用官方 Windows 客户端，该客户端不包含本项目新增的云同步模块，不能将网页登录成功视为桌面版已接入；迁移和手动转档步骤见 [新手手册第十六节](cloud-save-user-guide.md)。
 
 ## 已实现的行为
 
