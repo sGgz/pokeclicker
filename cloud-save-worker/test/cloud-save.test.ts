@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { createHandler, type Env } from '../src/index';
-import { verifyAccess } from '../src/auth';
+import { SESSION_COOKIE } from '../src/auth';
 import { ApiError, GithubStore } from '../src/github';
 import { hashPayload, validateRemote, type CloudSaveEnvelope, type RemoteSave, type SavePayload, type UploadRequest } from '../../src/modules/cloudSave/protocol';
 import { SyncEngine, decideStartup } from '../../src/modules/cloudSave/SyncEngine';
@@ -12,8 +11,9 @@ import { CloudApiError } from '../../src/modules/cloudSave/api';
 const slot = '66cf8d51-2bac-4a66-a608-5f08a77ed50a';
 const env: Env = {
     GITHUB_OWNER: 'test-owner', GITHUB_SAVE_REPO: 'private-saves', GITHUB_SAVE_BRANCH: 'main', GITHUB_SAVE_TOKEN: 'test-token',
-    CLOUD_SLOT_ID: slot, ACCESS_TEAM_DOMAIN: 'https://test.cloudflareaccess.com', ACCESS_AUD: 'test-audience',
-    ALLOWED_EMAIL: 'owner@example.com', ALLOWED_ORIGIN: 'https://play.ggzz.fun',
+    CLOUD_SLOT_ID: slot, GAME_AUTH: JSON.stringify({ version: 1, passwordHash: 'a'.repeat(64), sessionKey: 'b'.repeat(43) }),
+    LOGIN_RATE_LIMITER: { limit: async () => ({ success: true }) }, LOGIN_GLOBAL_LIMITER: { limit: async () => ({ success: true }) },
+    ALLOWED_ORIGIN: 'https://play.ggzz.fun',
     ASSETS: { fetch: async () => new Response('asset') },
 };
 const payload = (money = 1): SavePayload => ({
@@ -26,7 +26,7 @@ const requestData = (base: RemoteSave | null = null, data = payload()): UploadRe
 });
 function request(data?: UploadRequest, extra: Record<string, string> = {}, method = 'PUT'): Request {
     return new Request(env.ALLOWED_ORIGIN + '/api/cloud-save/slots/' + slot, {
-        method, headers: { 'Cf-Access-Jwt-Assertion': 'test-jwt', Origin: env.ALLOWED_ORIGIN, 'Content-Type': 'application/json', ...extra },
+        method, headers: { Cookie: SESSION_COOKIE + '=test-jwt', Origin: env.ALLOWED_ORIGIN, 'Content-Type': 'application/json', ...extra },
         ...(data ? { body: JSON.stringify(data) } : {}),
     });
 }
@@ -102,7 +102,7 @@ test('a valid base cannot reuse a snapshot ID for different content', async () =
 test('reject unauthenticated, cross-origin and wrong-host requests before writes', async () => {
     const { handler, store } = service();
     const unauthenticated = request(requestData());
-    unauthenticated.headers.delete('Cf-Access-Jwt-Assertion');
+    unauthenticated.headers.delete('Cookie');
     assert.equal((await handler(unauthenticated, env)).status, 401);
     assert.equal((await handler(request(requestData(), { Origin: 'https://evil.example' }), env)).status, 403);
     const wrongHost = new Request('https://test.workers.dev/api/cloud-save/slots/' + slot, request(requestData()));
@@ -114,7 +114,7 @@ test('fail closed on missing configuration and reject arbitrary slots', async ()
     const { handler } = service();
     assert.equal((await handler(request(undefined, {}, 'GET'), { ...env, GITHUB_SAVE_TOKEN: '' })).status, 503);
     assert.equal((await handler(new Request(env.ALLOWED_ORIGIN + '/api/cloud-save/slots/other', {
-        headers: { 'Cf-Access-Jwt-Assertion': 'test' },
+        headers: { Cookie: SESSION_COOKIE + '=test' },
     }), env)).status, 404);
 });
 
@@ -183,22 +183,6 @@ test('GitHub validation errors without a changed file are not misreported as dat
     assert.equal((await handler(request(requestData()), env)).status, 502);
 });
 
-test('Access verifies real signatures, audience, expiry and the exact allowed email', async () => {
-    const { publicKey, privateKey } = await generateKeyPair('RS256');
-    const jwk = await exportJWK(publicKey);
-    const keys = createLocalJWKSet({ keys: [{ ...jwk, kid: 'test' }] });
-    const sign = (email: string, audience = env.ACCESS_AUD, expired = false) => new SignJWT({ email })
-        .setProtectedHeader({ alg: 'RS256', kid: 'test' }).setIssuer(env.ACCESS_TEAM_DOMAIN)
-        .setAudience(audience).setSubject('user').setIssuedAt().setExpirationTime(expired ? '0s' : '1h').sign(privateKey);
-    await verifyAccess(await sign(env.ALLOWED_EMAIL), env, keys);
-    await assert.rejects(verifyAccess(await sign('someone@example.com'), env, keys));
-    await assert.rejects(verifyAccess(await sign(env.ALLOWED_EMAIL, 'other'), env, keys));
-    await assert.rejects(verifyAccess(await sign(env.ALLOWED_EMAIL, env.ACCESS_AUD, true), env, keys));
-    const token = await sign(env.ALLOWED_EMAIL);
-    const parts = token.split('.');
-    const forged = Buffer.from(JSON.stringify({ email: 'someone@example.com' })).toString('base64url');
-    await assert.rejects(verifyAccess(parts[0] + '.' + forged + '.' + parts[2], env, keys));
-});
 
 function memoryState(initial: SyncState = emptyState()): StateStorage & { saved: SyncState; fail: boolean } {
     return {

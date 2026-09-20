@@ -1,6 +1,7 @@
 # PokéClicker 项目架构与 GitHub 私有仓库云存档设计
 
-> 状态：第一版已实现并完成本地验收，尚未部署到用户账号。分析与实施日期：2026-09-20。
+> 状态：云存档第一版已完成本地验收；2026-09-20 按用户要求将 Access 邮箱门禁替换为游戏专用密码。尚未部署到用户账号。
+> 认证决策变更：原 Access + OTP 决策已被本文第 5 节替代，不再需要 Zero Trust 团队、邮箱、AUD 或付款方式配置。
 > 实际交付与验证见 [实现记录](cloud-save-implementation.md)；部署和使用见 [新手操作手册](cloud-save-user-guide.md)。
 > 下文原代码分析描述的是实施前基线，当前行为以实现记录为准。
 > 代码基线：a3062f11fdcf4c22e6a9a7d4747e5bb6614f44ab；项目版本：0.10.26。
@@ -8,7 +9,7 @@
 
 ## 1. 结论与范围
 
-方案可行。推荐 **Cloudflare 静态托管 + Access 邮箱登录 + Worker 存档 API + 独立 GitHub 私有存档仓库**。游戏仍在浏览器运行，保留现有本地存档，再将完整快照定期提交到 GitHub。
+方案可行。推荐 **Cloudflare 静态托管 + 游戏专用密码登录 + Worker 存档 API + 独立 GitHub 私有存档仓库**。游戏仍在浏览器运行，保留现有本地存档，再将完整快照定期提交到 GitHub。
 
 这能做到不购买、不维护 VPS，不需要自己的电脑一直开机；存档实际驻留 GitHub。若要求数据放在自己的电脑或 NAS，则使用第 12 节的自托管方案。域名可继续留在原注册商，配置 Cloudflare DNS 和自定义域名即可，无须转入 Cloudflare 注册。
 
@@ -16,7 +17,7 @@
 
 - 网页只访问同源 API。GitHub token 仅放 Worker Secret，不进入网页、构建产物、浏览器存储或仓库。
 - 本地约每 10 秒自动保存；云端自动同步默认关闭，用户开启后每 10 分钟尝试，提供“立即同步”“同步后切换设备”。
-- 首版一个允许的邮箱、一个云槽位；保留原有本地多存档。云槽位采用稳定 UUID，与设备本地槽位映射。
+- 首版一个游戏专用密码、一个云槽位；保留原有本地多存档。云槽位采用稳定 UUID，与设备本地槽位映射。
 - 云档选择与安装在 App.start() 前完成，运行中不热替换游戏对象。
 - 写入携带上次同步的 GitHub 文件 blob SHA；不匹配时显式处理冲突，不自动合并游戏数值。
 - 保留原版导入导出，以 Git 历史提供回退，同时定期下载独立备份。
@@ -103,7 +104,7 @@ Game.start() 使用 requestAnimationFrame，并尝试创建浏览器 Web Worker 
 | 仓库级 SSH 或 token | 可以限制特定仓库 | 首选 fine-grained PAT + Contents 读写，使用 HTTPS REST API |
 | 网页里配置 token | 不采用 | 放 Worker Secret；登录保护无法隐藏已下发的前端 token |
 | 不需要服务器 | 可以免维护服务器 | 仍有 Cloudflare 托管后端函数负责鉴权和持久化 |
-| 邮箱验证可有可无 | 对个人存档接口不成立 | 页面可公开，个人存档 API 必须鉴权；首版全站 Access 最省事 |
+| 邮箱验证可有可无 | 可以换认证方式，不能取消鉴权 | 使用游戏专用密码保护全站和存档 API，避免 Zero Trust 开通要求 |
 | 存到自己的机器 | 与 GitHub 目标不同 | 账号由自己控制，存储介质由 GitHub 托管 |
 
 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys) 确实可绑定一个仓库并允许写入，但面向 Git/SSH 操作。这里只更新文件，HTTPS API 更直接，无需在 Worker 中维护 Git 工作目录或实现 SSH 推送。
@@ -114,13 +115,14 @@ Game.start() 使用 requestAnimationFrame，并尝试创建浏览器 Web Worker 
 
 ```mermaid
 flowchart LR
-    B[浏览器游戏] --> A[Cloudflare Access：指定邮箱]
-    A --> S[Worker Static Assets：游戏资源]
-    A --> W[同源 Worker API：校验与版本控制]
+    B[浏览器游戏] --> A[Worker：密码登录与会话校验]
+    A --> S[Static Assets：游戏资源]
+    A --> W[同源存档 API：校验与版本控制]
     B --> L[localStorage：本地进度]
     B --> Q[IndexedDB：待上传快照和备份]
     W -->|HTTPS REST API| G[GitHub 私有仓库：快照与历史]
-    K[Worker Secret：PAT] -.-> W
+    K[Worker Secret：GITHUB_SAVE_TOKEN] -.-> W
+    P[Worker Secret：GAME_AUTH] -.-> A
     C[游戏代码仓库] -->|构建部署| S
 ```
 
@@ -150,24 +152,30 @@ saves/
 | Secret | GITHUB_SAVE_TOKEN | 仅 Worker 读取 |
 | 运行配置 | GITHUB_OWNER、GITHUB_SAVE_REPO、GITHUB_SAVE_BRANCH | 固定目标，不接受请求任意指定 |
 | 运行配置 | CLOUD_SLOT_ID | 固定单槽位 UUID |
-| 运行配置 | ACCESS_TEAM_DOMAIN、ACCESS_AUD、ALLOWED_EMAIL | 签发方、应用 audience、精确邮箱白名单 |
+| Secret | GAME_AUTH | 随机密码验证信息及独立会话签名密钥，仅 Worker 读取，由 cloud:password 生成 |
+| 绑定 | 登录限流器 | 向导生成 Workers 原生 Rate Limit 绑定，不让用户手填 |
 | 运行配置 | ALLOWED_ORIGIN、MAX_SAVE_BYTES | 同源约束与大小上限 |
 
 [Worker Secrets](https://developers.cloudflare.com/workers/configuration/secrets/) 提供运行时密钥绑定。构建环境变量一旦经 Gulp replace 或 Webpack 注入客户端就不再保密。部署系统读取代码仓库的授权，与运行时读写存档仓库的 PAT 是两套权限。
 
 ### 5.2 访问控制
 
-Access 支持向批准的邮箱发送验证码，参见 [OTP 登录](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/)。首版整个域名配置精确邮箱 Allow 策略，明确启用 OTP 登录。
+用户希望避免 Zero Trust 开通时的付款方式步骤，因此原“Access 邮箱验证码 + 精确邮箱 Allow”决策在 2026-09-20 被替代。当前采用单人游戏专用密码；不提供公共注册、多账户或邮箱重置功能。
 
-Worker 对每个 API 请求校验 Cf-Access-Jwt-Assertion 签名、issuer、audience、有效期和允许身份，不直接相信 email 请求头。参见官方 [JWT 验证](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)。
+- 配置工具生成 32 字符随机游戏密码；Cloudflare Secret 保存密码验证信息和独立 sessionKey，不保存可直接展示给前端的明文。密码仅在用户本机真实交互终端成功配置后显示；不经过聊天、源码或构建注入。
+- /login 提供登录表单，POST /auth/login 校验密码并签发会话。Cookie 使用 HttpOnly、Secure、SameSite=Strict、Path=/；固定 7 天有效，不自动续期。服务端校验签名和到期时间。成功后先显示确认页，由用户点击进入游戏；重新登录时直接回原游戏页，避免第二个标签页意外启动。
+- POST /auth/logout 清除当前浏览器 Cookie；不是全局会话撤销。重新运行 cloud:password 同时轮换密码与 sessionKey，撤销所有旧设备会话；不改变 GitHub 凭据和云槽位。
+- Worker 使用 run_worker_first: true；页面、脚本、图片等资产先通过认证，再委托 ASSETS.fetch。未登录页面请求进入登录页，存档 API 返回 JSON 401，不能通过直接请求资产绕过门禁。GAME_AUTH 缺失或格式无效时关闭访问并返回配置错误，不公开放行。
+- 登录使用 Workers 原生限流：同一 IP 每 60 秒最多 5 次，全站在同一 Cloudflare 位置每 60 秒最多 20 次。此限流不是跨全球的强一致计数，不能表述为全球攻击者只能尝试 20 次。高熵随机密码不依赖限流器来弥补弱口令。
+- 既有 Access 应用如果仍保护游戏域名，会先触发旧邮箱门禁。迁移时只解除 play.ggzz.fun 的旧保护，不删除其他站点的应用或整个 Zero Trust 配置。
 
 实施要求：
 
-- 关闭或同等保护 workers.dev 与预览入口。生产显式配置 workers_dev: false、preview_urls: false，参见 [workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/) 和 [Preview URLs](https://developers.cloudflare.com/workers/versions-and-deployments/preview-urls/)。
-- 写操作只接受 JSON、预期方法与合法 Origin；不允许跨站表单写入，不配置通配跨域。CORS 不能代替身份认证。
-- API 返回 Cache-Control: private, no-store；CDN 缓存规则排除 /api/*。存档不放静态构建产物，不通过公开 raw URL 提供。
-- 日志只记录请求 ID、大小、耗时和错误类别，不记录 token、JWT、完整邮箱或存档正文。
-- 用户登录失效与 GitHub PAT 失效分开呈现，后者属于服务配置故障。
+- 关闭 workers.dev 与预览入口，生产显式配置 workers_dev: false、preview_urls: false，参见 [workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/) 和 [Preview URLs](https://developers.cloudflare.com/workers/versions-and-deployments/preview-urls/)。
+- 写操作校验预期方法与合法 Origin；存档只接受 JSON；登录和退出按各自允许的内容类型处理，不允许跨站表单伪造，不配置通配跨域。CORS 不能代替身份认证。
+- 登录页、认证接口和存档 API 不得公共缓存；存档 API 返回 Cache-Control: private, no-store。CDN 缓存规则不能绕过 /api/*、/auth/*、/login 的 Worker 校验。存档不放静态构建产物，不通过公开 raw URL 提供。
+- 日志只记录请求 ID、大小、耗时和错误类别，不记录 token、游戏密码、会话 Cookie 或存档正文。
+- 用户登录失效与 GitHub PAT 失效分开呈现，后者属于服务配置故障。会话失效不清空本地存档或持久队列；当前游戏可保留本地进度，云面板提示在新标签页登录，再回原页检查连接与同步，不强制刷新正在游玩的页面。
 
 ## 6. 存档协议和 GitHub 适配
 
@@ -204,6 +212,9 @@ interface CloudSaveEnvelope {
 
 | 接口 | 用途 | 约束 |
 | --- | --- | --- |
+| GET /login | 游戏专用密码页或已登录退出入口 | 不泄露密码，禁止公共缓存 |
+| POST /auth/login | 校验密码并签发会话 | 同源、请求体限制、登录限流 |
+| POST /auth/logout | 当前浏览器退出 | 同源、清除 Cookie，不删除存档 |
 | GET /api/cloud-save/status | 身份、配置与状态 | 不暴露 Secret，不随每次本地保存轮询 |
 | GET /api/cloud-save/slots | 槽位列表 | 首版一个预配置槽位 |
 | GET /api/cloud-save/slots/:id | 下载云档 | 返回 envelope、blobSha |
@@ -211,7 +222,7 @@ interface CloudSaveEnvelope {
 
 首次创建：baseBlobSha 为 null、baseRevision 为 0。更新必须携带上次确认的两项版本。成功返回新 blobSha、revision、snapshotId、payloadHash、serverSavedAt、commitSha。以 blobSha 字段作为并发凭证，不误用 GitHub HTTP 缓存 ETag。
 
-错误：401/403 为用户认证或授权问题；409 为版本冲突；413 为过大；422 为结构或版本不支持；429 为限流；502/503 为上游或配置故障。Access 可能先返回登录页或跳转，客户端要识别 HTML/重定向，保留待同步数据并提示重新登录。
+错误：401/403 为用户认证或授权问题；409 为版本冲突；413 为过大；422 为结构或版本不支持；429 为限流；502/503 为上游或配置故障。当前 Worker 对未登录存档 API 返回 JSON 401；客户端仍防御性识别 HTML/重定向，保留待同步数据并提示从新标签页重新登录。
 
 首版不提供远程删除。“删除本地存档”只删本机并解除同步映射，重新启用时显式恢复云档。未来云删除应有版本化 tombstone，防止离线设备复活已删存档。
 
@@ -370,11 +381,11 @@ npx cross-env NODE_ENV=production gulp website
 ### 9.2 部署顺序
 
 1. 创建并初始化专用私有存档仓库，指定固定分支；确认该分支规则允许该凭据通过 API 更新文件。
-2. 创建仅该仓库可用的 fine-grained PAT，记录到期时间，通过 Worker Secret 设置。
+2. 填写域名、owner/repo/branch 等公开配置，保留固定 CLOUD_SLOT_ID；不再配置邮箱、Access team 或 audience。
 3. 实现并测试 Worker API。固定 owner/repo/branch/slot，明确 GitHub API 版本与 User-Agent，禁止客户端任意传仓库路径。
-4. 构建游戏，部署静态资产与 Worker。配置 /api/* 优先进入 Worker，避免 API 被静态资源或 HTML 回退捕获。
-5. 绑定自定义域名，配置 Access 精确邮箱策略和 OTP，关闭未受保护的默认域名与预览入口。
-6. 测试环境使用独立存档仓库、不同 Access audience 和 Secret，不能拿真实长期档做覆盖测试。
+4. 构建游戏，部署静态资产与 Worker；全站请求先进入 Worker。绑定自定义域名，关闭默认域名与预览入口。未设置 GAME_AUTH 时全站保持配置错误状态。
+5. 运行 cloud:password 设置随机游戏密码及会话密钥；再创建仅该仓库可用的 fine-grained PAT，通过 cloud:secret 设置 GITHUB_SAVE_TOKEN，并记录 token 到期日。
+6. 测试环境使用独立存档仓库、不同游戏密码和会话密钥，不能拿真实长期档做覆盖测试。已有游戏 Access 应用时仅解除对应域名的旧保护。
 7. 从原站导出一份 .txt 并额外保留副本；新域名导入，明确绑定目标云槽位，首次上传。
 8. 用另一台设备登录、下载、核对关键进度，再做一次双设备冲突演练。
 9. 确认失败提示、token 轮换和恢复可用后启用自动同步。
@@ -404,7 +415,8 @@ GitHub 历史可以查看旧快照，但账号丢失、仓库误删、错误覆�
 | 上传期间继续玩 | 旧请求成功不清除后来产生的待同步进度 |
 | 多标签 | 同一槽位只有一个可写会话，另一个不运行自动保存 |
 | 网络和上游错误 | 断网、超时、429、403、5xx 时本地继续工作，状态不伪报成功 |
-| 身份和入口 | 非白名单、过期/伪造 JWT、默认域名、预览域名均不能读写存档 |
+| 身份和入口 | 错密码、过期/伪造会话、默认域名和预览域名均不能读取受保护资源或云档；密码缺失关闭访问 |
+| 登录与改密 | 限流、同源防护、退出、7 天到期和新密码撤销旧会话可验证；重新登录保留本地进度和待同步数据 |
 | 文件体积 | 大于 1 MB 时仍正确读正文与 SHA；超出应用上限返回 413，不破坏旧档 |
 | token 到期 | 明确显示服务配置故障；轮换后可从原基线恢复同步 |
 | 历史恢复 | 旧快照作为新提交保存，revision 不倒退，原历史保留 |
@@ -427,7 +439,7 @@ GitHub 历史可以查看旧快照，但账号丢失、仓库误删、错误覆�
 
 即使每 10 分钟一次，全天挂着也约 52,560 次提交/年。Git 会压缩历史，但真实增长取决于存档大小和变化量，应观察，不承诺固定容量；若持续挂机导致历史增长过快，放宽同步周期或迁移热存储，GitHub 仅保存低频备份。首版不自动清理或重写历史。
 
-Cloudflare 静态资产请求当前免费且不限次数，Worker 动态调用和 CPU 有各自配额，参见 [Workers Pricing](https://developers.cloudflare.com/workers/platform/pricing/)。个人低频调用量通常很小，这是容量估算，不是零费用保证；域名、Access 套餐与账户条件也应在实际开通时确认。特别是大 JSON 解析、校验和编码需要测 CPU，不能仅根据请求次数判断免费计划可用。
+Cloudflare 对纯静态资产服务与 Worker 动态调用采用不同计费口径，参见 [Workers Pricing](https://developers.cloudflare.com/workers/platform/pricing/)。当前配置 run_worker_first: true，所有静态资产请求也先执行登录检查，因此会计入 Worker 请求用量；不能沿用“静态资源请求免费无限”估算整个网站。图片和脚本较多，首次加载或多设备访问的请求量可能明显高于低频云同步，应观察 Workers Metrics。当前方案不需要 Zero Trust 或 Access 套餐，但域名、Workers 请求和 CPU 额度仍需核对；这不是永久零费用保证。特别是大 JSON 解析、校验和编码需要测 CPU，不能仅根据请求次数判断免费计划可用。
 
 正常网络下，另一设备最多落后一个自动同步周期；异常期间可能更久。产品应明确显示未同步时长。“本地已保存”不等于“已在云端”。更换设备前手动同步并确认成功，是首版最可靠的使用方式。
 
@@ -451,17 +463,17 @@ KV 是最终一致性，跨节点更新可能 60 秒或更久才可见，直接�
 若必须把存档放自己机器，最小架构是：
 
 ```text
-浏览器 → Cloudflare Access → Tunnel → 自有机器的存档 API → SQLite
+浏览器 → 游戏专用密码门禁 → Tunnel → 自有机器的存档 API → SQLite
 ```
 
-游戏静态资源仍可放 Cloudflare。自有 API 保持相同协议，在 SQLite 事务中使用 revision 条件更新与历史表；数据库在该机器磁盘，另做备份。API 监听回环地址，经 Tunnel 暴露，验证 Access JWT。Tunnel 由本机 cloudflared 建立出站连接，参见 [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/)。
+游戏静态资源仍可放 Cloudflare。自有 API 保持相同协议，在 SQLite 事务中使用 revision 条件更新与历史表；数据库在该机器磁盘，另做备份。API 监听回环地址，经 Tunnel 暴露；自托管时也需在所有存档入口验证专用密码会话，不能把当前 Worker 的认证视为 Tunnel 自动具备的能力。Tunnel 由本机 cloudflared 建立出站连接，参见 [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/)。
 
 这能免租公网 VPS、免直接暴露数据库，但机器断电、休眠或断网时云同步不可用，本地游戏仍可继续。不要把 SQLite 数据库文件放在普通双向文件同步盘里期待解决并发。如果既想免常开又想保留自己的副本，可继续用 GitHub 主存档，NAS 定期拉取独立备份。
 
 ## 13. 分阶段实施建议
 
 1. **先打通静态部署和本地存档往返**：构建、翻译资源、自有域名、原 .txt 导入导出可用，导出真实存档测体积。
-2. **实现最小安全云保存**：专用私有仓库、Access、Worker、单槽位、手动上传/下载、SHA 冲突提示、本地备份。此阶段不自动同步。
+2. **实现最小安全云保存**：专用私有仓库、游戏密码门禁、Worker、单槽位、手动上传/下载、SHA 冲突提示、本地备份。此阶段不自动同步。
 3. **实现可靠启动与持久队列**：启动前云档选择、三段安装日志、多标签锁、幂等重试、版本异常阻断。
 4. **启用低频自动同步**：10 分钟、明确状态、切设备按钮，完成故障和冲突演练后启用。
 5. **按实际需要扩展**：多云槽位、历史浏览、设备设置隔离；频繁同步时评估 R2，长期授权管理再评估 GitHub App。
@@ -479,6 +491,6 @@ KV 是最终一致性，跨节点更新可能 60 秒或更久才可见，直接�
 
 ## 15. 第一版落地说明
 
-已按主方案实现 Workers Static Assets + Access + GitHub 私有仓库；域名向导默认 play.ggzz.fun。自动同步默认关闭，重新绑定也会关闭；备份包由命令行工具转换为原版 .txt，首版不提供网页内历史浏览。队列保存一个不可变在途请求和一份最新进度；确认旧请求后如仍有新进度，会提示等待后再次同步。
+已按主方案实现 Workers Static Assets + GitHub 私有仓库，随后按用户要求将原 Access 门禁替换为游戏专用密码；域名向导默认 play.ggzz.fun，只收集域名与仓库信息。自动同步默认关闭，重新绑定也会关闭；备份包由命令行工具转换为原版 .txt，首版不提供网页内历史浏览。队列保存一个不可变在途请求和一份最新进度；确认旧请求后如仍有新进度，会提示等待后再次同步。
 
-使用 Web Locks 协调同域所有本地槽位，一次只允许一个运行中的游戏页，比仅锁云槽位更保守；没有 IndexedDB 时可玩本地游戏，但不能使用依赖恢复副本的云导入操作。实际已通过 54 项原游戏测试、28 项云端/恢复/工具测试、生产构建、Worker dry-run 与浏览器验收。详细覆盖及真实账号尚未验收的限制见 [实现记录](cloud-save-implementation.md)。
+使用 Web Locks 协调同域所有本地槽位，一次只允许一个运行中的游戏页，比仅锁云槽位更保守；没有 IndexedDB 时可玩本地游戏，但不能使用依赖恢复副本的云导入操作。密码改造前的第一版曾通过 54 项原游戏测试、28 项云端/恢复/工具测试、生产构建、Worker dry-run 与浏览器验收；这些历史数字不代替本次密码改造的验收。本次结果及真实账号尚未验收的限制见 [实现记录](cloud-save-implementation.md)。

@@ -4,7 +4,7 @@
 
 ## 交付状态
 
-第一版代码、配置工具、操作手册和本地验证已完成。**尚未创建或修改用户的 Cloudflare/GitHub 资源，没有发布到 play.ggzz.fun。** 正式上线按 [新手手册](cloud-save-user-guide.md) 操作；真实账号登录、DNS、私有仓库权限及目标手机浏览器由上线验收确认。
+第一版云存档代码、配置工具、操作手册和本地验证已完成；随后根据用户要求，将 Access 邮箱验证码改为游戏专用密码。用户已自行完成 ggzz.fun 接入 Cloudflare，并提供了成功截图。**本次没有代用户创建或修改 Cloudflare/GitHub 资源，没有发布到 play.ggzz.fun。** 正式上线按 [新手手册](cloud-save-user-guide.md) 操作；真实密码登录、私有仓库权限及目标手机浏览器由上线验收确认。
 
 本地测试使用独立临时浏览器资料和生成的测试存档，没有读取或替换用户真实进度。
 
@@ -13,8 +13,11 @@
 | 功能 | 实际行为 |
 | --- | --- |
 | 托管 | Cloudflare Worker 与 Static Assets 同源，Wrangler 上传生产构建的 docs 目录 |
-| 登录 | Access 邮箱验证码；API 验证 RS256 签名、issuer、audience、有效期和唯一允许邮箱 |
-| 凭据 | 仅服务端 GITHUB_SAVE_TOKEN Secret；网页不接收 token，公开配置与 Secret 分开 |
+| 登录 | 游戏专用随机密码；Worker 对页面、静态资产和 API 验证签名会话；未配置密码时全站关闭访问 |
+| 会话 | HttpOnly、Secure、SameSite=Strict Cookie，固定 7 天有效；退出清除当前浏览器 Cookie，改密轮换签名密钥撤销全部旧会话 |
+| 凭据 | 服务端 GAME_AUTH 与 GITHUB_SAVE_TOKEN 两项 Secret；网页只接收用户输入的游戏密码，不接收 GitHub token 或会话签名密钥 |
+| 登录限流 | 原生 Workers Rate Limit 绑定：同 IP 5 次/60 秒、同位置全站 20 次/60 秒；不是全球强一致计数 |
+| 重新登录 | 会话失效保留本地档和待同步请求；云面板在新标签页打开登录，返回原页检查连接和同步 |
 | 存档结构 | 原版 player/save/settings 完整快照，附 schemaVersion、revision、snapshotId、设备和时间等元数据 |
 | 冲突 | GitHub blob SHA + revision 条件更新，失败返回双方进度；用户明确选择，禁止金币背包自动合并 |
 | 重试 | IndexedDB 先保存确切请求再发送；相同 snapshotId 和内容的重放识别已成功写入 |
@@ -30,7 +33,7 @@
 | 体积与频率 | 完整云文件上限 5 MiB；写入至少间隔 15 秒；上游限流/网络异常退避 |
 | 版本 | 拒绝用较旧游戏版本覆盖较新云档；本地恢复前检查版本；模块载入异常禁止上传 |
 
-一次只支持一个云槽位和一个允许邮箱。本地最多 9 个槽位仍沿用原版。每次重新关联槽位关闭自动同步，需再次明确开启。
+一次只支持一个云槽位和一个游戏专用密码，不提供多人账号。本地最多 9 个槽位仍沿用原版。每次重新关联槽位关闭自动同步，需再次明确开启。
 
 ## 文件职责
 
@@ -42,16 +45,58 @@
 | src/modules/cloudSave/api.ts | 同源请求、超时、云档回执校验 |
 | src/modules/cloudSave/CloudSave.ts | 旧游戏与新模块协调、标签锁、UI、导入恢复 |
 | src/components/cloudSave.html | 选档页和游戏中的中文云存档面板 |
-| cloud-save-worker/src/auth.ts | Cloudflare Access JWT 验证 |
+| cloud-save-worker/src/auth.ts | 游戏密码验证、签名会话和 Cookie |
+| cloud-save-worker/src/login.ts | 登录页、成功确认页和登录/退出流程 |
 | cloud-save-worker/src/github.ts | GitHub Contents API 条件写入、超过 1 MB 文件按不可变 blob SHA 读取 |
 | cloud-save-worker/src/index.ts | API 路由、来源校验、单槽位、幂等与冲突 |
-| cloud-save-worker/scripts/setup.mjs | 询问公开信息，生成被忽略的 wrangler.local.json，保留云槽位 ID |
+| cloud-save-worker/scripts/setup.mjs | 询问域名和仓库公开信息，生成被忽略的 wrangler.local.json，保留云槽位 ID |
+| cloud-save-worker/scripts/password.mjs | 生成高熵游戏密码，上传 GAME_AUTH，仅在交互终端成功后显示新密码 |
 | cloud-save-worker/scripts/recover.mjs | 将本地恢复包或云端 JSON 转成原版 .txt |
 | .github/workflows/build.yml | 在原 CI 中增加独立 Worker 类型及测试任务 |
 
 对原项目的接入集中在启动、Save.store/loadFromFile/delete、模块载入异常和 Game.stop。没有改战斗、奖励、掉落或经济规则。App 统一移除选档页并移动云面板，避免原全屏选档层遮住云存档按钮。
 
-## 自动验证结果
+## 密码改造后的验证
+
+本节记录本次密码改造的验证结果；下面标注“改造前”的测试和截图只说明旧版本云存档行为，不能当作新登录链的通过证据。
+
+已完成的本次自动检查：
+
+| 检查 | 结果 |
+| --- | --- |
+| npm run cloud:build | 通过，完整生产构建成功 |
+| 原游戏与客户端 Vitest | **64/64 通过**：原有 54 项与新增客户端 10 项 |
+| 原游戏 ESLint / Stylelint | 通过 |
+| Worker strict TypeScript | 通过 |
+| Worker Node 测试 | **46/46 通过**，含 11 项认证测试、10 项工具测试及数据、冲突、存储等回归 |
+| Wrangler dry-run | **退出码 0**；识别 8,604 个静态资源条目、两个 Rate Limit 绑定及 ASSETS；仅检查发布包，未部署 |
+
+没有生成或设置用户真实游戏密码，没有读取用户 GitHub token，也没有部署到用户账号；测试使用独立测试凭据和存档。
+
+新增客户端用例验证认证过期不导航、不刷新、检查连接前暂停自动重试；退出需确认并保存本地、网络或保存失败保留当前页、取消不改变自动同步。认证与工具用例覆盖全站门禁、缺配置、Cookie、密码会话、退出与轮换、同源校验、请求体与限流，以及向导、Secret 工具的安全输入输出。实际覆盖以测试源码为准，不以这些测试代替真实账号上线验收。
+
+### 本次密码登录浏览器验收
+
+使用真实 Edge 无头浏览器，通过本地 HTTP 适配器执行最终 Worker handler 和生产构建的 docs。GitHub 与限流绑定使用测试替身，不连接用户真实账号；测试专用凭据不等于已为用户生成正式密码。
+
+以下 **10 项检查通过**：
+
+1. 未登录访问游戏页面，进入密码门禁。
+2. 390 像素手机宽度下登录界面没有横向溢出。
+3. 错误密码被拒绝。
+4. 正确密码登录成功，Cookie 带 HttpOnly、Secure、SameSite=Strict 属性。
+5. 生产选档页正常显示，云存档面板可以检查连接。
+6. 在新标签页重新登录，原游戏页不会被刷新；成功确认页不自动启动第二份游戏。
+7. 实际点击云面板的退出按钮和确认按钮，完成游戏内退出流程。
+8. 登录成功确认页上的表单退出可用。
+9. 退出后直接访问静态资源，再次被登录门禁保护。
+10. 上述操作没有触发 pageerror。
+
+已查看桌面和手机截图。浏览器验收发现登录页原先的 no-referrer 策略导致表单提交出现 Origin: null；已改成 same-origin 并增加回归断言，保留同源校验，不通过放宽来源限制规避问题。
+
+截图在 output/playwright/ 下，属于被 Git 忽略的本地验收产物，不提交。该验收没有访问真实私有存档仓库，也没有替用户在两台真实设备上完成上传与恢复；真实 Cloudflare、GitHub 权限、手机浏览器、网络和费用仍按新手手册上线验收。
+
+## 自动验证结果（密码改造前）
 
 使用 Node **v24.19.0**，遵守项目 Node 24 要求；未改用户系统默认 Node 版本。依赖按 lockfile 安装。翻译子模块为已锁定提交 47195e47e419b7bcbe9f9cdfad09065b00a55bb8。
 
@@ -71,7 +116,7 @@
 
 构建仍有上游依赖的弃用、旧 Browserslist 数据提示；CNAME 未设置是原 GitHub Pages 构建提示，本部署由 Wrangler Custom Domain 管理域名。均未导致检查失败。
 
-## 浏览器验收
+## 浏览器验收（密码改造前）
 
 使用 Playwright CLI 驱动本机 Chrome，访问生产构建资源。临时测试 API 复用实际 Worker handler 和内存仓库，测试环境注入认证，仅监听 127.0.0.1；该测试服务不在发布代码中，也不是生产绕过开关。
 
@@ -87,14 +132,21 @@
 8. GitHub 历史 JSON 和原版 .txt 均通过文件选择器导入；历史导入 base/关联为空，不继承旧版本。
 9. 1280 像素桌面和 390 像素窄屏检查。修复原主题下次要按钮颜色与背景相同的问题，最终按钮可读、面板未横向越界。
 
-本地截图在 output/playwright/cloud-save-desktop-final.png 和 cloud-save-mobile-final.png，属于忽略的验收产物，不提交测试存档。浏览器原项目的翻译回退存在 zh/zh-CN 404；初次空云槽位 404、模拟冲突 409 和模拟故障 503 是预期响应。浏览器验收不等于真实 Access、GitHub、手机 Safari 或长期挂机性能验收。
+本地截图在 output/playwright/cloud-save-desktop-final.png 和 cloud-save-mobile-final.png，属于忽略的验收产物，不提交测试存档。浏览器原项目的翻译回退存在 zh/zh-CN 404；初次空云槽位 404、模拟冲突 409 和模拟故障 503 是预期响应。这批历史浏览器验收不覆盖本次游戏密码门禁，也不等于真实 GitHub、手机 Safari 或长期挂机性能验收。
 
 ## 上线前仍需用户完成
 
-- ggzz.fun 接入 Cloudflare，先保存并核对旧 DNS 记录。
+- ggzz.fun 接入已由用户完成；确认 Cloudflare 保留根域、clw、memos 三条各自的原 DNS 记录。
 - 创建专用 GitHub 私有仓库与仅该仓库 Contents 读写的 token。
-- 创建精确邮箱 Access 策略，保存团队地址与应用 AUD。
-- 运行配置向导、检查、部署，再通过 Secret 输入 token。
+- 不再开通 Zero Trust。如已创建 Access 应用，仅解除 play.ggzz.fun 的旧邮箱门禁，保留其他业务规则。
+- 运行配置向导、检查和部署，再运行 cloud:password 生成游戏密码，运行 cloud:secret 录入 GitHub token。
+- 保存游戏密码到密码管理器，保留 wrangler.local.json 和 CLOUD_SLOT_ID；无需团队地址、AUD 或允许邮箱。
 - 按手册在真实两台设备完成首次上传、恢复和切换，确认后再开启自动同步。
 
 尚未实现多人账户、多云槽位、游戏内历史版本浏览、服务端挂机或自动合并。恢复副本不自动清理；GitHub 历史长期增长需要观察。较大真实存档的 Worker CPU、费用和实际网络延迟需部署后测量。
+
+## 密码门禁带来的运行边界
+
+全站采用 run_worker_first: true，游戏图片、脚本等静态请求也执行 Worker 登录检查，会计入 Worker 请求用量。不能将本版本估算为纯静态托管的无限免费请求；需在上线后观察真实资源加载和 CPU 额度。
+
+正常部署更新保留 GAME_AUTH；只有主动运行 cloud:password 才轮换游戏密码与会话密钥。游戏内退出前需确认，保存本地并关闭自动同步，服务端退出成功后暂停游戏、返回登录页；保存或网络失败时保留页面。退出当前浏览器不删除本地或云端存档，不自动补上传；已打开游戏在登录失效时仍保留本地数据。

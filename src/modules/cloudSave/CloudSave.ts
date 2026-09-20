@@ -30,6 +30,7 @@ export default class CloudSave {
     private static failures = 0;
     private static captureQueue: Promise<void> = Promise.resolve();
     private static stopped = false;
+    private static loginRequired = false;
 
     static initialize(version?: string): Promise<void> {
         if (version) {
@@ -72,7 +73,7 @@ export default class CloudSave {
             this.render();
             this.refreshLocalChoices();
             window.setInterval(() => {
-                if (this.running && !this.stopped && !this.blocked && !this.busy
+                if (this.running && !this.stopped && !this.blocked && !this.busy && !this.loginRequired
                     && this.engine?.state.autoSync && !this.engine.state.hasConflict
                     && this.engine.state.localKey === this.activeKey
                     && Settings.getSetting('disableAutoSave').value === false
@@ -116,7 +117,11 @@ export default class CloudSave {
         const checkbox = document.getElementById('cloud-save-auto') as HTMLInputElement;
         if (checkbox) {
             checkbox.checked = state?.autoSync ?? false;
-            checkbox.disabled = !state?.base || !!this.blocked || !!state?.hasConflict;
+            checkbox.disabled = !state?.base || !!this.blocked || !!state?.hasConflict || this.loginRequired;
+        }
+        const logout = document.querySelector<HTMLButtonElement>('[data-cloud-action="logout"]');
+        if (logout) {
+            logout.disabled = this.busy || this.serverSlot === null;
         }
         const conflict = document.getElementById('cloud-save-conflict');
         if (conflict) {
@@ -289,6 +294,10 @@ export default class CloudSave {
                 return false;
             }
         } catch (error) {
+            if (error instanceof CloudApiError && error.code === 'LOGIN_REQUIRED') {
+                this.loginRequired = true;
+                this.render();
+            }
             this.message(this.errorMessage(error));
             const proceed = await Notifier.confirm({
                 title: '暂时无法确认云存档',
@@ -353,6 +362,7 @@ export default class CloudSave {
             throw new Error('服务器云槽位与本机已关联槽位不同，请检查配置，不要覆盖存档。');
         }
         this.serverSlot = slot;
+        this.loginRequired = false;
         return slot;
     }
 
@@ -429,6 +439,41 @@ export default class CloudSave {
         this.message(remaining
             ? '上一份快照已确认，但仍有更新的本地进度。请 15 秒后再点一次同步，暂不要换设备。'
             : switchDevice ? '同步成功，可以关闭此页面并换设备。当前游戏已暂停；继续游玩请刷新页面。' : '云端已确认保存。');
+    }
+
+    private static async logout(): Promise<void> {
+        if (this.serverSlot === null) {
+            throw new Error('请先检查连接，确认当前地址已启用云存档。');
+        }
+        if (!await Notifier.confirm({
+            title: '退出游戏登录',
+            message: '退出只保存当前设备的本地进度，不会上传云端，并会关闭自动同步。若要换设备，请取消后先点“同步后换设备”。确定退出吗？',
+            confirm: '保存本地并退出', cancel: '取消',
+        })) {
+            return;
+        }
+        await this.engine.setAutomatic(false);
+        if (this.running && this.activeKey !== null) {
+            await this.current(this.activeKey);
+        }
+        if (this.blocked) {
+            throw new Error('本地备份尚未完成，已保留当前页面。请先导出本地存档，再处理退出登录。');
+        }
+        this.message('本地进度已保存，正在退出登录；这次操作不会上传云端。');
+        await this.api.logout();
+        // Keep playing on network failure; only pause after the server confirms logout.
+        if (this.running && !this.stopped) {
+            player._lastSeen = Date.now();
+            Save.store(player);
+            this.stopped = true;
+            App.game.stop();
+            await this.captureQueue;
+        }
+        if (this.blocked) {
+            throw new Error('登录已退出，但本地备份未完成。请保留本页并导出本地存档。');
+        }
+        window.onbeforeunload = () => {};
+        location.assign('/login');
     }
 
     private static async restore(useConflict: boolean): Promise<void> {
@@ -509,7 +554,9 @@ export default class CloudSave {
                 this.downloadJson(await this.storage.allBackups(), 'pokeclicker-recovery-backups.json');
             } else {
                 await this.requireWriter();
-                if (action === 'automatic') {
+                if (action === 'logout') {
+                    await this.logout();
+                } else if (action === 'automatic') {
                     if (this.selectedKey() !== this.engine.state.localKey) {
                         throw new Error('请先选择已关联的本地存档。');
                     }
@@ -523,11 +570,16 @@ export default class CloudSave {
                 }
             }
         } catch (error) {
+            if (error instanceof CloudApiError && error.code === 'LOGIN_REQUIRED') {
+                this.loginRequired = true;
+            }
             if (error instanceof CloudApiError && (error.status === 429 || error.status === 0 || error.status >= 500)) {
                 this.failures++;
                 this.retryAt = Date.now() + Math.max(error.retryAfter * 1000, Math.min(600000, 30000 * 2 ** Math.min(this.failures, 5)));
             }
-            this.message(this.errorMessage(error) + (this.stopped ? ' 当前游戏已暂停，重试同步成功后再换设备。' : ' 本地进度不会被云端覆盖。'));
+            this.message(this.errorMessage(error) + (this.stopped
+                ? action === 'logout' ? ' 当前游戏已暂停，保留本页并导出本地备份后再处理退出。' : ' 当前游戏已暂停，重试同步成功后再换设备。'
+                : ' 本地进度不会被云端覆盖。'));
         } finally {
             this.busy = false;
             this.render();

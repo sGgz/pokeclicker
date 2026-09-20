@@ -13,6 +13,8 @@
         <button type="button" class="btn btn-outline-primary m-1" data-cloud-action="restore">下载云档到本机</button>
         <button type="button" class="btn btn-outline-dark m-1" data-cloud-action="export">导出本地备份</button>
         <button type="button" class="btn btn-outline-dark m-1" data-cloud-action="backups">下载恢复备份包</button>
+        <a class="btn btn-outline-dark m-1" href="/login" target="_blank" rel="noopener">重新登录</a>
+        <button type="button" class="btn btn-outline-danger m-1" data-cloud-action="logout" disabled>退出登录</button>
     </div>
     <label class="d-block mt-2">
         <input id="cloud-save-auto" type="checkbox" /> 每 10 分钟自动同步（完成首次手动验证后再开启）
@@ -24,5 +26,5 @@
         <button type="button" class="btn btn-primary m-1" data-cloud-action="remote">使用这份云端进度</button>
         <button type="button" class="btn btn-warning m-1" data-cloud-action="local">使用本地进度覆盖云端</button>
     </div>
-    <p class="small mt-2 mb-0">登录过期时请刷新页面重新验证邮箱。GitHub token 只在 Cloudflare 后台设置，不要填写到网页中。</p>
+    <p class="small mt-2 mb-0">登录过期时点“重新登录”，在新标签页输入游戏密码，再回到本页检查连接；不要刷新当前游戏。退出登录只保存本地进度，不会上传云端。GitHub token 只在 Cloudflare 后台设置，不要填写到网页中。</p>
 </details>

@@ -8,16 +8,17 @@
     "assets": {
         "directory": "../docs",
         "binding": "ASSETS",
-        "run_worker_first": ["/api/*"]
+        "run_worker_first": true
     },
+    "ratelimits": [
+        { "name": "LOGIN_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
+        { "name": "LOGIN_GLOBAL_LIMITER", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } }
+    ],
     "vars": {
         "GITHUB_OWNER": "",
         "GITHUB_SAVE_REPO": "pokeclicker-saves",
         "GITHUB_SAVE_BRANCH": "main",
         "CLOUD_SLOT_ID": "66cf8d51-2bac-4a66-a608-5f08a77ed50a",
-        "ACCESS_TEAM_DOMAIN": "",
-        "ACCESS_AUD": "",
-        "ALLOWED_EMAIL": "",
         "ALLOWED_ORIGIN": ""
     }
 }

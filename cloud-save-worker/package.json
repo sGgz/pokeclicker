@@ -13,7 +13,8 @@
     "deploy": "wrangler deploy",
     "deploy:check": "wrangler deploy --dry-run",
     "login": "wrangler login",
-    "secret": "wrangler secret put GITHUB_SAVE_TOKEN --config wrangler.local.json"
+    "secret": "wrangler secret put GITHUB_SAVE_TOKEN --config wrangler.local.json",
+    "password": "node scripts/password.mjs"
   },
   "dependencies": {
     "jose": "^6.1.0"
