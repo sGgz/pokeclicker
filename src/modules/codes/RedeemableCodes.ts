@@ -17,6 +17,7 @@ import Amount from '../wallet/Amount';
 import Item from '../items/Item';
 import QuestLineState from '../quests/QuestLineState';
 import Rand from '../utilities/Rand';
+import PricingPolicy from '../privateGameplay/PricingPolicy';
 
 export default class RedeemableCodes implements Saveable {
     defaults: Record<string, any>;
@@ -128,6 +129,9 @@ export default class RedeemableCodes implements Saveable {
                 return true;
             }, new MultiRequirement([new MaxRegionRequirement(Region.kalos), new ObtainedPokemonRequirement('Ampharos')])),
             new RedeemableCode('refund-vitamins', 1316108150, false, async () => {
+                if (!this.canRefundVitamins()) {
+                    return false;
+                }
                 const vitamins = GameHelper.enumStrings(VitaminType).map((name) => ItemList[name]);
                 const toRefund = vitamins.map((item) => {
                     const totalUsed = App.game.party.caughtPokemon.reduce(
@@ -171,6 +175,10 @@ export default class RedeemableCodes implements Saveable {
                     }.</br></br>You can only do this once.</br>Are you sure?</p>`,
                 });
 
+                // A fixed-price purchase can occur while the confirmation is open.
+                if (refund && !this.canRefundVitamins()) {
+                    return false;
+                }
                 if (refund) {
                     toRefund.forEach(([item, n]) => {
                         player.loseItem(item.name, n);
@@ -241,6 +249,18 @@ export default class RedeemableCodes implements Saveable {
                 return true;
             }),
         ];
+    }
+
+    private canRefundVitamins(): boolean {
+        if (PricingPolicy.canRefundVitamins()) {
+            return true;
+        }
+        Notifier.notify({
+            title: '维生素退款已停用',
+            message: '此存档购买过固定价格的维生素，不能使用旧版维生素退款码。切回官方价格不会解除此限制。',
+            type: NotificationConstants.NotificationOption.warning,
+        });
+        return false;
     }
 
     // eslint-disable-next-line class-methods-use-this

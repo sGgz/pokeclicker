@@ -6,6 +6,7 @@ import {
 } from '../GameConstants';
 import NotificationConstants from '../notifications/NotificationConstants';
 import Notifier from '../notifications/Notifier';
+import PricingPolicy from '../privateGameplay/PricingPolicy';
 import Requirement from '../requirements/Requirement';
 import Amount from '../wallet/Amount';
 import { MultiplierDecreaser, ShopOptions } from './types';
@@ -66,6 +67,15 @@ export default class Item {
     }
 
     totalPrice(amount: number): number {
+        if (!PricingPolicy.isValidQuantity(amount)) {
+            return Infinity;
+        }
+        if (amount === 0) {
+            return 0;
+        }
+        if (PricingPolicy.fixedPricesEnabled()) {
+            return PricingPolicy.fixedTotal(this.basePrice, amount, this.maxAmount);
+        }
         const targetAmount = Math.min(amount, this.maxAmount);
 
         if (this.multiplier === 1) {
@@ -89,7 +99,7 @@ export default class Item {
     }
 
     buy(amt: number) {
-        if (amt <= 0) {
+        if (!PricingPolicy.isValidQuantity(amt) || amt === 0) {
             return;
         }
 
@@ -112,7 +122,13 @@ export default class Item {
             return;
         }
 
-        if (App.game.wallet.loseAmount(new Amount(this.totalPrice(n), this.currency))) {
+        const total = this.totalPrice(n);
+        if (!Number.isFinite(total) || total < 0) {
+            return;
+        }
+        const fixedPrices = PricingPolicy.fixedPricesEnabled();
+        if (App.game.wallet.loseAmount(new Amount(total, this.currency))) {
+            PricingPolicy.recordPurchase(this.name, fixedPrices);
             this.gain(n);
             this.increasePriceMultiplier(n);
             Notifier.notify({
@@ -177,11 +193,17 @@ export default class Item {
     }
 
     increasePriceMultiplier(amount = 1) {
+        if (PricingPolicy.fixedPricesEnabled()) {
+            return;
+        }
         player.itemMultipliers[this.saveName] = Math.min(this.maxMultiplier, (player.itemMultipliers[this.saveName] || 1) * (this.multiplier ** amount));
         this.price(Math.round(this.basePrice * player.itemMultipliers[this.saveName]));
     }
 
     decreasePriceMultiplier(amount = 1, multiplierDecreaser?: MultiplierDecreaser) {
+        if (PricingPolicy.fixedPricesEnabled()) {
+            return;
+        }
         if (!this.multiplierDecrease) {
             return;
         }

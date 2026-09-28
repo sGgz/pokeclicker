@@ -53,6 +53,7 @@ class Save {
 
         // Load our settings, or the saved default settings, or no settings
         const settings = localStorage.getItem(`settings${Save.key}`) || localStorage.getItem('settings') || '{}';
+        PrivateGameplay.resetSettingsForLoad();
         Settings.fromJSON(JSON.parse(settings));
 
         // Sort modules now, save settings, load settings

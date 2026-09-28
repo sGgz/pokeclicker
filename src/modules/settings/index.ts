@@ -39,8 +39,11 @@ import areaStatus from '../enums/AreaStatus';
 import ObtainedKeyItemRequirement from '../requirements/ObtainedKeyItemRequirement';
 import KeyItemType from '../enums/KeyItemType';
 import MultiSelectSetting from './MultiSelectSetting';
+import PrivateGameplay from '../privateGameplay/settings';
 
 export default Settings;
+
+PrivateGameplay.registerSettings();
 
 /* SettingOptions that can be reused by multiple settings */
 

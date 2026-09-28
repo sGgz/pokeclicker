@@ -141,6 +141,31 @@
 
                     <div class="tab-pane" id="settings-game">
                         <table class="table table-striped table-hover m-0">
+                            <thead>
+                                <tr><th colspan="2">自用玩法</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.guidePathfinding')}"></tr>
+                                <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.pricingMode')}"></tr>
+                                <tr>
+                                    <td class="p-2"><label class="m-0" for="private-guide-fee">地牢助手服务费</label></td>
+                                    <td class="p-2">
+                                        <select id="private-guide-fee" class="form-control" data-bind="
+                                            options: Settings.getSetting('ggzz.private.guideFeeRate').options,
+                                            optionsText: 'text', optionsValue: 'value',
+                                            value: Settings.getSetting('ggzz.private.guideFeeRate').observableValue,
+                                            disable: PrivateGameplay.guideIsHired()"></select>
+                                    </td>
+                                </tr>
+                                <tr><td colspan="2" class="small">
+                                    优化寻路保留各助手的速度和能力。服务费默认原价的 1%，门票仍为原价；助手工作期间不能调整费用比例。
+                                    固定价期间保留并冻结旧倍率，切回官方价格会恢复旧倍率，不补扣或退还历史差价。
+                                    按固定价购买维生素后，本存档不再支持旧的维生素退款码。
+                                </td></tr>
+                            </tbody>
+                            <thead>
+                                <tr><th colspan="2">Gameplay</th></tr>
+                            </thead>
                             <tbody>
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('shopButtons')}"></tr>
                                 <tr data-bind="template: { name: 'BooleanSettingTemplate', data: Settings.getSetting('resetShopAmountOnPurchase')}"></tr>

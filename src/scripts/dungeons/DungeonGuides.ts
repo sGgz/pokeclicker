@@ -30,7 +30,12 @@ class DungeonGuide {
         if (this.ticks >= this.interval) {
             this.ticks = 0;
             try {
-                this.walk();
+                if (PrivateGameplay.optimizedPathfinding()) {
+                    DungeonGuidePlanner.walk(this.name);
+                } else {
+                    DungeonGuidePlanner.reset();
+                    this.walk();
+                }
 
                 // Interact with the current tile
                 switch (DungeonRunner.map.currentTile().type()) {
@@ -66,7 +71,10 @@ class DungeonGuide {
                 // Only refund for the cancelled attempts
                 refunds.forEach((a) => {
                     a.amount = Math.round(uncompleteRatio * a.amount);
-                    App.game.wallet.addAmount(a, true);
+                    // Wallet.addAmount converts zero to one; small discounted fees can round to zero.
+                    if (a.amount > 0) {
+                        App.game.wallet.addAmount(a, true);
+                    }
                 });
                 this.fire();
             }
@@ -93,6 +101,14 @@ class DungeonGuide {
             newCost.amount = Math.round(cost.amount * clears * discount);
             costs.push(new Amount(newCost.amount, newCost.currency));
         });
+        const feeRate = PrivateGameplay.guideFeeRate();
+        if (feeRate !== 1) {
+            costs.forEach((cost) => {
+                if (cost.amount > 0) {
+                    cost.amount = Math.max(1, Math.round(cost.amount * feeRate));
+                }
+            });
+        }
         if (includeDungeonCost) {
             let dtCost = costs.find(c => c.currency === GameConstants.Currency.dungeonToken);
             if (!dtCost) {
@@ -128,6 +144,7 @@ class DungeonGuide {
         DungeonGuides.clears(1);
         DungeonGuides.totalClears = 1;
         DungeonGuides.hired(null);
+        DungeonGuidePlanner.reset();
     }
 }
 

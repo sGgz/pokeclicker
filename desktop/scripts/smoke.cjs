@@ -132,6 +132,43 @@ async function run() {
         await pageA.locator('#pickStarterTutorialModal input.image-starter').first().click();
         // Hide the tutorial tooltip only in this disposable test profile.
         await pageA.evaluate(() => { Information.hide(); App.game.profile.name('Desktop fixture A'); Save.store(player); });
+        // Exercise the actual Knockout controls and game objects in this isolated save.
+        await pageA.evaluate(() => $('#settingsModal').modal('show'));
+        await pageA.locator('#settingsModal a[href="#settings-game"]').click();
+        await pageA.locator('select[name="ggzz.private.guidePathfinding"]').selectOption('optimized');
+        await pageA.locator('select[name="ggzz.private.pricingMode"]').selectOption('base-price');
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.optimizedPathfinding()), true);
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.fixedItemPrices()), true);
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.guideFeeRate()), 0.01);
+        await pageA.locator('#private-guide-fee').selectOption({ label: '官方原价' });
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.guideFeeRate()), 1);
+        await pageA.locator('#private-guide-fee').selectOption({ label: '原价的 1%（门票原价）' });
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.guideFeeRate()), 0.01);
+        await pageA.screenshot({ path: path.join(output, 'private-gameplay-settings.png') });
+        await pageA.evaluate(() => $('#settingsModal').modal('hide'));
+        const purchase = await pageA.evaluate(() => {
+            const vitamin = ItemList.Protein;
+            player.itemMultipliers[vitamin.saveName] = 8;
+            vitamin.price(vitamin.basePrice * 8);
+            App.game.wallet.currencies[vitamin.currency](vitamin.basePrice * 100);
+            const beforeMoney = App.game.wallet.currencies[vitamin.currency]();
+            const beforeItems = player.amountOfItem(vitamin.name);
+            vitamin.buy(2);
+            const result = {
+                spent: beforeMoney - App.game.wallet.currencies[vitamin.currency](),
+                expected: Math.round(vitamin.basePrice * 2),
+                gained: player.amountOfItem(vitamin.name) - beforeItems,
+                multiplier: player.itemMultipliers[vitamin.saveName],
+                refundProtected: PrivateGameplay.fixedVitaminsPurchased(),
+            };
+            Save.store(player);
+            return result;
+        });
+        assert.equal(purchase.spent, purchase.expected);
+        assert.equal(purchase.gained, 2);
+        assert.equal(purchase.multiplier, 8);
+        assert.equal(purchase.refundProtected, true);
+        checks.push('Private gameplay controls work in the real renderer: optimized paths, fixed-price purchase, frozen old multiplier, vitamin history and 1% guide fee.');
         const keyA = await pageA.evaluate(() => Save.key);
         const seconds = await pageA.evaluate(() => App.game.statistics.secondsPlayed());
         await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
@@ -170,6 +207,10 @@ async function run() {
         await status(pageA, '云端已确认保存');
         assert.equal(remote.envelope.payload.save.profile.name, 'Desktop fixture A');
         assert.equal(remote.envelope.revision, 1);
+        assert.equal(remote.envelope.payload.settings['ggzz.private.pricingMode'], 'base-price');
+        assert.equal(remote.envelope.payload.settings['ggzz.private.guidePathfinding'], 'optimized');
+        assert.equal(remote.envelope.payload.settings['ggzz.private.guideFeeRate'], 0.01);
+        assert.equal(remote.envelope.payload.settings['ggzz.private.fixedVitaminPurchased'], true);
         checks.push('Desktop uploads a real game snapshot through the unchanged Worker protocol and receives a revision/SHA receipt.');
         await quit(a);
         ({ app: a, page: pageA } = await launch(profiles[0]));
@@ -202,6 +243,12 @@ async function run() {
         await web.getByRole('button', { name: '备份并恢复', exact: true }).click();
         await status(web, '存档已恢复到本机');
         const webKey = await web.evaluate(() => Object.keys(localStorage).find(key => key.startsWith('save')).slice(4));
+        const restoredSettings = await web.evaluate(key => JSON.parse(localStorage.getItem('settings' + key)), webKey);
+        assert.equal(restoredSettings['ggzz.private.pricingMode'], 'base-price');
+        assert.equal(restoredSettings['ggzz.private.guidePathfinding'], 'optimized');
+        assert.equal(restoredSettings['ggzz.private.guideFeeRate'], 0.01);
+        assert.equal(restoredSettings['ggzz.private.fixedVitaminPurchased'], true);
+        checks.push('All private preferences and vitamin purchase history survive desktop-to-web cloud restore without a protocol change.');
         await web.evaluate(key => { const save = JSON.parse(localStorage.getItem('save' + key)); save.profile.name = 'Web fixture progress'; localStorage.setItem('save' + key, JSON.stringify(save)); }, webKey);
         clock += 20000;
         await panel(web);
@@ -269,7 +316,10 @@ async function run() {
         await help.locator('h1').waitFor();
         await help.screenshot({ path: path.join(output, 'offline-manual.png') });
         assert.ok((await help.locator('body').innerText()).includes('同步后换设备'));
-        checks.push('The packaged Chinese operation manual opens locally while offline.');
+        assert.ok((await help.locator('#private-gameplay').innerText()).includes('原价的 1%'));
+        await help.locator('#private-gameplay').scrollIntoViewIfNeeded();
+        await help.locator('#private-gameplay').screenshot({ path: path.join(output, 'private-gameplay-manual.png') });
+        checks.push('The packaged Chinese operation manual, including private gameplay instructions, opens locally while offline.');
         await quit(b); await quit(a);
         assert.deepEqual(errors, []);
         checks.push('No uncaught renderer errors during the desktop acceptance flow.');

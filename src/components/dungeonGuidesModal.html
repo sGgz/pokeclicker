@@ -16,6 +16,7 @@
                     <!-- Hiring Tab -->
                     <div id="dungeonGuidesModalHireTab" class="tab-pane fade active show">
                         <!-- ko if: player.town instanceof DungeonTown -->
+                        <p class="m-2 small text-center">助手服务费按原价的 <strong data-bind="text: (PrivateGameplay.guideFeeRate() * 100).toLocaleString()"></strong>% 收取，每项正服务费最低 1，门票原价。费用仍按整批预付，雇用期间不能切换费率。</p>
                         <div class="row m-0 justify-content-center d-flex p-1" data-bind="foreach: DungeonGuides.available()" style="max-width: 100%;">
                             <div class="card text-left col-lg-6 col-md-12 p-1 border-0 align-items-stretch">
                                 <h5 class="card-header d-flex align-items-center py-2">
@@ -34,7 +35,7 @@
                                             </tr>
                                             <tr>
                                                 <td class="align-middle" data-bind="text: `${($data.interval / 1000).toLocaleString('en-US')} seconds`"></td>
-                                                <td rowspan="3" class="align-middle" data-bind="foreach: $data.calcCost(1, player.town.dungeon.tokenCost, player.region)">
+                                                <td rowspan="3" class="align-middle" data-bind="foreach: $data.calcCost(1, player.town.dungeon.tokenCost, player.town.dungeon.difficulty)">
                                                     <knockout class="w-100 currency-template" data-bind="template: { name: 'currencyTemplate', data: {'amount': $data.amount, 'currency': $data.currency}}">cost</knockout><br/>
                                                 </td>
                                             </tr>
@@ -78,7 +79,7 @@
                                                 </tr>
                                                 <tr>
                                                     <td class="align-middle" data-bind="text: `${($data.interval / 1000).toLocaleString('en-US')} seconds`"></td>
-                                                    <td class="align-middle" data-bind="foreach: $data.calcCost(1, player.town.dungeon.tokenCost, player.region)">
+                                                    <td class="align-middle" data-bind="foreach: $data.calcCost(1, player.town.dungeon.tokenCost, player.town.dungeon.difficulty)">
                                                         <img width="24" src="" data-bind="attr: { src: `assets/images/currency/${GameConstants.Currency[$data.currency]}.svg` }"/>
                                                     </td>
                                                 </tr>
@@ -135,7 +136,7 @@
                             </td>
                         </tr>
                         <tr>
-                            <td class="table-secondary p-2">Guide Cost</td>
+                            <td class="table-secondary p-2">Guide Cost（原价的 <span data-bind="text: (PrivateGameplay.guideFeeRate() * 100).toLocaleString()"></span>%）</td>
                         </tr>
                         <tr>
                             <td class="p-2" data-bind="foreach: DungeonGuides.calcCost()">
@@ -143,7 +144,7 @@
                             </td>
                         </tr>
                         <tr>
-                            <td class="table-secondary p-2">Dungeon Entry Cost</td>
+                            <td class="table-secondary p-2">Dungeon Entry Cost（门票原价）</td>
                         </tr>
                         <tr class="p-2" data-bind="with: DungeonGuides.calcDungeonCost()">
                             <td data-bind="template: { name: 'currencyTemplate', data: {'amount': $data.amount, 'currency': $data.currency}}"></td>
@@ -203,7 +204,7 @@
                                         <th>Cost / Run</th>
                                     </tr>
                                     <tr>
-                                        <td data-bind="foreach: $data.calcCost(1, player.town.dungeon.tokenCost, player.region)">
+                                        <td data-bind="foreach: $data.calcCost(1, player.town.dungeon.tokenCost, player.town.dungeon.difficulty)">
                                             <knockout data-bind="template: { name: 'currencyTemplate', data: {'amount': $data.amount, 'currency': $data.currency}}"></knockout><br/>
                                         </td>
                                     </tr>
