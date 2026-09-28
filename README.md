@@ -21,6 +21,7 @@ You can reach out on discord to discuss your ideas and how to implement them: ht
 - [项目架构与云存档设计](design/cloud-save-design.md)
 - [实现和验收记录](design/cloud-save-implementation.md)
 - [Windows 客户端与开发说明](desktop/README.md)
+- [自用玩法优化设计：地牢助手与固定道具价格](design/private-gameplay-design.md)（设计提案，尚未实现）
 
 GitHub token 只录入 Worker Secret。先完成手册中的账号配置与验收，再开启自动同步。
 
