@@ -21,7 +21,7 @@ You can reach out on discord to discuss your ideas and how to implement them: ht
 - [项目架构与云存档设计](design/cloud-save-design.md)
 - [实现和验收记录](design/cloud-save-implementation.md)
 - [Windows 客户端与开发说明](desktop/README.md)
-- [自用玩法实现与兼容说明：优化寻路、固定道具价格、助手服务费 1%](design/private-gameplay-design.md)（源码已实现；使用方法见 Windows 手册，本次未部署网页）
+- [自用玩法实现与兼容说明：优化寻路、固定道具价格、助手服务费 1%](design/private-gameplay-design.md)（2026-09-28 已部署到 play.ggzz.fun；使用方法见 Windows 手册）
 
 GitHub token 只录入 Worker Secret。先完成手册中的账号配置与验收，再开启自动同步。
 

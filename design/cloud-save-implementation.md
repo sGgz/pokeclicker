@@ -1,12 +1,34 @@
 # GitHub 私有仓库云存档：实现与验收记录
 
-日期：2026-09-20。游戏版本：0.10.26。目标地址：play.ggzz.fun。
+更新日期：2026-09-28。游戏版本：0.10.26。目标地址：play.ggzz.fun。
 
 ## 交付状态
 
 第一版云存档代码、配置工具、操作手册和本地验证已完成；随后根据用户要求，将 Access 邮箱验证码改为游戏专用密码。初次密码版本交付时没有代用户创建资源或部署。**用户随后已完成 play.ggzz.fun 发布，Cloudflare 部署记录和 GAME_AUTH、GITHUB_SAVE_TOKEN 两项 Secret 名称已核实存在，未读取 Secret 值。** 用户截图显示已进入游戏，但云存档提示 GitHub 无法连接；已在真实 Worker 运行时复现并修复代码兼容问题，修复版也已成功发布，处理记录见下一节。Secret 存在与网页可用均不能替代 GitHub 权限和真实同步验收。
 
 本地测试使用独立临时浏览器资料和生成的测试存档，没有读取或替换用户真实进度。
+
+## 2026-09-28：三项自用玩法发布
+
+用户明确授权后，已将优化地牢助手寻路、固定道具基础价、助手服务费默认原价的 1% 发布到现有 `play.ggzz.fun`。先前交付说明中的“源码已实现、网页未部署”状态至此结束。功能入口为 **Start Menu → Settings → Gameplay → 自用玩法**；寻路和固定价默认保留官方模式，需要手动开启，服务费默认系数为 `0.01`，门票原价。
+
+| 项目 | 结果 |
+| --- | --- |
+| 已发布源码提交 | `58ccd0cbb0794d6af32af6caf63de760e5ab8bfc` |
+| 部署命令 | `npm run cloud:deploy`，沿用现有 `wrangler.local.json`，退出码 0 |
+| Worker 与域名 | `pokeclicker-cloud-save`；`play.ggzz.fun (custom domain)` |
+| Cloudflare 版本 ID | `5ca52d14-1c10-4a7c-928a-a06e2b6120e0` |
+| 更新的静态资产 | `index.html`、`scripts/script.min.js`、`scripts/modules.min.js`、`package.json`，Wrangler 确认上传 4 项 |
+| 本地发布来源核对 | 四项网页文件 SHA-256 与生产 build 一致；按既有离线转换规则处理后，与已通过 17 项成品流程的 EXE 内资源一致 |
+| 公开登录页 | 无凭据 GET `/login` 返回 200，包含密码登录表单 |
+| 游戏及资源门禁 | 无凭据 GET `/` 与 `/scripts/modules.min.js` 均返回 303，跳到 `/login?returnTo=...` |
+| 云档 API 门禁 | 无凭据 GET `/api/cloud-save/status` 返回 401、`LOGIN_REQUIRED` |
+
+发布前已通过游戏 165 项测试、Worker 48 项测试、桌面 29 项测试，以及代码检查、样式检查、生产构建和打包 EXE 的 17 项操作流程。本次发布前重新完成了 Cloudflare 命令行登录授权，没有运行游戏改密或 Secret 更新命令；存档仓库、分支与槽位沿用既有配置。
+
+公开探针不带 Cookie 或 Authorization，不调用登录接口，不执行 POST/PUT。源码已核实无会话请求在创建 GitHub 存储对象前返回，所以此次核验没有读取或修改真实云档。无密码检查无法直接读取受保护的线上游戏 bundle；实际发布来源由本地资产一致性核对和 Cloudflare 成功回执确认。用户登录后仍需核对“自用玩法”和自己的进度，并在全部电脑更新后完成真实设备往返；公开入口通过不等于真实存档同步已验收。
+
+本地核验报告位于 `output/desktop-tests/private-gameplay-web-release-verification.json`。完整功能与兼容边界见 [自用玩法实现说明](private-gameplay-design.md)。
 
 ## 上线后的 GitHub 连接故障
 
