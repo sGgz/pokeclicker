@@ -42,6 +42,28 @@ class BreedingController {
         }
     }
 
+    public static fillEmptyEggSlots() {
+        const breeding = App.game.breeding;
+        if (!breeding.canAccess() || PokemonCategories.categoryAssignEnabled() || !breeding.hasFreeEggSlot()) {
+            return;
+        }
+
+        // Read current filters directly: the rendered list is cached and rate-limited.
+        const candidates = BreedingController.sortHatcheryList(App.game.party.caughtPokemon.filter((pokemon) => pokemon.matchesHatcheryFilters()));
+        let added = false;
+        for (const pokemon of candidates) {
+            if (!breeding.hasFreeEggSlot()) {
+                break;
+            }
+            if (pokemon.isHatchable()) {
+                added = breeding.addPokemonToHatchery(pokemon) || added;
+            }
+        }
+        if (added) {
+            breeding.checkCloseModal();
+        }
+    }
+
     public static getEggCssClass(egg: Egg): string {
         const animationType = Settings.getSetting('eggAnimation').observableValue();
         if (animationType === 'none') {
@@ -190,10 +212,7 @@ class BreedingController {
 
     // Sorted list of pokemon that match hatchery filters
     private static hatcherySortedFilteredList = ko.pureComputed(() => {
-        const hatcheryList = Array.from(BreedingController.hatcheryFilteredList());
-        // Don't adjust attack based on region if debuff is disabled
-        const region = App.game.challenges.list.regionalAttackDebuff.active() ? Settings.getSetting('breedingRegionalAttackDebuffSetting').observableValue() : -1;
-        hatcheryList.sort(PartyController.compareBy(Settings.getSetting('hatcherySort').observableValue(), Settings.getSetting('hatcherySortDirection').observableValue(), region));
+        const hatcheryList = BreedingController.sortHatcheryList(Array.from(BreedingController.hatcheryFilteredList()));
         // If a filter or sort order just changed
         if (BreedingController.viewResetWaiting.peek()) {
             // Ready to rerender now that the list is up to date
@@ -201,6 +220,12 @@ class BreedingController {
         }
         return hatcheryList;
     }).extend({ skippableRateLimit: 500 }) as KnockoutComputed<PartyPokemon[]> & SkippableRateLimit;  // Lets us rerender immediately after filter changes
+
+    private static sortHatcheryList(pokemon: PartyPokemon[]): PartyPokemon[] {
+        // Don't adjust attack based on region if debuff is disabled.
+        const region = App.game.challenges.list.regionalAttackDebuff.active() ? Settings.getSetting('breedingRegionalAttackDebuffSetting').observableValue() : -1;
+        return pokemon.sort(PartyController.compareBy(Settings.getSetting('hatcherySort').observableValue(), Settings.getSetting('hatcherySortDirection').observableValue(), region));
+    }
 
     // Filters for pokemon that match hatchery filters
     private static hatcheryFilteredList: KnockoutComputed<PartyPokemon[]> = ko.pureComputed(() => {
