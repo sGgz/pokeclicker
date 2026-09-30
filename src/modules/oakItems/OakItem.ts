@@ -68,6 +68,10 @@ export default class OakItem extends ExpUpgrade {
         return super.calculateBonus(level);
     }
 
+    hasEnoughExp(): boolean {
+        return !this.isMaxLevel() && super.hasEnoughExp();
+    }
+
     toJSON(): Record<string, any> {
         const json = super.toJSON();
         json.isActive = this.isActive;
@@ -81,11 +85,17 @@ export default class OakItem extends ExpUpgrade {
 
     // Knockout getters/setters
     get expPercentage() {
+        if (this.isMaxLevel()) {
+            return 100;
+        }
         const nextLevelExp = this.level === 0 ? this.expList[this.level] : this.expList[this.level] - this.expList[this.level - 1];
         return (Math.ceil(this.normalizedExp / this.expGain) / Math.ceil(nextLevelExp / this.expGain)) * 100;
     }
 
     get progressString(): string {
+        if (this.isMaxLevel()) {
+            return 'MAX LEVEL!';
+        }
         const nextLevelExp = this.level === 0 ? this.expList[this.level] : this.expList[this.level] - this.expList[this.level - 1];
         return `${Math.ceil(this.normalizedExp / this.expGain).toLocaleString('en-US')} / ${Math.ceil(nextLevelExp / this.expGain).toLocaleString('en-US')}`;
     }
@@ -100,6 +110,10 @@ export default class OakItem extends ExpUpgrade {
 
     get bonusText(): string {
         return `${this.calculateBonusIfActive()}${this.bonusSymbol}`;
+    }
+
+    get nextBonusText(): string {
+        return this.isMaxLevel() ? 'MAX LEVEL!' : `${this.calculateBonusIfActive(this.level + 1)}${this.bonusSymbol}`;
     }
 
     get tooltip() {

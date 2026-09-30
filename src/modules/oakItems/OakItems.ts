@@ -8,6 +8,7 @@ import MultiplierType from '../multiplier/MultiplierType';
 import AmountFactory from '../wallet/AmountFactory';
 import BoughtOakItem from './BoughtOakItem';
 import OakItem from './OakItem';
+import extendOakItemProgression from './OakItemProgression';
 
 export default class OakItems implements Feature {
     name = 'Oak Items';
@@ -56,6 +57,8 @@ export default class OakItems implements Feature {
             new BoughtOakItem(OakItemType.Treasure_Scanner, 'Treasure Scanner', 'Chance to multiply mining rewards', 'Cinnabar Island Shop',
                 true, [4, 8, 12, 16, 20, 24], 1, 25, undefined, undefined, AmountFactory.createArray([50000, 100000, 250000, 500000, 1000000], Currency.money), '%'),
         ];
+
+        this.itemList.forEach(extendOakItemProgression);
 
         this.addMultiplier('clickAttack', OakItemType.Rocky_Helmet);
         this.addMultiplier('exp', OakItemType.Exp_Share);

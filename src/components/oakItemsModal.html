@@ -124,10 +124,13 @@
             </tr>
             <tr>
               <td class="table-dark" style="width: 50%">
-                Level: <span data-bind="text: App.game.oakItems.itemList[OakItemController.inspectedItem].level"></span>
+                Level: <span data-bind="text: App.game.oakItems.itemList[OakItemController.inspectedItem].level + '/' + App.game.oakItems.itemList[OakItemController.inspectedItem].maxLevel"></span>
               </td>
               <td class="table-dark" style="width: 50%">
                 Bonus: <span data-bind="text: App.game.oakItems.itemList[OakItemController.inspectedItem].bonusText"></span>
+                <small class="d-block" data-bind="visible: !App.game.oakItems.itemList[OakItemController.inspectedItem].isMaxLevel()">
+                  Next: <span data-bind="text: App.game.oakItems.itemList[OakItemController.inspectedItem].nextBonusText"></span>
+                </small>
               </td>
             </tr>
             <!-- /ko -->
