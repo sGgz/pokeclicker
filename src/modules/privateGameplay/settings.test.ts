@@ -28,7 +28,8 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.guideFeeRate()).toBe(0.01);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(false);
         PrivateGameplay.registerSettings();
-        expect(Settings.list).toHaveLength(4);
+        expect(PrivateGameplay.autoFillEggSlots()).toBe(false);
+        expect(Settings.list).toHaveLength(5);
     });
 
     it('reacts immediately to price mode changes and preserves settings through JSON round trips', () => {
@@ -38,6 +39,7 @@ describe('private gameplay save settings', () => {
         Settings.setSettingByName(`${prefix}pricingMode`, 'base-price');
         Settings.setSettingByName(`${prefix}guidePathfinding`, 'optimized');
         Settings.setSettingByName(`${prefix}guideFeeRate`, 1);
+        Settings.setSettingByName(`${prefix}autoFillEggSlots`, true);
         PrivateGameplay.markFixedVitaminPurchase();
         expect(quoteMode()).toBe(true);
         expect(changes).toHaveBeenCalledWith(true);
@@ -48,6 +50,7 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.optimizedPathfinding()).toBe(true);
         expect(PrivateGameplay.guideFeeRate()).toBe(1);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(true);
+        expect(PrivateGameplay.autoFillEggSlots()).toBe(true);
         subscription.dispose();
         quoteMode.dispose();
     });
@@ -58,6 +61,7 @@ describe('private gameplay save settings', () => {
         Settings.setSettingByName(`${prefix}pricingMode`, 'base-price');
         Settings.setSettingByName(`${prefix}guidePathfinding`, 'optimized');
         Settings.setSettingByName(`${prefix}guideFeeRate`, 1);
+        Settings.setSettingByName(`${prefix}autoFillEggSlots`, true);
         PrivateGameplay.markFixedVitaminPurchase();
         PrivateGameplay.resetSettingsForLoad();
         Settings.fromJSON({});
@@ -65,13 +69,14 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.optimizedPathfinding()).toBe(false);
         expect(PrivateGameplay.guideFeeRate()).toBe(0.01);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(false);
+        expect(PrivateGameplay.autoFillEggSlots()).toBe(false);
         expect(original.value).toBe('kept');
     });
 
     it('excludes all private preferences from global defaults', () => {
         PrivateGameplay.markFixedVitaminPurchase();
         expect(Object.keys(Settings.toJSON(true))).toEqual([]);
-        expect(Object.keys(Settings.toJSON())).toHaveLength(4);
+        expect(Object.keys(Settings.toJSON())).toHaveLength(5);
     });
 
     it('retains vitamin purchase history when loading global defaults, but resets it for a different save', () => {
@@ -92,11 +97,13 @@ describe('private gameplay save settings', () => {
             [`${prefix}guidePathfinding`]: { mode: 'optimized' },
             [`${prefix}guideFeeRate`]: '0.01',
             [`${prefix}fixedVitaminPurchased`]: 'false',
+            [`${prefix}autoFillEggSlots`]: 'true',
         });
         expect(PrivateGameplay.fixedItemPrices()).toBe(false);
         expect(PrivateGameplay.optimizedPathfinding()).toBe(false);
         expect(PrivateGameplay.guideFeeRate()).toBe(0.01);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(true);
+        expect(PrivateGameplay.autoFillEggSlots()).toBe(false);
         warning.mockRestore();
     });
 

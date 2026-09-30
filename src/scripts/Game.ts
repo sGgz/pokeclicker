@@ -536,6 +536,8 @@ class Game implements TmpGameType {
         // Farm
         this.farming.update(GameConstants.TICK_TIME / GameConstants.SECOND);
 
+        BreedingController.tickAutoFill(GameConstants.TICK_TIME);
+
         // Effect Engine (battle items and flutes)
         EffectEngineRunner.counter += GameConstants.TICK_TIME;
         if (EffectEngineRunner.counter >= GameConstants.EFFECT_ENGINE_TICK) {

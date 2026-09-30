@@ -11,6 +11,7 @@ const names = {
     vitamins: 'ggzz.private.fixedVitaminPurchased',
     pathfinding: 'ggzz.private.guidePathfinding',
     guideFee: 'ggzz.private.guideFeeRate',
+    autoFillEggSlots: 'ggzz.private.autoFillEggSlots',
 };
 
 function guideIsHired(): boolean {
@@ -44,6 +45,10 @@ class PrivateSetting<T> extends Setting<T> {
 
 export default class PrivateGameplay {
     static registerSettings(): void {
+        Settings.add(new PrivateSetting(names.autoFillEggSlots, '自动填满孵蛋空位', [
+            new SettingOption('关闭', false),
+            new SettingOption('开启', true),
+        ], false, undefined, false));
         Settings.add(new PrivateSetting(names.pricing, '道具价格', [
             new SettingOption('官方动态价格', 'official'),
             new SettingOption('固定基础价（购买不涨价）', 'base-price'),
@@ -64,6 +69,10 @@ export default class PrivateGameplay {
 
     static fixedItemPrices(): boolean {
         return Settings.getSetting(names.pricing)?.observableValue() === 'base-price';
+    }
+
+    static autoFillEggSlots(): boolean {
+        return Settings.getSetting(names.autoFillEggSlots)?.observableValue() === true;
     }
 
     static optimizedPathfinding(): boolean {

@@ -6,6 +6,7 @@
 /// <reference path="../party/PartyController.ts" />
 
 class BreedingController {
+    private static autoFillElapsed = 0;
     public static selectedEggItem: KnockoutObservable<GameConstants.EggItemType> = ko.observable(undefined);
 
     public static initialize() {
@@ -43,6 +44,26 @@ class BreedingController {
     }
 
     public static fillEmptyEggSlots() {
+        BreedingController.fillEggSlots(true);
+    }
+
+    public static tickAutoFill(delta: number) {
+        if (!PrivateGameplay.autoFillEggSlots()) {
+            BreedingController.autoFillElapsed = 0;
+            return;
+        }
+        BreedingController.autoFillElapsed += delta;
+        if (BreedingController.autoFillElapsed < GameConstants.SECOND) {
+            return;
+        }
+        BreedingController.autoFillElapsed = 0;
+        // Let the existing queue fill slots first, without reordering its entries.
+        if (!App.game.breeding.queueList().length) {
+            BreedingController.fillEggSlots(false);
+        }
+    }
+
+    private static fillEggSlots(closeModal: boolean) {
         const breeding = App.game.breeding;
         if (!breeding.canAccess() || PokemonCategories.categoryAssignEnabled() || !breeding.hasFreeEggSlot()) {
             return;
@@ -59,7 +80,7 @@ class BreedingController {
                 added = breeding.addPokemonToHatchery(pokemon) || added;
             }
         }
-        if (added) {
+        if (added && closeModal) {
             breeding.checkCloseModal();
         }
     }
