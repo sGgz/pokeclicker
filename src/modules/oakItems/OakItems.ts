@@ -14,15 +14,13 @@ export default class OakItems implements Feature {
     saveKey = 'oakItems';
 
     itemList: OakItem[];
-    unlockRequirements: number[];
 
     defaults: Record<string, any>;
 
     maxLevelOakItems: KnockoutObservable<number>;
 
-    constructor(unlockRequirements: number[], private multiplier: Multiplier) {
+    constructor(private multiplier: Multiplier) {
         this.itemList = [];
-        this.unlockRequirements = unlockRequirements;
         this.maxLevelOakItems = ko.observable(0);
     }
 
@@ -97,13 +95,8 @@ export default class OakItems implements Feature {
         this.itemList[item].use(undefined, scale);
     }
 
-    maxActiveCount() {
-        for (let i = 0; i < this.unlockRequirements.length; i += 1) {
-            if (App.game.party.caughtPokemon.length < this.unlockRequirements[i]) {
-                return i;
-            }
-        }
-        return this.unlockRequirements.length;
+    unlockedCount() {
+        return this.itemList.filter((item) => item.isUnlocked()).length;
     }
 
     activeCount() {
@@ -116,8 +109,8 @@ export default class OakItems implements Feature {
         return count;
     }
 
-    hasAvailableSlot(): boolean {
-        return this.activeCount() < this.maxActiveCount();
+    hasUnequippedItems(): boolean {
+        return this.itemList.some((item) => item.isUnlocked() && !item.isActive);
     }
 
     fromJSON(json: Record<string, any>): void {
@@ -158,16 +151,7 @@ export default class OakItems implements Feature {
         if (!this.isUnlocked(item)) {
             return;
         }
-        if (this.maxActiveCount() === 0) {
-            return;
-        }
-        if (this.maxActiveCount() === 1) {
-            this.deactivateAll();
-            this.itemList[item].isActive = true;
-        }
-        if (this.activeCount() < this.maxActiveCount()) {
-            this.itemList[item].isActive = true;
-        }
+        this.itemList[item].isActive = true;
     }
 
     deactivateAll() {

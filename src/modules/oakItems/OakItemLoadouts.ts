@@ -39,7 +39,7 @@ export default class OakItemLoadouts implements Saveable {
             if (index !== -1) {
                 loadout.splice(index, 1);
             }
-        } else if (loadout().length < App.game.oakItems.maxActiveCount() && App.game.oakItems.isUnlocked(item)) {
+        } else if (App.game.oakItems.isUnlocked(item)) {
             loadout.push(item);
         }
     }
