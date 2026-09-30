@@ -5,9 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 const source = readFileSync('src/scripts/breeding/BreedingController.ts', 'utf8');
 const compiled = transpileModule(source, { compilerOptions: { target: ScriptTarget.ES2020 } }).outputText;
+const breedingSource = readFileSync('src/scripts/breeding/Breeding.ts', 'utf8');
+const breedingCompiled = transpileModule(breedingSource, { compilerOptions: { target: ScriptTarget.ES2020 } }).outputText;
 
 function setup() {
-    const state = { enabled: false, slots: 2, accessible: true, categories: false, descending: false, debuff: true, queue: [] as number[] };
+    const state = { enabled: false, capacity: 2, accessible: true, categories: false, descending: false, debuff: true, queue: [] as number[] };
     const makePokemon = (id: number, attack: number, match = true, hatchable = true) => ({
         id, attack, match, hatchable,
         matchesHatcheryFilters() { return this.match; },
@@ -19,11 +21,11 @@ function setup() {
         (a: typeof party[number], b: typeof party[number]) => (a.attack - b.attack) * (descending ? -1 : 1));
     const breeding = {
         canAccess: () => state.accessible,
-        hasFreeEggSlot: () => state.slots > 0,
+        hasFreeQueueSlot: () => state.queue.length < state.capacity,
         queueList: () => state.queue,
-        addPokemonToHatchery: vi.fn((pokemon: typeof party[number]) => {
-            expect(state.slots).toBeGreaterThan(0);
-            state.slots--;
+        addPokemonToQueue: vi.fn((pokemon: typeof party[number]) => {
+            expect(state.queue.length).toBeLessThan(state.capacity);
+            state.queue.push(pokemon.id);
             pokemon.hatchable = false;
             added.push(pokemon.id);
             return true;
@@ -40,22 +42,55 @@ function setup() {
         GameConstants: { SECOND: 1000 },
         DisplayObservables: { modalState: { breedingModal: 'hidden' } },
         PokemonCategories: { categoryAssignEnabled: () => state.categories },
-        PrivateGameplay: { autoFillEggSlots: () => state.enabled },
+        PrivateGameplay: { autoFillHatcheryQueue: () => state.enabled },
         Settings: { getSetting: (key: keyof typeof settings) => settings[key] },
         PartyController: { compareBy },
         App: { game: { breeding, party: { caughtPokemon: party }, challenges: { list: { regionalAttackDebuff: { active: () => state.debuff } } } } },
-    }) as { fillEmptyEggSlots: () => void; tickAutoFill: (delta: number) => void };
+    }) as { fillHatcheryQueue: () => void; tickAutoFill: (delta: number) => void };
     return { state, party, added, breeding, controller, compareBy };
 }
 
-describe('hatchery slot filling', () => {
-    it('fills only free slots with eligible filtered Pokemon in current sort order', () => {
+describe('hatchery queue filling', () => {
+    it('uses the real queue insertion path with capacity settings and duplicate protection', () => {
+        const limit = ko.observable(2);
+        const BreedingClass = runInNewContext(`${breedingCompiled}\nBreeding;`, {
+            EggType: { Pokemon: 0 },
+            Settings: { getSetting: () => ({ observableValue: limit }) },
+        });
+        const breeding = Object.assign(Object.create(BreedingClass.prototype), {
+            _queueList: ko.observableArray([[0, 99]]),
+            queueSlots: ko.observable(4),
+            usableQueueSlots: ko.pureComputed(() => limit() < 0 ? 4 : Math.min(limit(), 4)),
+            gainPokemonEgg: vi.fn(() => { throw new Error('Queue filling must not insert directly into egg slots'); }),
+        });
+        const pokemon = (id: number, level = 100) => ({
+            id, level, breeding: false,
+            isHatchable() { return this.level >= 100 && !this.breeding; },
+        });
+        const first = pokemon(1);
+        expect(breeding.addPokemonToQueue(pokemon(2, 99))).toBe(false);
+        expect(breeding.addPokemonToQueue(first)).toBe(true);
+        expect(first.breeding).toBe(true);
+        expect(breeding.addPokemonToQueue(first)).toBe(false);
+        expect(breeding.addPokemonToQueue(pokemon(3))).toBe(false);
+        expect(breeding._queueList()).toEqual([[0, 99], [0, 1]]);
+        limit(0);
+        expect(breeding.hasFreeQueueSlot()).toBeFalsy();
+        expect(breeding.addPokemonToQueue(pokemon(3))).toBe(false);
+        limit(-1);
+        expect(breeding.addPokemonToQueue(pokemon(3))).toBe(true);
+        expect(breeding.addPokemonToQueue(pokemon(4))).toBe(true);
+        expect(breeding.addPokemonToQueue(pokemon(5))).toBe(false);
+        expect(breeding.gainPokemonEgg).not.toHaveBeenCalled();
+    });
+
+    it('fills queue capacity with eligible filtered Pokemon in current sort order', () => {
         const s = setup();
-        s.controller.fillEmptyEggSlots();
+        s.controller.fillHatcheryQueue();
         expect(s.added).toEqual([3, 5]);
         expect(s.party.map(p => p.id)).toEqual([1, 2, 3, 4, 5]);
         expect(s.compareBy).toHaveBeenCalledWith('attack', false, 2);
-        s.controller.fillEmptyEggSlots();
+        s.controller.fillHatcheryQueue();
         expect(s.added).toEqual([3, 5]);
         expect(s.breeding.checkCloseModal).toHaveBeenCalledTimes(1);
     });
@@ -88,40 +123,53 @@ describe('hatchery slot filling', () => {
         expect(s.added).toEqual([3, 5]);
     });
 
-    it('preserves queue priority and retries when queued work has been consumed', () => {
+    it('appends to a partial queue without reordering it and tops it up after consumption', () => {
         const s = setup();
         s.state.enabled = true;
         s.state.queue = [99];
         s.controller.tickAutoFill(1000);
-        expect(s.added).toEqual([]);
-        expect(s.state.queue).toEqual([99]);
-        s.state.queue = [];
+        expect(s.added).toEqual([3]);
+        expect(s.state.queue).toEqual([99, 3]);
+        s.state.queue.shift();
         s.controller.tickAutoFill(1000);
         expect(s.added).toEqual([3, 5]);
+        expect(s.state.queue).toEqual([3, 5]);
     });
 
-    it.each(['inaccessible', 'categories', 'full', 'no matches'])('does nothing when %s', (reason) => {
+    it.each(['inaccessible', 'categories', 'full', 'disabled', 'no matches'])('does nothing when %s', (reason) => {
         const s = setup();
         s.state.enabled = true;
         if (reason === 'inaccessible') s.state.accessible = false;
         if (reason === 'categories') s.state.categories = true;
-        if (reason === 'full') s.state.slots = 0;
+        if (reason === 'full') s.state.queue = [98, 99];
+        if (reason === 'disabled') s.state.capacity = 0;
         if (reason === 'no matches') s.party.forEach(p => { p.match = false; });
-        s.controller.fillEmptyEggSlots();
+        s.controller.fillHatcheryQueue();
         s.controller.tickAutoFill(1000);
         expect(s.added).toEqual([]);
         expect(s.breeding.checkCloseModal).not.toHaveBeenCalled();
     });
 
-    it('retries when a slot opens or an eligible Pokemon becomes available', () => {
+    it('retries when queue capacity increases or an eligible Pokemon becomes available', () => {
         const s = setup();
         s.state.enabled = true;
-        s.state.slots = 1;
+        s.state.capacity = 1;
         s.controller.tickAutoFill(1000);
         expect(s.added).toEqual([3]);
-        s.state.slots = 1;
+        s.state.capacity = 2;
         s.party[1].match = true;
         s.controller.tickAutoFill(1000);
         expect(s.added).toEqual([3, 2]);
+    });
+
+    it('stops when candidates run out, then continues after a filter change', () => {
+        const s = setup();
+        s.state.enabled = true;
+        s.state.capacity = 10;
+        s.controller.tickAutoFill(1000);
+        expect(s.state.queue).toEqual([3, 5, 1]);
+        s.party[1].match = true;
+        s.controller.tickAutoFill(1000);
+        expect(s.state.queue).toEqual([3, 5, 1, 2]);
     });
 });

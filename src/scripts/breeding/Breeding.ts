@@ -318,7 +318,10 @@ class Breeding implements Feature {
         return false;
     }
 
-    private addPokemonToQueue(pokemon: PartyPokemon): boolean {
+    public addPokemonToQueue(pokemon: PartyPokemon): boolean {
+        if (!pokemon.isHatchable()) {
+            return false;
+        }
         const success = this.addDataToQueue([EggType.Pokemon, pokemon.id]);
         if (success) {
             pokemon.breeding = true;

@@ -28,7 +28,7 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.guideFeeRate()).toBe(0.01);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(false);
         PrivateGameplay.registerSettings();
-        expect(PrivateGameplay.autoFillEggSlots()).toBe(false);
+        expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(false);
         expect(Settings.list).toHaveLength(5);
     });
 
@@ -50,7 +50,7 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.optimizedPathfinding()).toBe(true);
         expect(PrivateGameplay.guideFeeRate()).toBe(1);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(true);
-        expect(PrivateGameplay.autoFillEggSlots()).toBe(true);
+        expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(true);
         subscription.dispose();
         quoteMode.dispose();
     });
@@ -69,7 +69,7 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.optimizedPathfinding()).toBe(false);
         expect(PrivateGameplay.guideFeeRate()).toBe(0.01);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(false);
-        expect(PrivateGameplay.autoFillEggSlots()).toBe(false);
+        expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(false);
         expect(original.value).toBe('kept');
     });
 
@@ -103,7 +103,7 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.optimizedPathfinding()).toBe(false);
         expect(PrivateGameplay.guideFeeRate()).toBe(0.01);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(true);
-        expect(PrivateGameplay.autoFillEggSlots()).toBe(false);
+        expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(false);
         warning.mockRestore();
     });
 

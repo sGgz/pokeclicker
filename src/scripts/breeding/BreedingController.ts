@@ -43,12 +43,12 @@ class BreedingController {
         }
     }
 
-    public static fillEmptyEggSlots() {
-        BreedingController.fillEggSlots(true);
+    public static fillHatcheryQueue() {
+        BreedingController.fillQueue(true);
     }
 
     public static tickAutoFill(delta: number) {
-        if (!PrivateGameplay.autoFillEggSlots()) {
+        if (!PrivateGameplay.autoFillHatcheryQueue()) {
             BreedingController.autoFillElapsed = 0;
             return;
         }
@@ -57,15 +57,12 @@ class BreedingController {
             return;
         }
         BreedingController.autoFillElapsed = 0;
-        // Let the existing queue fill slots first, without reordering its entries.
-        if (!App.game.breeding.queueList().length) {
-            BreedingController.fillEggSlots(false);
-        }
+        BreedingController.fillQueue(false);
     }
 
-    private static fillEggSlots(closeModal: boolean) {
+    private static fillQueue(closeModal: boolean) {
         const breeding = App.game.breeding;
-        if (!breeding.canAccess() || PokemonCategories.categoryAssignEnabled() || !breeding.hasFreeEggSlot()) {
+        if (!breeding.canAccess() || PokemonCategories.categoryAssignEnabled() || !breeding.hasFreeQueueSlot()) {
             return;
         }
 
@@ -73,11 +70,11 @@ class BreedingController {
         const candidates = BreedingController.sortHatcheryList(App.game.party.caughtPokemon.filter((pokemon) => pokemon.matchesHatcheryFilters()));
         let added = false;
         for (const pokemon of candidates) {
-            if (!breeding.hasFreeEggSlot()) {
+            if (!breeding.hasFreeQueueSlot()) {
                 break;
             }
             if (pokemon.isHatchable()) {
-                added = breeding.addPokemonToHatchery(pokemon) || added;
+                added = breeding.addPokemonToQueue(pokemon) || added;
             }
         }
         if (added && closeModal) {
