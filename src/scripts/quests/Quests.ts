@@ -23,8 +23,7 @@ class Quests implements Saveable {
         return this.xpToLevel(this.xp());
     });
     public questSlots: KnockoutComputed<number> = ko.pureComputed((): number => {
-        // Minimum of 1, Maximum of 4
-        return Math.min(GameConstants.MAX_QUEST_SLOTS, Math.max(1, Math.floor((this.level() + 5) / 5)));
+        return GameConstants.MAX_QUEST_SLOTS;
     });
 
     // Get current quests by status
@@ -197,6 +196,8 @@ class Quests implements Saveable {
         this.lastRefreshRegion = player.highestRegion();
         this.currentQuests().forEach(quest => quest.quit());
         this.questList(QuestHelper.generateQuestList(this.generateSeed(date, level), GameConstants.QUESTS_PER_SET));
+        // Start only newly generated quests; loading a save must preserve progress and abandoned quests.
+        this.questList().slice(0, this.questSlots()).forEach(quest => quest.begin());
     }
 
     private generateSeed(date = new Date(), level = this.level()): number {
