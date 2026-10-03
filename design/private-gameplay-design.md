@@ -396,3 +396,13 @@ Treasure Scanner 沿用连续随机追加机制，概率 50% 对应平均 2 份�
 外部筛选使用独立 `party*Filter` 设置，覆盖名称/编号、双属性、多地区、多分类、闪光、宝可病毒、特殊变身、隐藏形态；复用孵化列表匹配逻辑，不共享选择状态。展开/收起 Filters，支持单独重置外部筛选。保留既有 partySort/partySortDirection。新筛选及 partyDisplayValue 随存档保存，不写入全局默认；读取旧存档时先重置新增外部列表选项。
 
 兼容保证指旧存档升级到新版；超过 4 个蛋或超过旧等级上限的数据不应通过旧客户端读写。网页与桌面须统一更新，本轮不改变云同步协议。
+
+## 15. 1.0.3 发布记录（2026-10-03）
+
+桌面客户端版本为 1.0.3，包内游戏版本仍为 0.10.26，构建源码提交为 `26d5f865c42469d424a0ca5619b26ddcfb5762c7`。本版包含第 14 节的四项调整，任务列表保持原规则。
+
+Windows x64 安装包、完整 ZIP 和可直接运行的程序位于 `output/desktop-builds/game-0.10.26_20261003-185134-v1.0.3/`。同目录保存 `SHA256SUMS.txt`、`打包成功.txt`、`开始游戏.cmd` 及本次 `smoke-report.json`。应用 ID、用户数据目录和云存档协议保持原状。
+
+发布前通过 227 项游戏测试、ESLint、Stylelint、29 项桌面测试、Worker 类型检查与 48 项测试、生产构建和 Cloudflare dry-run。实际打包 EXE 已核对运行版本为 1.0.3，并通过 21 项隔离存档验收，涵盖新玩法、离线运行、跨端恢复、同步冲突与备份导入导出；没有读取或改写用户真实存档。
+
+网页已部署到 `https://play.ggzz.fun`，Worker 为 `pokeclicker-cloud-save`，Cloudflare Version ID 为 `80afd748-2bc8-4ff4-8463-a41dca26b12b`，部署列表确认 100% 流量。此次更新了 `index.html`、`script.min.js`、`modules.min.js` 三个静态资源。部署后登录页返回 HTTP 200，未登录的云存档状态接口返回预期的 HTTP 401 / `LOGIN_REQUIRED`；真实用户存档的两设备往返仍由用户在更新全部客户端后确认。
