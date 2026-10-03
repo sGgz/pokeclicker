@@ -7,6 +7,168 @@ const source = readFileSync('src/scripts/breeding/BreedingController.ts', 'utf8'
 const compiled = transpileModule(source, { compilerOptions: { target: ScriptTarget.ES2020 } }).outputText;
 const breedingSource = readFileSync('src/scripts/breeding/Breeding.ts', 'utf8');
 const breedingCompiled = transpileModule(breedingSource, { compilerOptions: { target: ScriptTarget.ES2020 } }).outputText;
+const helperSource = readFileSync('src/scripts/breeding/HatcheryHelper.ts', 'utf8');
+const helperCompiled = transpileModule(helperSource.slice(helperSource.indexOf('class HatcheryHelpers {'), helperSource.indexOf('// Note: Mostly')), {
+    compilerOptions: { target: ScriptTarget.ES2020 },
+}).outputText;
+
+function setupSlots() {
+    class TestEgg {
+        type = -1;
+        id = 0;
+        steps = 0;
+        isNone() { return this.type === -1; }
+        partyPokemon() { return null; }
+        addSteps(amount: number) { if (!this.isNone()) this.steps += amount; }
+        canHatch() { return !this.isNone() && this.steps >= 100; }
+        hatch() { return this.canHatch(); }
+        toJSON() { return { type: this.type, id: this.id, steps: this.steps }; }
+        fromJSON(json: { type: number; id: number; steps: number }) { Object.assign(this, json); }
+    }
+    const limit = ko.observable(8);
+    const hired = ko.observableArray([]);
+    const wallet = { loseAmount: vi.fn((cost: { amount: number; currency: number }) => cost.amount >= 0) };
+    const app = { game: { breeding: null, wallet } };
+    const BreedingClass = runInNewContext(`${breedingCompiled}\nBreeding;`, {
+        ko, Egg: TestEgg, EggType: { None: -1, Pokemon: 0, EggItem: 1 },
+        HatcheryHelpers: class {
+            hired = hired;
+            addSteps = vi.fn();
+            fromJSON = vi.fn();
+            toJSON = () => [];
+        },
+        PrivateGameplay: { hatcherySlotLimit: limit },
+        Settings: { getSetting: () => ({ observableValue: ko.observable(-1) }) },
+        GameConstants: { EggItemType: {}, Currency: { questPoint: 0 } },
+        Amount: class { constructor(public amount: number, public currency: number) {} },
+        App: app,
+        Notifier: { notify: vi.fn() },
+        NotificationConstants: { NotificationOption: { success: 0 }, NotificationSound: { Hatchery: {} }, NotificationSetting: { Hatchery: {} } },
+    });
+    const breeding = new BreedingClass({ getBonus: () => 1 });
+    app.game.breeding = breeding;
+    breeding.createEgg = (id: number) => Object.assign(new TestEgg(), { type: 0, id });
+    const add = (id: number, steps = 0) => breeding.gainEgg(Object.assign(breeding.createEgg(id), { steps }));
+    const eggs = () => breeding.eggList.map(egg => egg()).filter(egg => !egg.isNone());
+    const HelperClass = runInNewContext(`${helperCompiled}\nHatcheryHelpers;`, {
+        Egg: TestEgg,
+        GameHelper: { incrementObservable: (observable, amount) => observable(observable() + amount) },
+    });
+    breeding.hatcheryHelpers.hatchery = breeding;
+    const tickHelpers = () => HelperClass.prototype.addSteps.call(breeding.hatcheryHelpers, 1, {});
+    return { breeding, limit, hired, wallet, add, eggs, tickHelpers };
+}
+
+describe('configurable incubation slots', () => {
+    it('restores a four-slot save with exact egg progress and retains the purchased slot count', () => {
+        const { breeding, eggs } = setupSlots();
+        breeding.fromJSON({ eggSlots: 4, eggList: [{ type: 0, id: 25, steps: 73 }], queueList: [1, 4], queueSlots: 4 });
+        expect(breeding.eggList).toHaveLength(16);
+        expect(breeding.eggSlots).toBe(4);
+        expect(eggs().map(egg => egg.toJSON())).toEqual([{ type: 0, id: 25, steps: 73 }]);
+        expect(breeding.toJSON().queueList).toEqual([1, 4]);
+    });
+
+    it('purchases only up to the configured cap and never charges for slots already purchased', () => {
+        const { breeding, limit, wallet } = setupSlots();
+        breeding.eggSlots = 4;
+        for (let slot = 5; slot <= 8; slot++) breeding.buyEggSlot();
+        expect(wallet.loseAmount.mock.calls.map(([cost]) => cost.amount)).toEqual([2500, 3000, 3500, 4000]);
+        breeding.buyEggSlot();
+        expect(wallet.loseAmount).toHaveBeenCalledTimes(4);
+        limit(4);
+        expect(breeding.eggSlots).toBe(8);
+        expect(breeding.usableEggSlots).toBe(4);
+        breeding.buyEggSlot();
+        limit(16);
+        expect(breeding.usableEggSlots).toBe(8);
+        expect(breeding.nextEggSlotCost().amount).toBe(4500);
+        expect(wallet.loseAmount).toHaveBeenCalledTimes(4);
+    });
+
+    it('lets overflow eggs progress and finish without consuming queued eggs until capacity is available', () => {
+        const { breeding, limit, add, eggs } = setupSlots();
+        breeding.eggSlots = 8;
+        for (let id = 1; id <= 8; id++) expect(add(id, 80)).toBe(true);
+        limit(4);
+        breeding.progressEggs(10);
+        expect(eggs()).toHaveLength(8);
+        expect(eggs().every(egg => egg.steps === 90)).toBe(true);
+        breeding._queueList([[0, 99], [0, 100]]);
+        breeding.nextEggFromQueue();
+        expect(breeding.queueList()).toHaveLength(2);
+        expect(add(55)).toBe(false);
+        for (let index = 7; index >= 4; index--) {
+            breeding.eggList[index]().steps = 100;
+            breeding.hatchPokemonEgg(index);
+        }
+        expect(eggs()).toHaveLength(4);
+        expect(breeding.queueList()).toHaveLength(2);
+        breeding.eggList[3]().steps = 100;
+        breeding.hatchPokemonEgg(3);
+        expect(eggs().map(egg => egg.id)).toEqual([1, 2, 3, 99]);
+        expect(breeding.queueList()).toEqual([[0, 100]]);
+    });
+
+    it('preserves all sixteen eggs and progress across a save round trip while limited to four', () => {
+        const first = setupSlots();
+        first.limit(16);
+        first.breeding.eggSlots = 16;
+        for (let id = 1; id <= 16; id++) first.add(id, id * 3);
+        const saved = JSON.parse(JSON.stringify(first.breeding.toJSON()));
+        const second = setupSlots();
+        second.limit(4);
+        second.breeding.fromJSON(saved);
+        expect(second.breeding.toJSON()).toEqual(saved);
+        expect(second.eggs()).toHaveLength(16);
+        expect(second.breeding.hasFreeEggSlot()).toBe(false);
+    });
+
+    it('reserves helper slots and stops automatic queue filling at the usable capacity', () => {
+        const { breeding, limit, hired, eggs } = setupSlots();
+        limit(4);
+        breeding.eggSlots = 8;
+        hired.push({} as never);
+        breeding._queueList(Array.from({ length: 8 }, (_, i) => [0, i + 1]));
+        breeding.progressEggs(1);
+        expect(eggs()).toHaveLength(3);
+        expect(breeding.eggList[0]().isNone()).toBe(true);
+        expect(breeding.queueList()).toHaveLength(5);
+    });
+
+    it('pauses helper refills during overflow and charges only for successfully placed eggs', () => {
+        const { breeding, limit, hired, add, eggs, tickHelpers } = setupSlots();
+        breeding.eggSlots = 8;
+        for (let id = 1; id <= 8; id++) add(id);
+        const helper = {
+            stepEfficiency: () => 100, attackEfficiency: () => 100,
+            getNextPokemon: vi.fn(() => [{ id: 99 }]), charge: vi.fn(), hatched: ko.observable(0),
+        };
+        hired.push(helper as never);
+        breeding.gainPokemonEgg = vi.fn((pokemon, index) => breeding.gainEgg(breeding.createEgg(pokemon.id), index));
+        limit(4);
+        breeding.eggList[0]().steps = 100;
+        tickHelpers();
+        expect(eggs()).toHaveLength(7);
+        expect(breeding.gainEgg(breeding.createEgg(55), 0)).toBe(false);
+        expect(helper.getNextPokemon).not.toHaveBeenCalled();
+        expect(helper.charge).not.toHaveBeenCalled();
+        for (let index = 7; index >= 4; index--) {
+            breeding.eggList[index]().steps = 100;
+            breeding.hatchPokemonEgg(index, false);
+        }
+        tickHelpers();
+        expect(eggs()).toHaveLength(4);
+        expect(breeding.eggList[0]().id).toBe(99);
+        expect(helper.charge).toHaveBeenCalledTimes(1);
+        expect(helper.hatched()).toBe(1);
+        breeding.eggList[0]().steps = 100;
+        breeding.gainPokemonEgg.mockImplementationOnce(() => false);
+        tickHelpers();
+        expect(helper.charge).toHaveBeenCalledTimes(1);
+        expect(helper.hatched()).toBe(1);
+    });
+});
 
 function setup() {
     const state = { enabled: false, capacity: 2, accessible: true, categories: false, descending: false, debuff: true, queue: [] as number[] };

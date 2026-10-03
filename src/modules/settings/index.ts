@@ -370,6 +370,26 @@ Settings.add(new Setting<string>('breedingUniqueTransformationFilter', 'Unique T
     'all', new MaxRegionRequirement(Region.kalos), false));
 Settings.add(new BooleanSetting('breedingHideAltFilter', 'Hide alternate forms', false));
 
+// Share filter choices and matching rules, never the selected values.
+export const partyFilterSettingKeys = breedingFilterSettingKeys.map(name => name.replace('breeding', 'party'));
+breedingFilterSettingKeys.forEach((name, index) => {
+    const original = Settings.getSetting(name);
+    const key = partyFilterSettingKeys[index];
+    const label = original.defaultDisplayName;
+    if (original instanceof SearchSetting) {
+        Settings.add(new SearchSetting(key, label, '', undefined, false));
+    } else if (original instanceof MultiSelectSetting) {
+        Settings.add(new MultiSelectSetting(key, label, () => original.options, [], original.requirement, false));
+    } else if (original instanceof BooleanSetting) {
+        Settings.add(new BooleanSetting(key, label, original.defaultValue, original.requirement, false));
+    } else {
+        Settings.add(new Setting(key, label, () => original.options, original.defaultValue, original.requirement, false));
+    }
+});
+Settings.add(new Setting<number>('partyDisplayValue', 'Display Value', [
+    new SettingOption('Follow sorting', -1), ...partySortSettings,
+], -1, undefined, false));
+
 // Hatchery display settings
 Settings.add(new Setting<string>('breedingDisplayTextSetting', 'Display Value',
     [

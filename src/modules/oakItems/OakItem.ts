@@ -38,7 +38,7 @@ export default class OakItem extends ExpUpgrade {
         if (!this.isActive) {
             return;
         }
-        if (!this.isMaxLevel()) {
+        if (!this.isMaxLevel() && !this.hasEnoughExp()) {
             this.gainExp(exp * scale);
         }
         GameHelper.incrementObservable(App.game.statistics.oakItemUses[this.name]);
@@ -89,7 +89,7 @@ export default class OakItem extends ExpUpgrade {
             return 100;
         }
         const nextLevelExp = this.level === 0 ? this.expList[this.level] : this.expList[this.level] - this.expList[this.level - 1];
-        return (Math.ceil(this.normalizedExp / this.expGain) / Math.ceil(nextLevelExp / this.expGain)) * 100;
+        return Math.min(100, (Math.ceil(this.normalizedExp / this.expGain) / Math.ceil(nextLevelExp / this.expGain)) * 100);
     }
 
     get progressString(): string {
@@ -97,7 +97,7 @@ export default class OakItem extends ExpUpgrade {
             return 'MAX LEVEL!';
         }
         const nextLevelExp = this.level === 0 ? this.expList[this.level] : this.expList[this.level] - this.expList[this.level - 1];
-        return `${Math.ceil(this.normalizedExp / this.expGain).toLocaleString('en-US')} / ${Math.ceil(nextLevelExp / this.expGain).toLocaleString('en-US')}`;
+        return `${Math.ceil(Math.min(this.normalizedExp, nextLevelExp) / this.expGain).toLocaleString('en-US')} / ${Math.ceil(nextLevelExp / this.expGain).toLocaleString('en-US')}`;
     }
 
     get isActive() {

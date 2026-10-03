@@ -55,7 +55,7 @@ import MoonCyclePhaseRequirement from './requirements/MoonCyclePhaseRequirement'
 import SeededRand from './utilities/SeededRand';
 import SeededDateRand from './utilities/SeededDateRand';
 import Rand from './utilities/Rand';
-import Settings, { breedingFilterSettingKeys, pokedexFilterSettingKeys } from './settings/index';
+import Settings, { breedingFilterSettingKeys, partyFilterSettingKeys, pokedexFilterSettingKeys } from './settings/index';
 import { SortOptionConfigs, SortOptions } from './settings/SortOptions';
 import { AchievementSortOptionConfigs, AchievementSortOptions } from './achievements/AchievementSortOptions';
 import AchievementCategory from './achievements/AchievementCategory';
@@ -304,6 +304,7 @@ Object.assign(<any>window, {
     Rand,
     Settings,
     breedingFilterSettingKeys,
+    partyFilterSettingKeys,
     pokedexFilterSettingKeys,
     NotificationConstants,
     Notifier,

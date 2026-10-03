@@ -132,8 +132,12 @@ async function run() {
         await pageA.locator('#pickStarterTutorialModal input.image-starter').first().click();
         // Hide the tutorial tooltip only in this disposable test profile.
         await pageA.evaluate(() => { Information.hide(); App.game.profile.name('Desktop fixture A'); Save.store(player); });
+        await pageA.locator('#routeBattleContainer > .clickable').click({ clickCount: 10, delay: 100 });
+        await pageA.locator('#starterCaughtModal').getByRole('button', { name: 'Next', exact: true }).click();
+        await pageA.locator('#starterCaughtModal').waitFor({ state: 'hidden' });
+        await pageA.evaluate(() => Information.hide());
         // Exercise the actual Knockout controls and game objects in this isolated save.
-        await pageA.evaluate(() => $('#settingsModal').modal('show'));
+        await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('shown.bs.modal', () => resolve()).modal('show')));
         await pageA.locator('#settingsModal a[href="#settings-game"]').click();
         await pageA.locator('select[name="ggzz.private.guidePathfinding"]').selectOption('optimized');
         await pageA.locator('select[name="ggzz.private.pricingMode"]').selectOption('base-price');
@@ -145,7 +149,7 @@ async function run() {
         await pageA.locator('#private-guide-fee').selectOption({ label: '原价的 1%（门票原价）' });
         assert.equal(await pageA.evaluate(() => PrivateGameplay.guideFeeRate()), 0.01);
         await pageA.screenshot({ path: path.join(output, 'private-gameplay-settings.png') });
-        await pageA.evaluate(() => $('#settingsModal').modal('hide'));
+        await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
         const purchase = await pageA.evaluate(() => {
             const vitamin = ItemList.Protein;
             player.itemMultipliers[vitamin.saveName] = 8;
@@ -169,13 +173,100 @@ async function run() {
         assert.equal(purchase.multiplier, 8);
         assert.equal(purchase.refundProtected, true);
         checks.push('Private gameplay controls work in the real renderer: optimized paths, fixed-price purchase, frozen old multiplier, vitamin history and 1% guide fee.');
+        // Exercise the extended progression and slot migration using this disposable save only.
+        const progression = await pageA.evaluate(() => {
+            const magic = App.game.oakItems.itemList[0];
+            magic.fromJSON({ level: 6, exp: 110000, isActive: true });
+            App.game.wallet.currencies[GameConstants.Currency.money](10000000);
+            magic.use();
+            const before = magic.toJSON();
+            while (magic.canBuy()) magic.buy();
+            magic.use();
+            const helmet = App.game.oakItems.itemList[2];
+            helmet.fromJSON({ level: 15, exp: 2270000, isActive: true });
+            const oldHelmet = helmet.calculateBonus();
+            helmet.use(750000);
+            helmet.buy();
+            return { before, magic: magic.toJSON(), oldHelmet, helmetLevel: helmet.level, helmetBonus: helmet.calculateBonus(), helmetCap: helmet.maxLevel };
+        });
+        assert.deepEqual(progression.before, { level: 6, exp: 110000, isActive: true });
+        assert.deepEqual(progression.magic, { level: 10, exp: 110000, isActive: true });
+        assert.equal(progression.oldHelmet, 2.75);
+        assert.equal(progression.helmetLevel, 16);
+        assert.equal(progression.helmetBonus, 2.95);
+        assert.equal(progression.helmetCap, 30);
+        checks.push('Magic Ball retains old excess XP through manual upgrades; an old level-15 Rocky Helmet continues to level 16 under the new level-30 cap.');
+
+        await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('shown.bs.modal', () => resolve()).modal('show')));
+        await pageA.locator('#settingsModal a[href="#settings-game"]').click();
+        await pageA.locator('select[name="ggzz.private.hatcherySlotLimit"]').selectOption('16');
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.hatcherySlotLimit()), 16);
+        await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        const hatchery = await pageA.evaluate(() => {
+            const breeding = App.game.breeding;
+            App.game.keyItems.gainKeyItem(KeyItemType.Mystery_egg, true);
+            breeding.eggSlots = 4;
+            App.game.wallet.currencies[GameConstants.Currency.questPoint](13000);
+            for (let slot = 5; slot <= 8; slot++) breeding.buyEggSlot();
+            for (let id = 1; id <= 9; id++) {
+                App.game.party.gainPokemonById(id, false, true);
+                const pokemon = App.game.party.getPokemon(id);
+                pokemon.exp = 2000000; pokemon.level = 100;
+                if (id <= 8) breeding.gainPokemonEgg(pokemon);
+            }
+            Settings.setSettingByName('ggzz.private.hatcherySlotLimit', 4);
+            const saved = breeding.toJSON();
+            breeding.fromJSON(JSON.parse(JSON.stringify(saved)));
+            return { purchased: breeding.eggSlots, usable: breeding.usableEggSlots, occupied: breeding.eggList.filter(egg => !egg().isNone()).length,
+                hasSpace: breeding.hasFreeEggSlot(), balance: App.game.wallet.currencies[GameConstants.Currency.questPoint](),
+                ids: breeding.eggList.filter(egg => !egg().isNone()).map(egg => egg().pokemon) };
+        });
+        assert.equal(hatchery.purchased, 8);
+        assert.equal(hatchery.usable, 4);
+        assert.equal(hatchery.occupied, 8);
+        assert.equal(hatchery.hasSpace, false);
+        assert.equal(hatchery.balance, 0);
+        checks.push('The real settings control changes the incubation cap; purchased slots, all eight eggs and their save data survive lowering it to four.');
+
+        await pageA.evaluate(() => {
+            Settings.setSettingByName('breedingShinyFilter', 1);
+            Settings.setSettingByName('hatcherySort', SortOptions.breedingEfficiency);
+            Settings.setSettingByName('partySort', SortOptions.evs);
+            $('#pokemonListBody').collapse('show');
+            $('#toaster .toast').toast('hide');
+        });
+        await pageA.locator('#party-list-filters summary').click();
+        await pageA.locator('#party-list-search').fill('9');
+        await pageA.waitForFunction(() => PartyController.getSortedList().length === 1 && PartyController.getSortedList()[0].id === 9);
+        assert.ok((await pageA.locator('#pokemonListContainer .pokemon-row').innerText()).includes('EVs:'));
+        await pageA.locator('#party-display-value').selectOption(String(2));
+        await pageA.waitForFunction(() => document.querySelector('#pokemonListContainer .pokemon-row')?.textContent.includes('Attack:'));
+        await pageA.locator('#party-select-partyShinyFilter').selectOption('1');
+        await pageA.waitForFunction(() => PartyController.getSortedList().length === 0);
+        await pageA.locator('#pokemonListContainer').getByRole('button', { name: 'Reset Filters', exact: true }).click();
+        await pageA.waitForFunction(() => PartyController.getSortedList().length > 0);
+        assert.equal(await pageA.evaluate(() => Settings.getSetting('breedingShinyFilter').value), 1);
+        assert.equal(await pageA.evaluate(() => Settings.getSetting('hatcherySort').value), 8);
+        await pageA.locator('#party-filter-partyCategoryFilter button').first().click();
+        await pageA.locator('#party-filter-partyCategoryFilter input[type="checkbox"]').first().check();
+        assert.equal(await pageA.evaluate(() => Settings.getSetting('partyCategoryFilter').value.length), 1);
+        assert.equal(await pageA.evaluate(() => Settings.getSetting('breedingCategoryFilter').value.length), 0);
+        await pageA.locator('#party-filter-partyCategoryFilter .dropdown-menu').getByRole('button', { name: 'All', exact: true }).click();
+        assert.equal(await pageA.evaluate(() => Settings.getSetting('partyCategoryFilter').value.length), 0);
+        await pageA.locator('#party-filter-partyCategoryFilter button').first().click();
+        await pageA.screenshot({ path: path.join(output, 'expanded-party-list.png') });
+        await pageA.locator('#party-filter-partyCategoryFilter button').first().click();
+        await pageA.locator('#party-list-search').fill('9');
+        await pageA.evaluate(() => Save.store(player));
+        checks.push('External Pokemon list search, follow-sort display, independent display selection and filter reset work without changing hatchery filters or sorting.');
+
         const keyA = await pageA.evaluate(() => Save.key);
         const seconds = await pageA.evaluate(() => App.game.statistics.secondsPlayed());
         await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
         await pageA.waitForFunction(start => App.game.statistics.secondsPlayed() >= start + 2, seconds, { timeout: 15000, polling: 200 });
         await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].restore());
         assert.ok(await pageA.evaluate(() => !!App.game.worker));
-        checks.push('Packaged local game cold-starts without a network, has isolated storage/Web Locks, no renderer Node, and continues ticking while minimized.');
+        checks.push('Local game cold-starts without a network, has isolated storage/Web Locks, no renderer Node, and continues ticking while minimized.');
         await panel(pageA);
         await pageA.screenshot({ path: path.join(output, 'offline-game.png') });
         await a.evaluate(({ dialog }) => { globalThis.testDialogs = []; dialog.showMessageBox = async (_window, options) => { globalThis.testDialogs.push(options.message); return { response: 0 }; }; });
@@ -248,6 +339,16 @@ async function run() {
         assert.equal(restoredSettings['ggzz.private.guidePathfinding'], 'optimized');
         assert.equal(restoredSettings['ggzz.private.guideFeeRate'], 0.01);
         assert.equal(restoredSettings['ggzz.private.fixedVitaminPurchased'], true);
+        assert.equal(restoredSettings['ggzz.private.hatcherySlotLimit'], 4);
+        assert.equal(restoredSettings.partyIDFilter, 9);
+        assert.equal(restoredSettings.partyDisplayValue, 2);
+        const restoredGame = await web.evaluate(key => JSON.parse(localStorage.getItem('save' + key)), webKey);
+        assert.equal(restoredGame.breeding.eggSlots, 8);
+        assert.equal(restoredGame.breeding.eggList.filter(egg => egg.type !== -1).length, 8);
+        assert.equal(restoredGame.oakItems.Magic_Ball.level, 10);
+        assert.equal(restoredGame.oakItems.Magic_Ball.exp, 110000);
+        assert.equal(restoredGame.oakItems.Rocky_Helmet.level, 16);
+        checks.push('Expanded egg data, purchased slot rights, slot cap, list preferences and Oak Item progression survive desktop-to-web cloud restoration.');
         checks.push('All private preferences and vitamin purchase history survive desktop-to-web cloud restore without a protocol change.');
         await web.evaluate(key => { const save = JSON.parse(localStorage.getItem('save' + key)); save.profile.name = 'Web fixture progress'; localStorage.setItem('save' + key, JSON.stringify(save)); }, webKey);
         clock += 20000;
@@ -319,7 +420,7 @@ async function run() {
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('原价的 1%'));
         await help.locator('#private-gameplay').scrollIntoViewIfNeeded();
         await help.locator('#private-gameplay').screenshot({ path: path.join(output, 'private-gameplay-manual.png') });
-        checks.push('The packaged Chinese operation manual, including private gameplay instructions, opens locally while offline.');
+        checks.push('The Chinese operation manual, including private gameplay instructions, opens locally while offline.');
         await quit(b); await quit(a);
         assert.deepEqual(errors, []);
         checks.push('No uncaught renderer errors during the desktop acceptance flow.');

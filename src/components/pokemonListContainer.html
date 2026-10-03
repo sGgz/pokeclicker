@@ -29,6 +29,19 @@
         </div>
     </div>
 </script>
+<script type="text/html" id="PartyMultiFilterTemplate">
+    <div data-bind="attr: { id: 'party-filter-' + name }">
+    <label class="small mb-1" data-bind="text: displayName"></label>
+    <knockout data-bind="template: { name: 'multiSelectDropdownTemplate', data: {
+        id: 'party-filter-' + name,
+        options: name === 'partyCategoryFilter' ? PokemonCategories.categories().map(c => ({ text: c.name, value: c.id })) : getValidOptions(),
+        optionsText: 'text', optionsValue: 'value', bindingField: observableValue,
+        buttonText: () => observableValue().length ? observableValue().length + ' selected' : 'All',
+        itemLabel: { class: 'small' },
+        topButtons: [{ label: 'All', class: 'btn-primary btn-sm', onClick: () => set([]) }]
+    }}"></knockout>
+    </div>
+</script>
 <div id="pokemonListContainer" class="card sortable border-secondary mb-3" data-bind="visible: player.regionStarters[GameConstants.Region.kanto]() != GameConstants.Starter.None">
     <div class="card-header p-0" data-toggle="collapse" href="#pokemonListBody">
         <span>Pokémon List</span>
@@ -37,9 +50,34 @@
         <div class="table-responsive d-flex flex-column" data-bind="resizable: { setting: 'pokemonList' }">
             <div class="flex-grow-1 flex-shrink-1 text-left" style="overflow: auto;">
                 <div data-bind="template: { name: 'PartySortSettingTemplate', data: Settings.getSetting('partySort')}"></div>
+                <div class="p-1 border-bottom">
+                    <label class="small mb-1" for="party-display-value">Display Value</label>
+                    <select id="party-display-value" class="custom-select custom-select-sm" data-bind="
+                        options: Settings.getSetting('partyDisplayValue').options, optionsText: 'text', optionsValue: 'value',
+                        value: Settings.getSetting('partyDisplayValue').observableValue"></select>
+                    <details id="party-list-filters" class="mt-1">
+                        <summary class="small clickable">Filters <span class="text-primary" data-bind="visible: PartyController.listFiltersActive">●</span></summary>
+                        <label class="small mb-1 mt-1" for="party-list-search">Name or ID</label>
+                        <input id="party-list-search" class="form-control form-control-sm" type="search" autocomplete="off" data-bind="textInput: PartyController.listSearch">
+                        <div class="form-row mt-2" data-bind="foreach: ['partyType1Filter', 'partyType2Filter', 'partyRegionFilter', 'partyCategoryFilter']">
+                            <div class="col-6 mb-2" data-bind="template: { name: 'PartyMultiFilterTemplate', data: Settings.getSetting($data) }"></div>
+                        </div>
+                        <div data-bind="foreach: ['partyShinyFilter', 'partyPokerusFilter', 'partyUniqueTransformationFilter']">
+                            <div class="mb-2" data-bind="with: Settings.getSetting($data)">
+                                <!-- ko if: isUnlocked() -->
+                                <label class="small mb-1" data-bind="text: displayName, attr: { for: 'party-select-' + name }"></label>
+                                <select class="custom-select custom-select-sm" data-bind="attr: { id: 'party-select-' + name }, options: getValidOptions(), optionsText: 'text', optionsValue: 'value', value: observableValue"></select>
+                                <!-- /ko -->
+                            </div>
+                        </div>
+                        <label class="small d-block"><input type="checkbox" data-bind="checked: Settings.getSetting('partyHideAltFilter').observableValue"> Hide alternate forms</label>
+                        <button type="button" class="btn btn-secondary btn-sm btn-block mb-1" data-bind="click: PartyController.resetListFilters, enable: PartyController.listFiltersActive">Reset Filters</button>
+                        <div class="small text-muted mb-1">筛选和显示设置独立于孵化列表。</div>
+                    </details>
+                </div>
+                <div class="small text-muted text-center p-2" data-bind="visible: PartyController.getSortedList().length === 0">No Pokémon match these filters.</div>
                 <div data-bind="let: {
                     lazyPokemonList: lazyLoad('lazyPokemonList', $element, PartyController.getSortedList, { pageSize: 20, reset: () => (DisplayObservables.collapseState.pokemonListBody === 'hidden'), pause: () => DisplayObservables.collapseState.pokemonListBody !== 'show' }),
-                    showAtkLabel: player.highestRegion() == GameConstants.Region.kanto,
                 }">
                     <!-- ko if: DisplayObservables.collapseState.pokemonListBody !== 'hidden' -->
                         <!-- ko foreach: lazyPokemonList, childrenComplete: () => { lazyLoadCallback('lazyPokemonList'); } -->
@@ -60,8 +98,7 @@
                                     </div>
                                     <div class="d-flex align-items-center">
                                         <div class="text-muted">
-                                            <small class="attack-label" data-bind="visible: showAtkLabel">Atk</small>
-                                            <knockout title="Attack Power" data-bind="text: attack.toLocaleString('en-US')"></knockout>
+                                            <knockout data-bind="text: PartyController.getListDisplayValue($data)"></knockout>
                                         </div>
                                         <div class="ml-auto text-right d-flex align-items-center">
                                             <!-- ko foreach: PokemonHelper.getMegaStones($data.name).filter(s => player.hasMegaStone(s.megaStone)) -->

@@ -237,7 +237,7 @@ class HatcheryHelpers {
     constructor(public hatchery: Breeding) {
         this.available = ko.pureComputed(() => HatcheryHelpers.list.filter(f => f.isUnlocked()));
         this.hired = ko.pureComputed(() => HatcheryHelpers.list.filter(f => f.hired()));
-        this.canHire =  ko.pureComputed(() => this.hired().length < Math.min(this.MAX_HIRES, this.hatchery.eggSlots));
+        this.canHire =  ko.pureComputed(() => this.hired().length < Math.min(this.MAX_HIRES, this.hatchery.usableEggSlots));
     }
 
     public isUnlocked() {
@@ -265,11 +265,10 @@ class HatcheryHelpers {
             }
 
             // Check if egg slot empty
-            if (egg.isNone()) {
+            if (egg.isNone() && this.hatchery.hasFreeEggSlot(true)) {
                 const pokemon = helper.getNextPokemon()[0];
 
-                if (pokemon) {
-                    this.hatchery.gainPokemonEgg(pokemon, index);
+                if (pokemon && this.hatchery.gainPokemonEgg(pokemon, index)) {
                     // Charge the player when we put a pokemon in the hatchery
                     helper.charge();
                     // Increment our hatched counter
