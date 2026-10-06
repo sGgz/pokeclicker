@@ -9,6 +9,8 @@ import ChangelogUpdate from './ChangelogUpdate';
  * PATCH - Increment for small changes, bugfixes, UI changes.
  */
 const ChangelogItems = [
+    new ChangelogUpdate('v0.10.27', new Date(2026, 9, 7)),
+    new Changelog(changelogType.NEW, 'Earn a Dream Orb every 10 minutes online, with partial progress saved. Existing offline earnings are retained.'),
     // note that month is 0 indexed
     // v0.10.26
     new ChangelogUpdate('v0.10.26', new Date(2026, 7, 30)),

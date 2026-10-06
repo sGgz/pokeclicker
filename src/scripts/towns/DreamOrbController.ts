@@ -16,6 +16,20 @@ class DreamOrbController implements Saveable {
     public amountSelected = ko.observable(1);
     public amountOpened = ko.observable(0);
     public itemsReceived = ko.observableArray();
+    public onlineTime = ko.observable(0);
+
+    public update(deltaSeconds: number): void {
+        if (!(new DreamOrbTownContent()).isUnlocked()) {
+            return;
+        }
+        const elapsed = this.onlineTime() + deltaSeconds;
+        const earned = Math.floor(elapsed / 600);
+        this.onlineTime(elapsed % 600);
+        const unlocked = this.orbs.filter(o => !o.requirement || o.requirement.isCompleted());
+        for (let i = 0; i < earned; i++) {
+            GameHelper.incrementObservable(Rand.fromArray(unlocked).amount);
+        }
+    }
 
     constructor() {
         this.selectedOrb = ko.observable(this.orbs[0]);
@@ -115,10 +129,13 @@ class DreamOrbController implements Saveable {
     defaults: Record<string, any>;
     toJSON(): Record<string, any> {
         return {
+            onlineTime: this.onlineTime(),
             orbs: this.orbs.map((o) => ({ amount: o.amount(), color: o.color })),
         };
     }
     fromJSON(json: Record<string, any>): void {
+        const onlineTime = json?.onlineTime;
+        this.onlineTime(Number.isFinite(onlineTime) && onlineTime >= 0 ? onlineTime % 600 : 0);
         json?.orbs?.forEach((o) => this.orbs.find((o2) => o2.color == o.color)?.amount(o.amount));
     }
 }

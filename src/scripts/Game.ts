@@ -536,6 +536,8 @@ class Game implements TmpGameType {
         // Farm
         this.farming.update(GameConstants.TICK_TIME / GameConstants.SECOND);
 
+        this.dreamOrbController.update(GameConstants.TICK_TIME / GameConstants.SECOND);
+
         BreedingController.tickAutoFill(GameConstants.TICK_TIME);
 
         // Effect Engine (battle items and flutes)

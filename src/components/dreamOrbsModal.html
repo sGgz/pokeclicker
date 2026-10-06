@@ -6,6 +6,9 @@ aria-labelledby="dreamOrbsModalLabel">
             <h5 class="modal-title">Open Dream Orbs</h5>
         </div>
         <div class="modal-body">
+            <p>Earn 1 random unlocked Dream Orb every 10 minutes online. Partial progress is saved.
+                Offline earnings remain 1 per hour, up to 24 hours.</p>
+            <p>Online progress: <span data-bind="text: Math.floor(App.game.dreamOrbController.onlineTime())"></span> / 600 seconds</p>
             <select id="dream-orbs-selector" class="custom-select" onchange="App.game.dreamOrbController.item(undefined)" style="margin-right: 8px"
                     data-bind="options: App.game.dreamOrbController.orbs.filter((o) => !o.requirement ||o.requirement.isCompleted()),
                                optionsText: 'color',
