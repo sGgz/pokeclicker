@@ -1,5 +1,11 @@
 # Windows 私人云存档客户端
 
+## 1.0.5（2026-10-07）
+
+客户端包版本为 `1.0.5`，内置游戏版本为 `0.10.27`，包含 Dream Orbs 在线产出：功能解锁后每运行 10 分钟随机获得 1 个已解锁颜色的球，未满 10 分钟的进度随存档保存，原离线收益保留。Dream Orbs 弹窗显示在线进度。客户端包版本与游戏版本分别维护。
+
+Windows x64 安装包为 `PokeclickerCloud-Setup-1.0.5.exe`，完整 ZIP 为 `PokeclickerCloud-1.0.5-win-x64.zip`。更新前导出本地备份并关闭旧客户端，再运行安装包；免安装使用时完整解压 ZIP 后运行 `PokeclickerCloud.exe`。
+
 最终用户请使用仓库 `design/cloud-save-user-guide.md` 的第十六节，或客户端内 **帮助 → 操作手册（离线可读）**。安装客户端不需要 Node、Git、Cloudflare CLI 或 GitHub token。
 
 本地游戏资源通过 `pokeclicker://game/` 加载；云端固定连接 `https://play.ggzz.fun`。这是有离线资源的 Electron 应用，游戏逻辑在本机运行。GitHub 私库、槽位及 Worker 认证均沿用现有实现，无需另行部署后台。
