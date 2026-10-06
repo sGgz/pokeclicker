@@ -18,7 +18,8 @@ class DefeatGymQuest extends Quest implements QuestInterface {
 
     // Only add Defeat Gym Quest if the player has defeated the first gym (Brock).
     public static canComplete() {
-        return App.game.badgeCase.hasBadge(BadgeEnums.Boulder);
+        return App.game.badgeCase.hasBadge(BadgeEnums.Boulder)
+            && GameConstants.RegionGyms.some(gyms => gyms.some(gym => GymList[gym].flags.quest && GymList[gym].clears() && GymList[gym].isUnlocked()));
     }
 
     public static generateData(): any[] {

@@ -56,6 +56,7 @@ class Save {
         PrivateGameplay.resetSettingsForLoad();
         PartyController.resetListFilters();
         Settings.getSetting('partyDisplayValue').set(-1);
+        Settings.getSetting('vitaminCategoryFilter').set([]);
         Settings.fromJSON(JSON.parse(settings));
 
         // Sort modules now, save settings, load settings

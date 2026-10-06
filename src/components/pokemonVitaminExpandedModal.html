@@ -12,7 +12,7 @@
                     <span class="btn btn-block btn-danger btn-static m-0">Vitamins are disabled.</span>
                     <!-- /ko -->
                     <div class="form-row m-0" id="multivitamin-filters">
-                        <div class="form-group col-6 col-lg-4 m-0 p-0">
+                        <div class="form-group col-6 col-lg-3 m-0 p-0">
                             <label for="multivitamin-search">Search</label>
                             <input id="multivitamin-search" autocomplete="off" class="form-control" placeholder="Search here" data-bind="textInput: Settings.getSetting('vitaminSearchFilter').observableValue" />
                         </div>
@@ -38,7 +38,20 @@
                             </select>
                             <!-- /ko -->
                         </div>
-                        <div class="form-group col-6 col-lg-4 m-0 p-0">
+                        <div class="form-group col-6 col-lg-2 m-0 p-0" id="multivitamin-category-filter">
+                            <label>标签</label>
+                            <!-- ko with: Settings.getSetting('vitaminCategoryFilter') -->
+                            <knockout data-bind="template: { name: 'multiSelectDropdownTemplate', data: {
+                                id: 'multivitamin-category',
+                                options: PokemonCategories.categories,
+                                optionsText: 'name', optionsValue: 'id', bindingField: observableValue,
+                                itemLabel: { class: 'small', style: (item) => ({ 'background-color': item.color(), color: GameHelper.isColorLight(item.color()) ? 'black' : 'white' }) },
+                                buttonText: () => observableValue().length ? '已选 ' + observableValue().length + ' 个标签' : '全部标签',
+                                topButtons: [{ label: '全部标签', class: 'btn-primary btn-sm', onClick: () => set([]) }]
+                            }}"></knockout>
+                            <!-- /ko -->
+                        </div>
+                        <div class="form-group col-12 col-lg-3 m-0 p-0">
                             <label>Order</label>
                             <div class="input-group">
                                 <!-- ko let: { vitaminSort: Settings.getSetting('vitaminSort') } -->
@@ -90,10 +103,10 @@
                                     <button type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown"></button>
                                     <div class="dropdown-menu">
                                         <!-- ko foreach: GameHelper.enumNumbers(GameConstants.VitaminType) -->
-                                        <a class="dropdown-item" href="#" data-bind="text: `Remove All ${GameConstants.VitaminType[$data]}`, click: () => { PartyController.removeVitaminFromParty($data) }"></a>
+                                        <a class="dropdown-item" href="#" data-bind="text: `Remove All ${GameConstants.VitaminType[$data]} (entire party)`, click: () => { PartyController.removeVitaminFromParty($data) }"></a>
                                         <!-- /ko -->
                                         <div class="dropdown-divider"></div>
-                                        <a class="dropdown-item" href="#" data-bind="click: () => { PartyController.removeAllVitaminsFromParty() }">Remove ALL Vitamins</a>
+                                        <a class="dropdown-item" href="#" data-bind="click: () => { PartyController.removeAllVitaminsFromParty() }">Remove ALL Vitamins (entire party)</a>
                                     </div>
                                 </div>
                             </div>

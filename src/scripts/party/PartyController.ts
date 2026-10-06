@@ -220,6 +220,10 @@ class PartyController {
             if (type > -2 && !pokemonMap[pokemon.name].type.includes(type)) {
                 return false;
             }
+            const categories = Settings.getSetting('vitaminCategoryFilter').observableValue() as number[];
+            if (categories.length && !categories.some(category => pokemon.category.includes(category))) {
+                return false;
+            }
             if (pokemon.vitaminUsesRemaining() == 0 && Settings.getSetting('vitaminHideMaxedPokemon').observableValue()) {
                 return false;
             }

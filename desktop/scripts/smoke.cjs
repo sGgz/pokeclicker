@@ -260,10 +260,109 @@ async function run() {
         await pageA.evaluate(() => Save.store(player));
         checks.push('External Pokemon list search, follow-sort display, independent display selection and filter reset work without changing hatchery filters or sorting.');
 
+        // The vitamin filter uses the existing categories and does not modify membership.
+        await pageA.evaluate(() => {
+            App.game.party.getPokemon(9).addCategory(1);
+            $('#toaster .toast').toast('hide');
+        });
+        await pageA.evaluate(() => new Promise(resolve => $('#pokemonVitaminExpandedModal').one('shown.bs.modal', () => resolve()).modal('show')));
+        await pageA.locator('#multivitamin-category-filter button').first().click();
+        await pageA.locator('#multivitamin-category-filter input[type="checkbox"]').nth(1).check();
+        await pageA.waitForFunction(() => PartyController.getVitaminFilteredList().length === 1 && PartyController.getVitaminFilteredList()[0].id === 9);
+        await pageA.waitForFunction(() => document.querySelectorAll('#pokemonVitaminExpandedModal tbody > tr').length === 1);
+        assert.equal(await pageA.evaluate(() => Settings.getSetting('breedingCategoryFilter').value.length), 0);
+        assert.equal(await pageA.evaluate(() => Settings.getSetting('partyCategoryFilter').value.length), 0);
+        await pageA.screenshot({ path: path.join(output, 'vitamin-category-filter.png') });
+        await pageA.locator('#multivitamin-category-filter button').first().click();
+        await pageA.evaluate(() => new Promise(resolve => $('#pokemonVitaminExpandedModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        checks.push('Vitamin UI filters by existing categories independently of hatchery and party filters, without changing categories or vitamin usage.');
+
+        const migratedQuests = await pageA.evaluate(() => {
+            App.game.gameState = GameConstants.GameState.paused;
+            const quests = App.game.quests;
+            const tutorial = quests.getQuestLine('Tutorial Quests');
+            tutorial.state(QuestLineState.ended);
+            const legacy = JSON.parse(JSON.stringify(quests.toJSON()));
+            delete legacy.cycleVersion;
+            legacy.xp = quests.levelToXP(30);
+            legacy.freeRefresh = false;
+            legacy.questList = [
+                { name: 'CatchShiniesQuest', data: [1, 1000], initial: App.game.statistics.totalShinyPokemonCaptured(), claimed: false },
+                { name: 'CapturePokemonsQuest', data: [100, 2000], initial: App.game.statistics.totalPokemonCaptured() - 100, claimed: true },
+            ];
+            const before = App.game.wallet.currencies[GameConstants.Currency.questPoint]();
+            // fromJSON initializes quest-line definitions once at startup. Clear this fixture's
+            // definitions before simulating another load in the same renderer.
+            quests.questLines().forEach(line => line.dispose());
+            quests.questLines.removeAll();
+            quests.fromJSON(legacy);
+            const pending = quests.toJSON().pendingLegacyBonus;
+            quests.tick(100);
+            const afterMigration = App.game.wallet.currencies[GameConstants.Currency.questPoint]() - before;
+            const migrated = JSON.parse(JSON.stringify(quests.toJSON()));
+            quests.questLines().forEach(line => line.dispose());
+            quests.questLines.removeAll();
+            quests.fromJSON(migrated);
+            quests.tick(100);
+            return { pending, afterMigration, afterReload: App.game.wallet.currencies[GameConstants.Currency.questPoint]() - before,
+                names: quests.questList().map(q => q.constructor.name), available: QuestHelper.availableTypes(),
+                shinyBonus: quests.questList().find(q => q.constructor.name === 'CatchShiniesQuest').bonusPointsReward };
+        });
+        assert.equal(migratedQuests.pending, 740);
+        assert.equal(migratedQuests.afterMigration, 740);
+        assert.equal(migratedQuests.afterReload, 740);
+        assert.equal(migratedQuests.shinyBonus, 370);
+        assert.equal(new Set(migratedQuests.names).size, migratedQuests.names.length);
+        assert.deepEqual([...migratedQuests.names].sort(), [...migratedQuests.available].sort());
+        await pageA.evaluate(() => new Promise(resolve => $('#QuestModal').one('shown.bs.modal', () => resolve()).modal('show')));
+        const shinyRow = pageA.locator('#QuestModal [data-quest-type="CatchShiniesQuest"]');
+        await shinyRow.locator('.quest-refresh').click();
+        await pageA.locator('.modal.show').filter({ hasText: '刷新此类任务' }).getByRole('button', { name: '刷新', exact: true }).click();
+        await pageA.waitForFunction(() => {
+            const quest = App.game.quests.questList().find(q => q.constructor.name === 'CatchShiniesQuest');
+            return App.game.quests.getRefreshCost(quest).amount === 100000;
+        });
+        await pageA.waitForFunction(() => !document.querySelector('.modal[id^="modal"]'));
+        const autoClaim = await pageA.evaluate(() => {
+            const quests = App.game.quests;
+            const old = quests.questList().find(q => q.constructor.name === 'CatchShiniesQuest');
+            const other = quests.questList().find(q => q.constructor.name === 'CapturePokemonsQuest');
+            const before = App.game.wallet.currencies[GameConstants.Currency.questPoint]();
+            const xp = quests.xp();
+            const completed = App.game.statistics.questsCompleted();
+            const reward = old.totalPointsReward;
+            const expectedXP = old.xpReward;
+            App.game.statistics.totalShinyPokemonCaptured(old.initial() + old.amount);
+            quests.tick(100);
+            const next = quests.questList().find(q => q.constructor.name === 'CatchShiniesQuest');
+            quests.tick(100);
+            return { reward, gained: App.game.wallet.currencies[GameConstants.Currency.questPoint]() - before,
+                expectedXP, xp: quests.xp() - xp, completed: App.game.statistics.questsCompleted() - completed,
+                replaced: next !== old, progress: next.progress(), unchanged: quests.questList().includes(other), cost: quests.getRefreshCost(next).amount };
+        });
+        assert.equal(autoClaim.gained, autoClaim.reward);
+        assert.equal(autoClaim.xp, Math.round(autoClaim.expectedXP));
+        assert.equal(autoClaim.completed, 1);
+        assert.equal(autoClaim.replaced, true);
+        assert.equal(autoClaim.progress, 0);
+        assert.equal(autoClaim.unchanged, true);
+        assert.equal(autoClaim.cost, 100000);
+        await pageA.screenshot({ path: path.join(output, 'independent-quest-cycles.png') });
+        await pageA.evaluate(() => new Promise(resolve => $('#QuestModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        await pageA.evaluate(() => { App.game.gameState = GameConstants.GameState.fighting; Save.store(player); });
+        checks.push('Ordinary quest rows migrate old bonuses exactly once, refresh individually through the real confirmation UI, and auto-claim once before starting the same type at zero progress.');
+
         const keyA = await pageA.evaluate(() => Save.key);
         const seconds = await pageA.evaluate(() => App.game.statistics.secondsPlayed());
         await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
-        await pageA.waitForFunction(start => App.game.statistics.secondsPlayed() >= start + 2, seconds, { timeout: 15000, polling: 200 });
+        try {
+            await pageA.waitForFunction(start => App.game.statistics.secondsPlayed() >= start + 2, seconds, { timeout: 15000, polling: 200 });
+        } catch (error) {
+            console.error('Background tick state:', await pageA.evaluate(start => ({ start, seconds: App.game.statistics.secondsPlayed(), hidden: document.hidden,
+                state: App.game.gameState, worker: !!App.game.worker, workerEnabled: Settings.getSetting('useWebWorkerForGameTicks').value,
+                cloudRunning: CloudSave.running, counter: Game.achievementCounter }), seconds));
+            throw error;
+        }
         await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].restore());
         assert.ok(await pageA.evaluate(() => !!App.game.worker));
         checks.push('Local game cold-starts without a network, has isolated storage/Web Locks, no renderer Node, and continues ticking while minimized.');
@@ -342,12 +441,19 @@ async function run() {
         assert.equal(restoredSettings['ggzz.private.hatcherySlotLimit'], 4);
         assert.equal(restoredSettings.partyIDFilter, 9);
         assert.equal(restoredSettings.partyDisplayValue, 2);
+        assert.deepEqual(restoredSettings.vitaminCategoryFilter, [1]);
         const restoredGame = await web.evaluate(key => JSON.parse(localStorage.getItem('save' + key)), webKey);
         assert.equal(restoredGame.breeding.eggSlots, 8);
         assert.equal(restoredGame.breeding.eggList.filter(egg => egg.type !== -1).length, 8);
         assert.equal(restoredGame.oakItems.Magic_Ball.level, 10);
         assert.equal(restoredGame.oakItems.Magic_Ball.exp, 110000);
         assert.equal(restoredGame.oakItems.Rocky_Helmet.level, 16);
+        assert.equal(restoredGame.quests.cycleVersion, 1);
+        assert.equal(restoredGame.quests.pendingLegacyBonus, 0);
+        assert.ok(restoredGame.quests.manualRefreshDays.CatchShiniesQuest);
+        assert.equal(new Set(restoredGame.quests.questList.map(q => q.name)).size, restoredGame.quests.questList.length);
+        assert.ok(restoredGame.quests.questList.every(q => q.bonusPointsReward > 0));
+        checks.push('Quest targets, frozen bonuses, per-type manual refresh history and vitamin category filters survive desktop-to-web cloud restoration.');
         checks.push('Expanded egg data, purchased slot rights, slot cap, list preferences and Oak Item progression survive desktop-to-web cloud restoration.');
         checks.push('All private preferences and vitamin purchase history survive desktop-to-web cloud restore without a protocol change.');
         await web.evaluate(key => { const save = JSON.parse(localStorage.getItem('save' + key)); save.profile.name = 'Web fixture progress'; localStorage.setItem('save' + key, JSON.stringify(save)); }, webKey);

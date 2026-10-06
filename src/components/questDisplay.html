@@ -1,20 +1,19 @@
 <div id="questDisplayContainer" class="card sortable border-secondary mb-3">
     <!-- ko if: App.game.quests.isDailyQuestsUnlocked() -->
         <div class="card-header p-0" data-toggle="collapse" href="#dailyQuestDisplayBody">
-            <span data-bind='text: "Quests (" + App.game.quests.currentQuests().length + "/" + App.game.quests.questSlots() + ")"'></span>
+            <span data-bind='text: "Quests (" + App.game.quests.questList().length + " types)"'></span>
         </div>
         <button class="btn btn-sm btn-primary" style="position: absolute; right: 0px; top: 0px; width: auto; height: 41px;"
                 data-bind="click: function(){$('#QuestModal').modal('show')}">
             List
         </button>
-    <!-- /ko -->
 
     <div id="dailyQuestDisplayBody" class="card-body text-left p-0 show questDisplayBlock">
         <div class="mx-2 my-1" style="font-size: .825rem;">
             <!-- ko if: App.game.quests.currentQuests().length == 0 && App.game.quests.isDailyQuestsUnlocked() -->
-                <div class="pt-2 pb-2 text-center">Click "List" to start a new quest.</div>
+                <div class="pt-2 pb-2 text-center">Unlocked quest types start automatically.</div>
             <!-- /ko -->
-            <div data-bind="foreach: App.game.quests.currentQuests()">
+            <div data-bind="foreach: App.game.quests.sortedQuestList">
                 <div class="mb-1" data-bind="text: $data.description"></div>
                 <div class="row no-gutters mb-1">
                     <div class="col-10">
@@ -28,20 +27,19 @@
                     </div>
                     <div class="col-2">
                         <!-- ko ifnot: $data.isCompleted() -->
-                        <button class="btn btn-danger btn-sm btn-block p-0" data-bind="click: () => { App.game.quests.quitQuest($data.index, $data.progress() > 0) }">
-                            Quit
+                        <button class="btn btn-outline-primary btn-sm btn-block p-0" data-bind="click: () => App.game.quests.refreshQuest($data), enable: App.game.quests.canRefresh($data), tooltip: { title: App.game.quests.getRefreshCost($data).amount ? '刷新此类任务：100,000 金币' : '免费刷新此类任务', trigger: 'hover' }">
+                            刷新
                         </button>
                         <!-- /ko -->
                         <!-- ko if: $data.isCompleted() -->
-                        <button class="btn btn-success btn-sm btn-block p-0" data-bind="click: () => { App.game.quests.claimQuest($data.index) }">
-                            Claim
-                        </button>
+                        <span class="small text-success">自动领取</span>
                         <!-- /ko -->
                     </div>
                 </div>
             </div>
         </div>
 	</div>
+    <!-- /ko -->
     <!-- List of quest line quests -->
 	<!-- ko let: {
         activeQuestLines: App.game.quests.questLines().filter((ql) => ql.state() == QuestLineState.started),

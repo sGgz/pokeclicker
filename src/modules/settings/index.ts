@@ -290,6 +290,9 @@ Settings.add(new BooleanSetting('vitaminHideShinyPokemon', 'Hide shiny Pokémon'
 Settings.add(new SearchSetting('vitaminSearchFilter', 'Search', '', undefined, false));
 Settings.add(new Setting<number>('vitaminRegionFilter', 'Region', [new SettingOption('All', -2), ...regionOptionsNoneLast], -2, undefined, false));
 Settings.add(new Setting<number>('vitaminTypeFilter', 'Type', [new SettingOption('All', -2), ...Settings.enumToNumberSettingOptionArray(PokemonType, (t) => t !== 'None')], -2, undefined, false));
+Settings.add(new MultiSelectSetting<number>('vitaminCategoryFilter', '标签', () => [
+    ...PokemonCategories.categories().map(c => new SettingOption(`Category ${c.id}`, c.id)),
+], [], undefined, false));
 
 // Consumable Sorting
 const consumableSortSettings = Object.keys(SortOptionConfigs).map((opt) => (

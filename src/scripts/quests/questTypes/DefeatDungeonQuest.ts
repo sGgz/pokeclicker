@@ -16,14 +16,20 @@ class DefeatDungeonQuest extends Quest implements QuestInterface {
         this.focus = App.game.statistics.dungeonsCleared[GameConstants.getDungeonIndex(this.dungeon)];
     }
 
+    private static availableRegionDungeons(): string[][] {
+        return GameConstants.RegionDungeons.slice(0, player.highestRegion() + 1)
+            .map(dungeons => dungeons.filter(dungeon => TownList[dungeon].isUnlocked()))
+            .filter(dungeons => dungeons.length > 0);
+    }
+
+    public static canComplete() {
+        return this.availableRegionDungeons().length > 0;
+    }
+
     public static generateData(): any[] {
         // Allow up to highest region
         const amount = SeededRand.intBetween(5, 20);
-        const region = SeededRand.intBetween(0, player.highestRegion());
-        // Only use unlocked dungeons
-        const possibleDungeons = GameConstants.RegionDungeons[region].filter(dungeon => TownList[dungeon].isUnlocked());
-        // If no dungeons unlocked in this region, just use the first dungeon of the region
-        const dungeon = possibleDungeons.length ? SeededRand.fromArray(possibleDungeons) : GameConstants.RegionDungeons[region][0];
+        const dungeon = SeededRand.fromArray(SeededRand.fromArray(this.availableRegionDungeons()));
         const reward = this.calcReward(amount, dungeon);
         return [amount, reward, dungeon];
     }

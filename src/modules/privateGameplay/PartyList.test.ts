@@ -12,6 +12,7 @@ import { SortOptions, SortOptionConfigs } from '../settings/SortOptions';
 
 const settingsSource = readFileSync('src/modules/settings/index.ts', 'utf8');
 const source = settingsSource.slice(settingsSource.indexOf('// Party Sorting'), settingsSource.indexOf('// Hatchery Sorting'))
+    + settingsSource.slice(settingsSource.indexOf('// Vitamin Sorting'), settingsSource.indexOf('// Consumable Sorting'))
     + settingsSource.slice(settingsSource.indexOf('// Hatchery Filters'), settingsSource.indexOf('// Hatchery display settings'))
     + readFileSync('src/scripts/party/PartyPokemon.ts', 'utf8')
     + readFileSync('src/scripts/party/PartyController.ts', 'utf8');
@@ -25,7 +26,7 @@ function setup() {
     const party = [
         { id: 1, name: 'Bulbasaur', displayName: 'Bulbasaur', shiny: true, pokerus: 0, region: 0, category: [1], attack: 20, type: [1, -1] },
         { id: 4, name: 'Charmander', displayName: 'Charmander', shiny: false, pokerus: 2, region: 1, category: [2], attack: 40, type: [2, -1] },
-    ].map(pokemon => ({ ...pokemon, breeding: false, evs: () => pokemon.id * 10, getEggSteps: () => 100, getBreedingAttackBonus: () => 5 }));
+    ].map(pokemon => ({ ...pokemon, breeding: false, vitaminUsesRemaining: () => 10, evs: () => pokemon.id * 10, getEggSteps: () => 100, getBreedingAttackBonus: () => 5 }));
     const map = Object.fromEntries(party.map(pokemon => [pokemon.name, pokemon]));
     const result = runInNewContext(`${compiled}\n({ PartyPokemon, PartyController });`, {
         ko, Settings, Setting, SettingOption, SearchSetting, MultiSelectSetting, BooleanSetting, SortOptions, SortOptionConfigs,
@@ -48,6 +49,24 @@ function setup() {
 }
 
 describe('independent external Pokemon list', () => {
+    it('filters vitamins by any selected category together with existing filters and persists independently', () => {
+        const { controller } = setup();
+        Settings.setSettingByName('vitaminCategoryFilter', [2]);
+        expect(controller.getVitaminFilteredList().map(p => p.id)).toEqual([4]);
+        Settings.setSettingByName('vitaminCategoryFilter', [1, 2]);
+        expect(controller.getVitaminFilteredList().map(p => p.id)).toEqual([1, 4]);
+        Settings.setSettingByName('vitaminHideShinyPokemon', true);
+        expect(controller.getVitaminFilteredList().map(p => p.id)).toEqual([4]);
+        Settings.setSettingByName('vitaminCategoryFilter', [1]);
+        expect(controller.getVitaminFilteredList()).toHaveLength(0);
+        const saved = JSON.parse(JSON.stringify(Settings.toJSON()));
+        Settings.setSettingByName('vitaminCategoryFilter', []);
+        Settings.fromJSON(saved);
+        expect(Settings.getSetting('vitaminCategoryFilter').value).toEqual([1]);
+        expect(Settings.getSetting('partyCategoryFilter').value).toEqual([]);
+        expect(Settings.getSetting('breedingCategoryFilter').value).toEqual([]);
+    });
+
     it('shares filter semantics while keeping hatchery choices independent, including JSON restoration', () => {
         const { party, matches } = setup();
         Settings.setSettingByName('partyRegionFilter', [1]);

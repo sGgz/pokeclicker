@@ -53,23 +53,19 @@ class QuestHelper {
         return new this.quests[questType](...data);
     }
 
-    public static generateQuestList(seed: number, amount = 10, uniqueQuestTypes = true) {
-        const quests = [];
+    public static availableTypes(): string[] {
+        return Object.keys(this.quests).filter(type => this.quests[type].canComplete());
+    }
 
-        SeededRand.seed(+seed);
-
-        // Only use unlocked quest types
-        const QuestTypes = new Set(Object.entries(this.quests).filter(([key, quest]) => quest.canComplete()).map(([key]) => key));
-        while (quests.length < amount && QuestTypes.size) {
-            const questType = SeededRand.fromArray(Array.from(QuestTypes));
-            if (uniqueQuestTypes) {
-                QuestTypes.delete(questType);
-            }
-            const quest = this.createQuest(questType);
-            quest.index = quests.length;
-            quests.push(quest);
+    public static generateQuest(type: string, seed: number): Quest {
+        // A row must not consume another row's random sequence (or another feature's RNG).
+        const previousState = SeededRand.state;
+        try {
+            SeededRand.seed(seed || 1);
+            return this.createQuest(type);
+        } finally {
+            SeededRand.state = previousState;
         }
-        return quests;
     }
 
     public static highestOneShotRoute(region: GameConstants.Region): number {
