@@ -6,6 +6,8 @@ aria-labelledby="dreamOrbsModalLabel">
             <h5 class="modal-title">Open Dream Orbs</h5>
         </div>
         <div class="modal-body">
+            <p class="small text-muted">解锁后每累计在线游戏 1 小时获得 1 个宝珠，颜色从已解锁颜色中随机选择。剩余进度随存档保存，关闭游戏期间不产出。</p>
+            <p>距离下一个宝珠：<span id="dream-orb-countdown" data-bind="text: GameConstants.formatTime(Math.ceil((DreamOrbController.ONLINE_ORB_INTERVAL - App.game.dreamOrbController.onlineTimeMs()) / GameConstants.SECOND))"></span></p>
             <select id="dream-orbs-selector" class="custom-select" onchange="App.game.dreamOrbController.item(undefined)" style="margin-right: 8px"
                     data-bind="options: App.game.dreamOrbController.orbs.filter((o) => !o.requirement ||o.requirement.isCompleted()),
                                optionsText: 'color',

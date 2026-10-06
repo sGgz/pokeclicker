@@ -352,7 +352,33 @@ async function run() {
         await pageA.evaluate(() => { App.game.gameState = GameConstants.GameState.fighting; Save.store(player); });
         checks.push('Ordinary quest rows migrate old bonuses exactly once, refresh individually through the real confirmation UI, and auto-claim once before starting the same type at zero progress.');
 
+        const dreamOrbs = await pageA.evaluate(() => {
+            const controller = App.game.dreamOrbController;
+            const lockedBefore = controller.onlineTimeMs();
+            controller.tick(GameConstants.HOUR);
+            if (controller.onlineTimeMs() !== lockedBefore || controller.orbs.some(orb => orb.amount())) throw new Error('Locked Dream Orbs accumulated time');
+            ['Tornadus', 'Thundurus', 'Landorus'].forEach(name => App.game.party.gainPokemonById(pokemonMap[name].id, false, true));
+            controller.fromJSON({ orbs: [{ color: 'Pink', amount: 7 }] });
+            const oldProgress = controller.onlineTimeMs();
+            controller.tick(15 * GameConstants.MINUTE);
+            const beforeOffline = JSON.stringify(controller.toJSON());
+            const lastSeen = player._lastSeen;
+            player._lastSeen = Date.now() - 48 * GameConstants.HOUR;
+            try { App.game.computeOfflineEarnings(); } finally { player._lastSeen = lastSeen; }
+            const offlineUnchanged = beforeOffline === JSON.stringify(controller.toJSON());
+            controller.onlineTimeMs(GameConstants.HOUR - 3000);
+            return { oldProgress, offlineUnchanged, pink: controller.orbs[0].amount() };
+        });
+        assert.deepEqual(dreamOrbs, { oldProgress: 0, offlineUnchanged: true, pink: 7 });
+        await pageA.evaluate(() => new Promise(resolve => $('#dreamOrbsModal').one('shown.bs.modal', () => resolve()).modal('show')));
+        assert.match(await pageA.locator('#dream-orb-countdown').innerText(), /^\d{2}:\d{2}:\d{2}$/);
+        await pageA.waitForFunction(() => App.game.dreamOrbController.orbs[0].amount() === 8, undefined, { timeout: 15000 });
+        await pageA.screenshot({ path: path.join(output, 'dream-orbs-online.png') });
+        await pageA.evaluate(() => new Promise(resolve => $('#dreamOrbsModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        checks.push('Dream Orbs retain legacy balances, require the original unlocks, ignore offline settlement and award once per online hour with a live countdown.');
+
         const keyA = await pageA.evaluate(() => Save.key);
+        await pageA.evaluate(() => { App.game.dreamOrbController.onlineTimeMs(GameConstants.HOUR - 5000); });
         const seconds = await pageA.evaluate(() => App.game.statistics.secondsPlayed());
         await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
         try {
@@ -363,8 +389,11 @@ async function run() {
                 cloudRunning: CloudSave.running, counter: Game.achievementCounter }), seconds));
             throw error;
         }
+        await pageA.waitForFunction(() => App.game.dreamOrbController.orbs[0].amount() === 9, undefined, { timeout: 20000 });
         await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].restore());
         assert.ok(await pageA.evaluate(() => !!App.game.worker));
+        await pageA.evaluate(() => { App.game.dreamOrbController.onlineTimeMs(20 * GameConstants.MINUTE); Save.store(player); });
+        checks.push('A minimized packaged client earns exactly one Dream Orb at the online threshold through the background game clock.');
         checks.push('Local game cold-starts without a network, has isolated storage/Web Locks, no renderer Node, and continues ticking while minimized.');
         await panel(pageA);
         await pageA.screenshot({ path: path.join(output, 'offline-game.png') });
@@ -380,6 +409,9 @@ async function run() {
         assert.equal(writes, beforeQuitWrites);
         ({ app: a, page: pageA } = await launch(profiles[0]));
         assert.equal(await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key)).profile.name, keyA), 'Desktop fixture A');
+        const restoredOrbs = await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key))['dream-orbs'], keyA);
+        assert.equal(restoredOrbs.orbs.find(orb => orb.color === 'Pink').amount, 9);
+        assert.ok(restoredOrbs.onlineTimeMs >= 20 * 60000 && restoredOrbs.onlineTimeMs < 21 * 60000);
         checks.push('Graceful close saves local progress; restarting the same profile restores it without uploading.');
 
         online = true;
@@ -443,6 +475,10 @@ async function run() {
         assert.equal(restoredSettings.partyDisplayValue, 2);
         assert.deepEqual(restoredSettings.vitaminCategoryFilter, [1]);
         const restoredGame = await web.evaluate(key => JSON.parse(localStorage.getItem('save' + key)), webKey);
+        assert.deepEqual(restoredGame['dream-orbs'], remote.envelope.payload.save['dream-orbs']);
+        assert.equal(restoredGame['dream-orbs'].orbs.find(orb => orb.color === 'Pink').amount, 9);
+        assert.ok(restoredGame['dream-orbs'].onlineTimeMs >= 20 * 60000);
+        checks.push('Dream Orb balances and unfinished online time persist through desktop restart and desktop-to-web cloud restoration.');
         assert.equal(restoredGame.breeding.eggSlots, 8);
         assert.equal(restoredGame.breeding.eggList.filter(egg => egg.type !== -1).length, 8);
         assert.equal(restoredGame.oakItems.Magic_Ball.level, 10);
