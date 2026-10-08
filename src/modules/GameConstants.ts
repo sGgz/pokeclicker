@@ -426,10 +426,6 @@ export const ACTIVE_QUEST_MULTIPLIER = 4;
 // This number is used to estimate time taken in terms of clicks, for reward calculation
 export const QUEST_CLICKS_PER_SECOND = 5;
 
-export const QUESTS_PER_SET = 10;
-
-export const MAX_QUEST_SLOTS = 10;
-
 // EVs
 export const BASE_EP_YIELD = 100;
 export const STONE_EP_YIELD = 1000;

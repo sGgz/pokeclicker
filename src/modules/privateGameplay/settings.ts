@@ -13,6 +13,7 @@ const names = {
     guideFee: 'ggzz.private.guideFeeRate',
     // Retain the released save key so existing enabled/disabled preferences survive.
     autoFillHatcheryQueue: 'ggzz.private.autoFillEggSlots',
+    hatcherySlotLimit: 'ggzz.private.hatcherySlotLimit',
 };
 
 function guideIsHired(): boolean {
@@ -46,6 +47,8 @@ class PrivateSetting<T> extends Setting<T> {
 
 export default class PrivateGameplay {
     static registerSettings(): void {
+        Settings.add(new PrivateSetting(names.hatcherySlotLimit, '同时孵化槽位上限',
+            [4, 8, 12, 16].map(value => new SettingOption(`${value} 个`, value)), 8, undefined, false));
         Settings.add(new PrivateSetting(names.autoFillHatcheryQueue, '自动补满孵化队列', [
             new SettingOption('关闭', false),
             new SettingOption('开启', true),
@@ -74,6 +77,10 @@ export default class PrivateGameplay {
 
     static autoFillHatcheryQueue(): boolean {
         return Settings.getSetting(names.autoFillHatcheryQueue)?.observableValue() === true;
+    }
+
+    static hatcherySlotLimit(): number {
+        return Settings.getSetting(names.hatcherySlotLimit)?.observableValue() ?? 8;
     }
 
     static optimizedPathfinding(): boolean {

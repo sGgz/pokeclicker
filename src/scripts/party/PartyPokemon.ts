@@ -456,12 +456,14 @@ class PartyPokemon implements Saveable, TmpPartyPokemonType {
         return this.isHatchable() && this.matchesHatcheryFilters();
     });
 
-    public matchesHatcheryFilters = ko.pureComputed(() => {
+    public matchesHatcheryFilters = ko.pureComputed(() => this.matchesListFilters('breeding'));
+
+    public matchesListFilters(prefix: 'breeding' | 'party'): boolean {
         if (this.id <= 0) {
             return false;
         }
         // Check if search matches englishName or displayName
-        const nameFilterSetting = Settings.getSetting('breedingNameFilter') as SearchSetting;
+        const nameFilterSetting = Settings.getSetting(`${prefix}NameFilter`) as SearchSetting;
         if (nameFilterSetting.observableValue() != '') {
             if (!PokemonHelper.matchPokemonByNames(nameFilterSetting.regex(), this.name, this)) {
                 return false;
@@ -469,13 +471,13 @@ class PartyPokemon implements Saveable, TmpPartyPokemonType {
         }
 
         // Check if search matches species number
-        const idFilter = Settings.getSetting('breedingIDFilter').observableValue();
+        const idFilter = Settings.getSetting(`${prefix}IDFilter`).observableValue();
         if (idFilter > -1 && idFilter != Math.floor(this.id)) {
             return false;
         }
 
         // Check based on categories
-        const categoryFilter = Settings.getSetting('breedingCategoryFilter').observableValue() as number[];
+        const categoryFilter = Settings.getSetting(`${prefix}CategoryFilter`).observableValue() as number[];
         if (categoryFilter.length > 0) {
             if (!categoryFilter.some((category) => this.category.includes(category))) {
                 return false;
@@ -483,13 +485,13 @@ class PartyPokemon implements Saveable, TmpPartyPokemonType {
         }
 
         // Check based on shiny status
-        const shinyFilter = Settings.getSetting('breedingShinyFilter').observableValue();
+        const shinyFilter = Settings.getSetting(`${prefix}ShinyFilter`).observableValue();
         if (shinyFilter >= 0 && +this.shiny !== shinyFilter) {
             return false;
         }
 
         // Check based on native region
-        const selectedRegions = Settings.getSetting('breedingRegionFilter').observableValue() as GameConstants.Region[];
+        const selectedRegions = Settings.getSetting(`${prefix}RegionFilter`).observableValue() as GameConstants.Region[];
         if (selectedRegions.length > 0) {
             const nativeRegion = PokemonHelper.calcNativeRegion(this.name);
             if (!selectedRegions.includes(nativeRegion)) {
@@ -498,12 +500,12 @@ class PartyPokemon implements Saveable, TmpPartyPokemonType {
         }
 
         // Check based on Pokerus status
-        const pokerusFilter = Settings.getSetting('breedingPokerusFilter').observableValue();
+        const pokerusFilter = Settings.getSetting(`${prefix}PokerusFilter`).observableValue();
         if (pokerusFilter > -1 && this.pokerus !== pokerusFilter) {
             return false;
         }
 
-        const uniqueTransformationFilter = Settings.getSetting('breedingUniqueTransformationFilter').observableValue();
+        const uniqueTransformationFilter = Settings.getSetting(`${prefix}UniqueTransformationFilter`).observableValue();
         const pokemon = PokemonHelper.getPokemonById(this.id);
         // Only Base Pokémon with Mega available
         if (uniqueTransformationFilter == 'mega-available' && !PokemonHelper.hasMegaEvolution(pokemon.name)) {
@@ -519,7 +521,7 @@ class PartyPokemon implements Saveable, TmpPartyPokemonType {
         }
 
         // Check to exclude alternate forms
-        const hideAltFilter = Settings.getSetting('breedingHideAltFilter').observableValue();
+        const hideAltFilter = Settings.getSetting(`${prefix}HideAltFilter`).observableValue();
         if (hideAltFilter && !Number.isInteger(pokemon.id)) {
             // Don't exclude alt forms native to a different region, as they're considered a main form for that region's progression
             const nativeRegion = PokemonHelper.calcNativeRegion(this.name);
@@ -530,8 +532,8 @@ class PartyPokemon implements Saveable, TmpPartyPokemonType {
         }
 
         // Check if either of the types match
-        const selectedType1 = Settings.getSetting('breedingType1Filter').observableValue() as PokemonType[];
-        const selectedType2 = Settings.getSetting('breedingType2Filter').observableValue() as PokemonType[];
+        const selectedType1 = Settings.getSetting(`${prefix}Type1Filter`).observableValue() as PokemonType[];
+        const selectedType2 = Settings.getSetting(`${prefix}Type2Filter`).observableValue() as PokemonType[];
         if (selectedType1.length > 0 || selectedType2.length > 0) {
             const { type: types } = pokemonMap[this.name];
             if (!PokemonHelper.matchesTypeFilter(types, selectedType1)
@@ -541,7 +543,7 @@ class PartyPokemon implements Saveable, TmpPartyPokemonType {
         }
 
         return true;
-    });
+    }
 
     public giveHeldItem = (heldItem: HeldItem): void => {
         if (!this.heldItem() || heldItem.name != this.heldItem().name) {

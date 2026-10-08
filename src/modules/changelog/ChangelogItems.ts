@@ -10,7 +10,7 @@ import ChangelogUpdate from './ChangelogUpdate';
  */
 const ChangelogItems = [
     new ChangelogUpdate('v0.10.27', new Date(2026, 9, 7)),
-    new Changelog(changelogType.NEW, 'Earn a Dream Orb every 10 minutes online, with partial progress saved. Existing offline earnings are retained.'),
+    new Changelog(changelogType.NEW, 'Earn a Dream Orb every hour of online game time, with partial progress saved. Dream Orbs are no longer earned offline.'),
     // note that month is 0 indexed
     // v0.10.26
     new ChangelogUpdate('v0.10.26', new Date(2026, 7, 30)),

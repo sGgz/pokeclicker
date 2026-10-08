@@ -149,6 +149,16 @@
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.pricingMode')}"></tr>
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.autoFillEggSlots')}"></tr>
                                 <tr>
+                                    <td class="p-2"><label class="m-0" for="private-hatchery-slot-limit">同时孵化槽位上限</label></td>
+                                    <td class="p-2">
+                                        <select id="private-hatchery-slot-limit" name="ggzz.private.hatcherySlotLimit" class="form-control" data-bind="
+                                            options: Settings.getSetting('ggzz.private.hatcherySlotLimit').options,
+                                            optionsText: 'text', optionsValue: 'value',
+                                            value: Settings.getSetting('ggzz.private.hatcherySlotLimit').observableValue"></select>
+                                    </td>
+                                </tr>
+                                <tr><td colspan="2" class="small">孵化槽位按原价逐个解锁。下调上限后，超出部分的蛋可继续孵完；已购槽位保留，再次调高无需重新购买。</td></tr>
+                                <tr>
                                     <td class="p-2"><label class="m-0" for="private-guide-fee">地牢助手服务费</label></td>
                                     <td class="p-2">
                                         <select id="private-guide-fee" class="form-control" data-bind="

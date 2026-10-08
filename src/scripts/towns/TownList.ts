@@ -5318,7 +5318,7 @@ const ProfJuniper = new ProfNPC('Prof. Juniper',
 
 const ProfBurnet = new NPC('Professor Burnet', [
     'Welcome to my laboratory, trainer! I am working here to understand the mysterious Interdream Zone.',
-    'My laboratory equipment can convert the energy of dreams you experience while sleeping, or "Offline" into orbs. We can then open these orbs and see what your mind experienced in the Interdream Zone.',
+    'My laboratory equipment collects dream energy while your game is running. Once Dream Orbs are unlocked, each hour of online game time produces one orb of a random unlocked color. Partial progress is saved, but time with the game closed does not produce orbs. We can open these orbs to explore the Interdream Zone.',
     'A trainer like you surely dreams of rare Pokémon. The more rare Pokémon you find from the Interdream Zone, the more we can explore to find others!',
 ], {
     image: 'assets/images/npcs/Professor Burnet.png',

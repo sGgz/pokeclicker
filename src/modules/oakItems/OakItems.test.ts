@@ -12,7 +12,7 @@ vi.mock('../notifications/Notifier', () => ({ default: { notify: vi.fn() } }));
 const expected = [
     { type: OakItemType.Magic_Ball, cap: 10, final: 18, old: [5, 6, 7, 8, 9, 10] },
     { type: OakItemType.Amulet_Coin, cap: 15, final: 2.75, old: [1.25, 1.3, 1.35, 1.4, 1.45, 1.5] },
-    { type: OakItemType.Rocky_Helmet, cap: 15, final: 2.75, old: [1.25, 1.3, 1.35, 1.4, 1.45, 1.5] },
+    { type: OakItemType.Rocky_Helmet, cap: 30, final: 6.5, old: [1.25, 1.3, 1.35, 1.4, 1.45, 1.5] },
     { type: OakItemType.Exp_Share, cap: 15, final: 2.05, old: [1.15, 1.18, 1.21, 1.24, 1.27, 1.3] },
     { type: OakItemType.Sprayduck, cap: 15, final: 2.75, old: [1.25, 1.3, 1.35, 1.4, 1.45, 1.5] },
     { type: OakItemType.Shiny_Charm, cap: 15, final: 4, old: [1.5, 1.6, 1.7, 1.8, 1.9, 2] },
@@ -70,11 +70,51 @@ describe('extended Oak Item progression', () => {
         const battery = oakItems.itemList[OakItemType.Cell_Battery];
         const deltas = (values: number[]) => values.slice(5).map((value, index) => value - values[index + 4]);
         expect(deltas(coin.expList)).toEqual([20000, 35000, 55000, 85000, 130000, 190000, 270000, 365000, 485000, 625000]);
-        expect(deltas(magic.expList)).toEqual([100000, 225000, 400000, 625000, 900000]);
+        expect(deltas(magic.expList)).toEqual([5000, 10000, 17500, 27500, 40000]);
         expect(deltas(battery.expList)).toEqual([360, 630, 990, 1530, 2340, 3420, 4860, 6570, 8730, 11250]);
         expect(coin.expList[14]).toBe(2270000);
-        expect(magic.expList[9]).toBe(2260000);
+        expect(magic.expList[9]).toBe(110000);
         expect(battery.expList[14]).toBe(40830);
+    });
+
+    it.each([5, 6, 7, 8, 9, 10])('retains all recorded Magic Ball XP from an old level-%s save, including after use and reload', (level) => {
+        const { oakItems, wallet } = setup();
+        const magic = oakItems.itemList[OakItemType.Magic_Ball];
+        const oldThresholds = [10000, 110000, 335000, 735000, 1360000, 2260000];
+        const saved = { level, exp: oldThresholds[level - 5] + (level === 5 ? 50000 : 0), isActive: true };
+        magic.fromJSON(saved);
+        expect(magic.toJSON()).toEqual(saved);
+        magic.use();
+        expect(magic.toJSON()).toEqual(saved);
+        expect(magic.expPercentage).toBe(100);
+        let upgrades = 0;
+        while (magic.canBuy()) {
+            magic.buy();
+            upgrades++;
+            magic.use(0);
+        }
+        const after = magic.toJSON();
+        expect(after.exp).toBe(saved.exp);
+        expect(magic.level).toBe(level === 5 ? 8 : 10);
+        expect(wallet.loseAmount).toHaveBeenCalledTimes(upgrades);
+        magic.fromJSON(JSON.parse(JSON.stringify(after)));
+        expect(magic.toJSON()).toEqual(after);
+    });
+
+    it('extends an old maxed Rocky Helmet by 30 million XP without changing its first 15 levels', () => {
+        const { oakItems } = setup();
+        const helmet = oakItems.itemList[OakItemType.Rocky_Helmet];
+        const coin = oakItems.itemList[OakItemType.Amulet_Coin];
+        expect(helmet.expList.slice(0, 15)).toEqual(coin.expList);
+        expect(helmet.bonusList.slice(0, 16)).toEqual(coin.bonusList);
+        expect(helmet.expList[29] - helmet.expList[14]).toBe(30000000);
+        helmet.fromJSON({ level: 15, exp: 2270000, isActive: true });
+        expect(helmet.isMaxLevel()).toBe(false);
+        expect(helmet.calculateBonus()).toBe(2.75);
+        helmet.use(750000);
+        helmet.buy();
+        expect(helmet.level).toBe(16);
+        expect(helmet.calculateBonus()).toBe(2.95);
     });
 
     it.each(expected)('upgrades $type from an old level-5 save through the new cap at a fixed cost', ({ type, cap, final }) => {

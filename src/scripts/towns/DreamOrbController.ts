@@ -10,26 +10,14 @@ class DreamOrb {
 }
 
 class DreamOrbController implements Saveable {
+    public static readonly ONLINE_ORB_INTERVAL = GameConstants.HOUR;
+    public onlineTimeMs = ko.observable(0);
     public selectedOrb: KnockoutObservable<DreamOrb>;
     public opening: KnockoutObservable<boolean>;
     public item: KnockoutObservable<DreamOrbLoot>;
     public amountSelected = ko.observable(1);
     public amountOpened = ko.observable(0);
     public itemsReceived = ko.observableArray();
-    public onlineTime = ko.observable(0);
-
-    public update(deltaSeconds: number): void {
-        if (!(new DreamOrbTownContent()).isUnlocked()) {
-            return;
-        }
-        const elapsed = this.onlineTime() + deltaSeconds;
-        const earned = Math.floor(elapsed / 600);
-        this.onlineTime(elapsed % 600);
-        const unlocked = this.orbs.filter(o => !o.requirement || o.requirement.isCompleted());
-        for (let i = 0; i < earned; i++) {
-            GameHelper.incrementObservable(Rand.fromArray(unlocked).amount);
-        }
-    }
 
     constructor() {
         this.selectedOrb = ko.observable(this.orbs[0]);
@@ -82,6 +70,33 @@ class DreamOrbController implements Saveable {
         ]),
     ]
 
+    public tick(delta: number): void {
+        if (!Number.isFinite(delta) || delta <= 0 || !(new DreamOrbTownContent()).isUnlocked()) {
+            return;
+        }
+        const total = this.onlineTimeMs() + delta;
+        const earned = Math.floor(total / DreamOrbController.ONLINE_ORB_INTERVAL);
+        this.onlineTimeMs(total % DreamOrbController.ONLINE_ORB_INTERVAL);
+        if (!earned) {
+            return;
+        }
+        const unlocked = this.orbs.filter(orb => !orb.requirement || orb.requirement.isCompleted());
+        const amounts = Object.fromEntries(unlocked.map(orb => [orb.color, 0]));
+        for (let i = 0; i < earned; i++) {
+            const orb = Rand.fromArray(unlocked);
+            GameHelper.incrementObservable(orb.amount);
+            amounts[orb.color]++;
+        }
+        const colors = Object.entries(amounts).filter(([, amount]) => amount > 0)
+            .map(([color, amount]) => `${amount} ${color}`).join(', ');
+        Notifier.notify({
+            title: 'Dream Orbs',
+            message: `Gained ${earned} Dream Orbs from online play: ${colors}.`,
+            type: NotificationConstants.NotificationOption.info,
+            timeout: 30 * GameConstants.SECOND,
+        });
+    }
+
     public open() {
         if (this.opening()) {
             return;
@@ -129,14 +144,18 @@ class DreamOrbController implements Saveable {
     defaults: Record<string, any>;
     toJSON(): Record<string, any> {
         return {
-            onlineTime: this.onlineTime(),
             orbs: this.orbs.map((o) => ({ amount: o.amount(), color: o.color })),
+            onlineTimeMs: this.onlineTimeMs(),
         };
     }
     fromJSON(json: Record<string, any>): void {
-        const onlineTime = json?.onlineTime;
-        this.onlineTime(Number.isFinite(onlineTime) && onlineTime >= 0 ? onlineTime % 600 : 0);
         json?.orbs?.forEach((o) => this.orbs.find((o2) => o2.color == o.color)?.amount(o.amount));
+        // develop previously stored a sub-ten-minute remainder in seconds.
+        const legacySeconds = json?.onlineTime;
+        const legacyProgress = Number.isFinite(legacySeconds) && legacySeconds >= 0 && legacySeconds < 600 ? legacySeconds * GameConstants.SECOND : 0;
+        const progress = Object.prototype.hasOwnProperty.call(json ?? {}, 'onlineTimeMs') ? json.onlineTimeMs : legacyProgress;
+        // Old saves have no online progress. Invalid data must not grant free orbs.
+        this.onlineTimeMs(Number.isFinite(progress) && progress >= 0 && progress < DreamOrbController.ONLINE_ORB_INTERVAL ? Math.floor(progress) : 0);
     }
 }
 

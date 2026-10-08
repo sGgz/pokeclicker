@@ -127,6 +127,10 @@ export default class PokemonCategories implements Saveable {
         cat.subscriber?.dispose();
         // Remove category
         PokemonCategories.categories.splice(index, 1);
+        const vitaminCategories = Settings.getSetting('vitaminCategoryFilter')?.value as number[];
+        if (vitaminCategories?.includes(cat.id)) {
+            Settings.setSettingByName('vitaminCategoryFilter', vitaminCategories.filter(value => value !== cat.id));
+        }
         // Update Pokedex/Breeding filters
         if (Settings.getSetting('pokedexCategoryFilter').value === cat.id) {
             Settings.setSettingByName('pokedexCategoryFilter', -1);

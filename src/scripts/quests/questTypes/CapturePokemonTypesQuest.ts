@@ -1,6 +1,7 @@
 /// <reference path="../Quest.ts" />
 
 class CapturePokemonTypesQuest extends Quest implements QuestInterface {
+    protected ownsFocus = true;
     public static maxWeight = 4;
     public static minWeight = 1.2;
     public static weights: Array<Record<string, number>> = [];

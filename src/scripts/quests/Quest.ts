@@ -11,12 +11,15 @@ abstract class Quest {
     protected customDescription?: string;
     private cachedTranslatedDescription?: KnockoutComputed<string>;
     pointsReward: number;
+    // Ordinary quests keep their base reward for XP and store the level bonus separately.
+    bonusPointsReward = 0;
     progress: KnockoutComputed<number>;
     progressText: KnockoutComputed<string>;
     inProgress: KnockoutComputed<boolean>;
     isCompleted: KnockoutComputed<boolean>;
     claimed: KnockoutObservable<boolean>;
     private _focus: KnockoutObservable<any>;
+    protected ownsFocus = false;
     private focusSub: KnockoutSubscription;
     private focusValue: number;
     initial: KnockoutObservable<any>;
@@ -81,9 +84,13 @@ abstract class Quest {
         return 100 + (this.pointsReward / 10);
     }
 
+    get totalPointsReward(): number {
+        return this.pointsReward + this.bonusPointsReward;
+    }
+
     //#region Quest Status
 
-    claim() {
+    claim(silent = false) {
         if (this.isCompleted() && !this.claimed()) {
             App.game.quests.addXP(this.xpReward);
             if (this.customReward !== undefined) {
@@ -94,27 +101,31 @@ abstract class Quest {
             }
             this.deleteFocusSub();
             this.claimed(true);
-            if (this.pointsReward) {
-                App.game.wallet.gainQuestPoints(this.pointsReward);
-                Notifier.notify({
-                    message: `You have completed your quest!\nYou claimed <img src="./assets/images/currency/questPoint.svg" height="24px"/> ${this.pointsReward.toLocaleString('en-US')}!`,
-                    strippedMessage: `You have completed your quest and claimed ${this.pointsReward.toLocaleString('en-US')} Quest Points!`,
-                    type: NotificationConstants.NotificationOption.success,
-                    setting: NotificationConstants.NotificationSetting.General.quest_completed,
-                });
+            if (this.totalPointsReward) {
+                App.game.wallet.gainQuestPoints(this.totalPointsReward);
+                if (!silent) {
+                    Notifier.notify({
+                        message: `You have completed your quest!\nYou claimed <img src="./assets/images/currency/questPoint.svg" height="24px"/> ${this.totalPointsReward.toLocaleString('en-US')}!`,
+                        strippedMessage: `You have completed your quest and claimed ${this.totalPointsReward.toLocaleString('en-US')} Quest Points!`,
+                        type: NotificationConstants.NotificationOption.success,
+                        setting: NotificationConstants.NotificationSetting.General.quest_completed,
+                    });
+                }
                 App.game.logbook.newLog(
                     LogBookTypes.QUEST,
                     createLogContent.completedQuestWithPoints({
                         quest: this.description,
-                        points: this.pointsReward.toLocaleString('en-US'),
+                        points: this.totalPointsReward.toLocaleString('en-US'),
                     })
                 );
             } else {
-                Notifier.notify({
-                    message: 'You have completed a quest!',
-                    type: NotificationConstants.NotificationOption.success,
-                    setting: NotificationConstants.NotificationSetting.General.quest_completed,
-                });
+                if (!silent) {
+                    Notifier.notify({
+                        message: 'You have completed a quest!',
+                        type: NotificationConstants.NotificationOption.success,
+                        setting: NotificationConstants.NotificationSetting.General.quest_completed,
+                    });
+                }
                 App.game.logbook.newLog(
                     LogBookTypes.QUEST,
                     createLogContent.completedQuest({ quest: this.description })
@@ -257,6 +268,20 @@ abstract class Quest {
         return false;
     }
 
+    /** Release an ordinary quest after its row has been replaced. */
+    dispose() {
+        this.deleteAutoCompleter();
+        this.deleteFocusSub();
+        this.isCompleted?.dispose();
+        this.progress?.dispose();
+        this.progressText?.dispose();
+        this.inProgress?.dispose();
+        this.cachedTranslatedDescription?.dispose();
+        if (this.ownsFocus && ko.isComputed(this._focus)) {
+            (this._focus as KnockoutComputed<any>).dispose();
+        }
+    }
+
     withDescription(description: string): Quest {
         this.customDescription = description;
         return this;
@@ -307,6 +332,7 @@ abstract class Quest {
             index: this.index || 0,
             customDescription: this.customDescription,
             data: <any[]>[this.amount, this.pointsReward],
+            bonusPointsReward: this.bonusPointsReward,
             initial: this.initial(),
             claimed: this.claimed(),
             notified: this.notified,
@@ -319,7 +345,9 @@ abstract class Quest {
             this.claimed(false);
             this.initial(null);
             this.notified = false;
+            return;
         }
+        this.bonusPointsReward = Number.isFinite(json.bonusPointsReward) ? Math.max(0, Math.round(json.bonusPointsReward)) : 0;
         this.index = json.hasOwnProperty('index') ? json.index : 0;
         this.claimed(json.hasOwnProperty('claimed') ? json.claimed : false);
         this.initial(json.hasOwnProperty('initial') ? json.initial : null);

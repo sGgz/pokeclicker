@@ -149,9 +149,48 @@ class PartyController {
     }
 
     static getSortedList = ko.pureComputed(() => {
-        const list = [...App.game.party.caughtPokemon];
+        const list = App.game.party.caughtPokemon.filter(pokemon => !pokemon.breeding && pokemon.matchesListFilters('party'));
         return list.sort(PartyController.compareBy(Settings.getSetting('partySort').observableValue(), Settings.getSetting('partySortDirection').observableValue()));
     }).extend({ rateLimit: 500 });
+
+    public static listSearch = ko.pureComputed({
+        read: () => {
+            const id = Settings.getSetting('partyIDFilter').observableValue();
+            return id === -1 ? Settings.getSetting('partyNameFilter').observableValue() : String(id);
+        },
+        write: (value: string) => {
+            const numeric = /^\d+$/.test(value);
+            Settings.setSettingByName('partyIDFilter', numeric ? Number(value) : -1);
+            Settings.setSettingByName('partyNameFilter', numeric ? '' : value);
+        },
+    });
+
+    public static resetListFilters(): void {
+        partyFilterSettingKeys.forEach(name => {
+            const setting = Settings.getSetting(name);
+            setting.set(setting.defaultValue);
+        });
+    }
+
+    public static listFiltersActive = ko.pureComputed(() => partyFilterSettingKeys.some(name => !Settings.getSetting(name).isDefault()));
+
+    public static getListDisplayValue(pokemon: PartyPokemon): string {
+        const selected = Settings.getSetting('partyDisplayValue').observableValue();
+        const option = selected === -1 ? Settings.getSetting('partySort').observableValue() : selected;
+        const config = SortOptionConfigs[option];
+        let value: string | number;
+        if (option === SortOptions.category) {
+            value = PokemonCategories.categories().filter(category => pokemon.category.includes(category.id)).map(category => ko.unwrap(category.name)).join(', ');
+        } else if (option === SortOptions.shiny) {
+            value = pokemon.shiny ? 'Yes' : 'No';
+        } else {
+            value = config.getValue(pokemon);
+            if (typeof value === 'number') {
+                value = value.toLocaleString('en-US', { maximumFractionDigits: 3 });
+            }
+        }
+        return `${config.text}: ${value}`;
+    }
 
     private static vitaminSortedList = [];
     static getVitaminSortedList = ko.pureComputed(() => {
@@ -179,6 +218,10 @@ class PartyController {
             }
             const type = Settings.getSetting('vitaminTypeFilter').observableValue();
             if (type > -2 && !pokemonMap[pokemon.name].type.includes(type)) {
+                return false;
+            }
+            const categories = Settings.getSetting('vitaminCategoryFilter').observableValue() as number[];
+            if (categories.length && !categories.some(category => pokemon.category.includes(category))) {
                 return false;
             }
             if (pokemon.vitaminUsesRemaining() == 0 && Settings.getSetting('vitaminHideMaxedPokemon').observableValue()) {
@@ -380,6 +423,10 @@ class PartyController {
             if (region > -1 && [SortOptions.attack, SortOptions.breedingEfficiency, SortOptions.attackBonus].includes(option)) {
                 aValue *= PartyController.calculateRegionalMultiplier(a, region);
                 bValue *= PartyController.calculateRegionalMultiplier(b, region);
+            }
+            if (region > -1 && option === SortOptions.stepsPerAttack) {
+                aValue /= PartyController.calculateRegionalMultiplier(a, region);
+                bValue /= PartyController.calculateRegionalMultiplier(b, region);
             }
 
             if (option === SortOptions.category) {

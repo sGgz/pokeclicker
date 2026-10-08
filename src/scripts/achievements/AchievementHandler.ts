@@ -827,7 +827,7 @@ class AchievementHandler {
 
         AchievementHandler.addSecretAchievement(
             'Picky Quester',
-            'Refresh the Quest List without completing any quests.',
+            'Manually refresh an unfinished quest.',
             new DummyRequirement(),
             'I don\'t want to do any of these',
             true

@@ -20,12 +20,12 @@
                     <div class="tab-pane active" id="questsModalQuestsPane">
                         <div class="container">
                             <div class="form-row mt-3 mb-2">
-                                <div class="col-3 align-self-center">
+                                <div class="col-4 align-self-center">
                                     <h5>
-                                        <span class='' data-bind='text: "Quests (" + App.game.quests.currentQuests().length + "/" + App.game.quests.questSlots() + ")"'></span>
+                                        <span data-bind='text: "Quests (" + App.game.quests.questList().length + " types)"'></span>
                                     </h5>
                                 </div>
-                                <div class='col-6' data-bind="tooltip : App.game.quests.questProgressTooltip()">
+                                <div class='col-5' data-bind="tooltip : App.game.quests.questProgressTooltip()">
                                     <div>Lvl. <knockout data-bind='text: App.game.quests.level'></knockout></div>
                                     <div class="progress" style='height: 5px'>
                                         <div class="progress-bar bg-info" role="progressbar"
@@ -39,10 +39,12 @@
                                 </div>
                             </div>
                             <div class="text-center mb-2">
-                                <div class="small">All 10 quest slots are unlocked. New quest lists are accepted automatically.</div>
+                                <div class="small">每种已解锁类型各一条，自动接取；完成后自动领奖，续接同类型任务。</div>
+                                <div class="small">每类每天首次手动刷新免费，之后每次 100,000 金币。自动续接免费。</div>
                             </div>
                         </div>
 
+                        <!-- ko if: App.game.quests.isDailyQuestsUnlocked() -->
                         <table class="table table-hover m-0">
                             <thead>
                                 <tr>
@@ -53,30 +55,31 @@
                                 </tr>
                             </thead>
                             <tbody data-bind="foreach: App.game.quests.sortedQuestList" >
-                                <tr>
+                                <tr data-bind="attr: { 'data-quest-type': App.game.quests.typeOf($data) }">
                                     <td class="align-middle text-left" data-bind="text: description"></td>
                                     <td class="align-middle text-center py-0">
-                                        <span data-bind="template: { name: 'currencyTemplate', data: {'amount':  pointsReward, 'currency': GameConstants.Currency.questPoint}}"></span>
+                                        <span data-bind="template: { name: 'currencyTemplate', data: {'amount': totalPointsReward, 'currency': GameConstants.Currency.questPoint}}"></span>
+                                        <small class="d-block text-muted text-nowrap" data-bind="text: '含加成 +' + bonusPointsReward.toLocaleString('en-US'), tooltip: { title: '基础奖励 ' + pointsReward.toLocaleString('en-US') + '；经验 ' + xpReward.toLocaleString('en-US') + '。加成在生成任务时固定。', trigger: 'hover' }"></small>
                                     </td>
                                     <td class="align-middle text-center py-0">
-                                        <span data-bind="visible: $data.inProgress() && !$data.isCompleted(), text: `${Math.floor(progress()*100)}%`"></span>
+                                        <span data-bind="visible: $data.inProgress() && !$data.isCompleted(), text: progressText"></span>
                                         <span data-bind="visible: !$data.inProgress() && !$data.isCompleted()">-</span>
-                                        <span class="text-muted" data-bind="visible: $data.isCompleted()">Completed</span>
+                                        <span class="text-muted" data-bind="visible: $data.isCompleted(), text: claimed() ? '等待此类型可用' : '自动领取中' "></span>
                                     </td>
                                     <td class="align-middle text-center py-0">
-                                        <button class="btn btn-primary btn-sm btn-block mt-0"
-                                            data-bind="visible: App.game.quests.canStartNewQuest() && !$data.inProgress() && !$data.isCompleted() && !$data.claimed(),
-                                                click: () => App.game.quests.beginQuest($data.index)">Start</button>
-                                        <button class="btn btn-success btn-sm btn-block mt-0"
-                                            data-bind="visible: !$data.claimed() && $data.isCompleted(),
-                                                click: () => App.game.quests.claimQuest($data.index)">Claim</button>
-                                        <button class="btn btn-danger btn-sm btn-block mt-0"
-                                            data-bind="visible: $data.inProgress() && !$data.isCompleted(),
-                                                click: () => App.game.quests.quitQuest($data.index, $data.progress() > 0)">Quit</button>
+                                        <button class="btn btn-outline-primary btn-sm btn-block text-nowrap mt-0 quest-refresh"
+                                            data-bind="enable: App.game.quests.canRefresh($data), click: () => App.game.quests.refreshQuest($data)">
+                                            刷新此类
+                                            <small class="d-block" data-bind="text: App.game.quests.getRefreshCost($data).amount ? '100,000 金币' : '免费'"></small>
+                                        </button>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
+                        <!-- /ko -->
+                        <!-- ko ifnot: App.game.quests.isDailyQuestsUnlocked() -->
+                        <p class="text-center py-3">完成 Tutorial Quests 后解锁自动循环任务。</p>
+                        <!-- /ko -->
                     </div>
 
                     <!-- Quest Lines -->
@@ -166,23 +169,10 @@
 
             <div class="modal-footer justify-content-start flex-nowrap">
                 <div id="refreshQuests">
-                    <div class="d-flex flex-wrap align-items-center" style="gap: 8px;">
-                        <!-- ko if: App.game.quests.isRefreshFree() -->
-                        <button class="btn btn-primary" onclick="App.game.quests.refreshQuests(true, true)">Free Refresh</button>
-                        <!-- /ko -->
-                        <!-- ko if: !App.game.quests.isRefreshFree() -->
-                        <button class="btn btn-primary" onclick="App.game.quests.refreshQuests(false, true)"
-                            data-bind="enable: App.game.quests.canAffordRefresh(),
-                                tooltip: {
-                                    title: App.game.quests.freeRefresh() ? '' : `Daily free refresh in: ${GameHelper.formattedLetterTimeUntilTomorrow()}`,
-                                    trigger: 'hover', placement:'top'
-                                }">
-                            <span data-bind="template: { name: 'amountTemplate', data: App.game.quests.getRefreshCost() }"></span> - Refresh
-                        </button>
-                        <!-- /ko -->
-                        <span>
-                            Or complete all quests for a bonus<knockout data-bind="template: { name: 'currencyTemplate', data: {'amount': App.game.quests.calcListBonus(), 'currency': GameConstants.Currency.questPoint}}"></knockout>
-                        </span>
+                    <div class="small">
+                        <div>整批奖励已计入单条奖励，经验按基础奖励计算。</div>
+                        <div data-bind="text: '新任务等级加成：+' + Math.round(App.game.quests.calcListBonusPercent(App.game.quests.level()) * 100) + '%' "></div>
+                        <div class="text-success" data-bind="visible: App.game.quests.freeRefresh">升级额外免费刷新：1 次（任意类型，不叠加，优先使用该类型每日免费次数）。</div>
                     </div>
                 </div>
                 <div class="flex-grow-1 text-right">

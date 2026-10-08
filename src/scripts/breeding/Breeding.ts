@@ -9,7 +9,7 @@ class Breeding implements Feature {
     saveKey = 'breeding';
 
     defaults = {
-        eggList: [ko.observable(new Egg()), ko.observable(new Egg()), ko.observable(new Egg()), ko.observable(new Egg())],
+        eggList: Array.from({ length: 16 }, () => ko.observable(new Egg())),
         eggSlots: 1,
         queueList: [],
         queueSlots: 0,
@@ -125,8 +125,8 @@ class Breeding implements Feature {
 
         this.eggSlots = json.eggSlots ?? this.defaults.eggSlots;
 
-        this._eggList = this.defaults.eggList;
-        if (json.eggList !== null) {
+        this._eggList.forEach(egg => egg(new Egg()));
+        if (Array.isArray(json.eggList)) {
             const saveEggList: Record<string, any>[] = json.eggList;
 
             for (let i = 0; i < this._eggList.length; i++) {
@@ -165,11 +165,12 @@ class Breeding implements Feature {
     public hasFreeEggSlot(isHelper = false): boolean {
         let counter = 0;
         for (let i = 0; i < this._eggList.length; i++) {
-            if (!this._eggList[i]().isNone() || (!isHelper && this.hatcheryHelpers.hired()[i])) {
+            if (!this._eggList[i]().isNone() || this.hatcheryHelpers.hired()[i]) {
                 counter++;
             }
         }
-        return counter < this._eggSlots();
+        // A helper fills an already reserved slot, so it does not add an occupied slot.
+        return isHelper ? counter <= this.usableEggSlots : counter < this.usableEggSlots;
     }
 
     public hasFreeQueueSlot(): boolean {
@@ -183,8 +184,11 @@ class Breeding implements Feature {
         }
 
         if (eggSlot === -1) {
+            if (!this.hasFreeEggSlot()) {
+                return false;
+            }
             // Throw egg in the first empty non-Helper slot
-            for (let i = 0; i < this._eggList.length; i++) {
+            for (let i = 0; i < this.usableEggSlots; i++) {
                 if (this._eggList[i]().isNone() && !this.hatcheryHelpers.hired()[i]) {
                     this._eggList[i](e);
                     return true;
@@ -192,7 +196,10 @@ class Breeding implements Feature {
             }
         } else {
             // Throw egg in the Helper slot if it's empty
-            if (this._eggList[eggSlot]?.().isNone()) {
+            if (!this.hasFreeEggSlot(true)) {
+                return false;
+            }
+            if (eggSlot >= 0 && eggSlot < this.usableEggSlots && this._eggList[eggSlot]?.().isNone()) {
                 this._eggList[eggSlot](e);
                 return true;
             }
@@ -219,7 +226,7 @@ class Breeding implements Feature {
                 continue;
             }
             const egg = this.eggList[index]();
-            if (egg.isNone() && index + 1 <= this._eggSlots()) {
+            if (egg.isNone() && index < this.usableEggSlots) {
                 emptySlots++;
                 continue;
             }
@@ -248,7 +255,7 @@ class Breeding implements Feature {
             }
 
             // Fill empty egg slots from queue.
-            while (this._queueList().length && emptySlots--) {
+            while (this._queueList().length && this.hasFreeEggSlot() && emptySlots--) {
                 this.nextEggFromQueue();
             }
         }
@@ -411,14 +418,20 @@ class Breeding implements Feature {
     }
 
     private nextEggFromQueue(): void {
-        const nextInQueue = this._queueList.shift();
+        if (!this._queueList().length || !this.hasFreeEggSlot()) {
+            return;
+        }
+        const nextInQueue = this._queueList()[0];
         let nextEgg;
         if (nextInQueue[0] === EggType.Pokemon) {
             nextEgg = this.createEgg(nextInQueue[1]);
         } else if (nextInQueue[0] === EggType.EggItem) {
             nextEgg = this.createItemEgg(nextInQueue[1]);
         }
-        this.gainEgg(nextEgg);
+        if (!this.gainEgg(nextEgg)) {
+            return;
+        }
+        this._queueList.shift();
         if (!this._queueList().length) {
             Notifier.notify({
                 message: 'Hatchery queue is empty.',
@@ -486,6 +499,9 @@ class Breeding implements Feature {
     }
 
     public buyEggSlot(): void {
+        if (!this.canBuyEggSlot()) {
+            return;
+        }
         const cost: Amount = this.nextEggSlotCost();
         if (App.game.wallet.loseAmount(cost)) {
             this.gainEggSlot();
@@ -502,7 +518,15 @@ class Breeding implements Feature {
     }
 
     set eggSlots(value: number) {
-        this._eggSlots(value);
+        this._eggSlots(Number.isFinite(value) ? Math.max(1, Math.min(16, Math.floor(value))) : this.defaults.eggSlots);
+    }
+
+    get usableEggSlots(): number {
+        return Math.min(this.eggSlots, PrivateGameplay.hatcherySlotLimit());
+    }
+
+    public canBuyEggSlot(): boolean {
+        return this.eggSlots < Math.min(this.eggList.length, PrivateGameplay.hatcherySlotLimit());
     }
 
     get queueList(): KnockoutObservable<Array<HatcheryQueueEntry>> {
@@ -510,7 +534,7 @@ class Breeding implements Feature {
     }
 
     public gainEggSlot(): void {
-        if (this.eggSlots === this.eggList.length) {
+        if (!this.canBuyEggSlot()) {
             console.error('Cannot gain another eggslot.');
             return;
         }

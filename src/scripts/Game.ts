@@ -214,28 +214,6 @@ class Game implements TmpGameType {
                 timeout: 2 * GameConstants.MINUTE,
                 setting: NotificationConstants.NotificationSetting.General.offline_earnings,
             });
-
-            // Dream orbs
-            if ((new DreamOrbTownContent()).isUnlocked()) {
-                const orbsUnlocked = App.game.dreamOrbController.orbs.filter((o) => !o.requirement || o.requirement.isCompleted());
-                const orbsEarned = Math.floor(timeDiffOverride / 3600);
-                if (orbsEarned > 0) {
-                    const orbAmounts = Object.fromEntries(orbsUnlocked.map(o => [o.color, 0]));
-                    for (let i = 0; i < orbsEarned; i++) {
-                        const orb = Rand.fromArray(orbsUnlocked);
-                        GameHelper.incrementObservable(orb.amount);
-                        orbAmounts[orb.color]++;
-                    }
-                    const messageAppend = Object.keys(orbAmounts).filter(key => orbAmounts[key] > 0).map(key => `<li>${orbAmounts[key]} ${key}</li>`).join('');
-                    Notifier.notify({
-                        type: NotificationConstants.NotificationOption.info,
-                        title: 'Dream Orbs',
-                        message: `Gained ${orbsEarned} Dream Orbs while offline:<br /><ul class="mb-0">${messageAppend}</ul>`,
-                        timeout: 2 * GameConstants.MINUTE,
-                        setting: NotificationConstants.NotificationSetting.General.offline_earnings,
-                    });
-                }
-            }
         }
     }
 
@@ -316,19 +294,15 @@ class Game implements TmpGameType {
 
         let pageHidden = document.hidden;
 
-        // requestAnimationFrame (consistent if page visible)
-        let lastFrameTime = 0;
+        // Both sources share a clock: Electron can stop animation frames while still
+        // reporting document.hidden=false. Worker ticks must also cover that case.
+        let lastTickTime = performance.now();
         let ticks = 0;
-        const tick = (currentFrameTime) => {
-            // Don't process while page hidden
-            if (pageHidden) {
-                this.frameRequest = requestAnimationFrame(tick);
-                return;
-            }
-
-            const delta = currentFrameTime - lastFrameTime;
+        const processTick = () => {
+            const currentTime = performance.now();
+            const delta = currentTime - lastTickTime;
             ticks += delta;
-            lastFrameTime = currentFrameTime;
+            lastTickTime = currentTime;
             if (ticks >= GameConstants.TICK_TIME) {
                 // Skip the ticks if we have too many...
                 if (ticks >= GameConstants.TICK_TIME * 2) {
@@ -337,6 +311,11 @@ class Game implements TmpGameType {
                     ticks -= GameConstants.TICK_TIME;
                 }
                 this.gameTick();
+            }
+        };
+        const tick = () => {
+            if (!pageHidden) {
+                processTick();
             }
             this.frameRequest = requestAnimationFrame(tick);
         };
@@ -347,19 +326,8 @@ class Game implements TmpGameType {
             console.log(`[${GameConstants.formatDate(new Date())}] %cStarting web worker..`, 'color:#8e44ad;font-weight:900;');
             const blob = new Blob([
                 `
-                // Window visibility state
-                let pageHidden = false;
-                self.onmessage = function(e) {
-                    if (e.data.pageHidden != undefined) {
-                        pageHidden = e.data.pageHidden;
-                    }
-                };
-
                 // setInterval (slightly slower on FireFox)
                 const tickInterval = setInterval(() => {
-                    // Don't process while page visible
-                    if (!pageHidden) return;
-
                     postMessage('tick')
                 }, ${GameConstants.TICK_TIME});
                 `,
@@ -368,20 +336,15 @@ class Game implements TmpGameType {
 
             this.worker = new Worker(blobURL);
             // use a setTimeout to queue the event
-            this.worker?.addEventListener('message', () => Settings.getSetting('useWebWorkerForGameTicks').value ? this.gameTick() : null);
+            this.worker?.addEventListener('message', () => Settings.getSetting('useWebWorkerForGameTicks').value ? processTick() : null);
 
             document.addEventListener('visibilitychange', () => {
-                // Let our worker know if the page is visible or not
-                if (pageHidden != document.hidden) {
-                    pageHidden = document.hidden;
-                    this.worker.postMessage({'pageHidden': pageHidden});
-                }
+                pageHidden = document.hidden;
 
                 // Save resources by not displaying updates if game is not currently visible
                 const gameEl = document.getElementById('game');
                 document.hidden ? gameEl.classList.add('hidden') : gameEl.classList.remove('hidden');
             });
-            this.worker.postMessage({'pageHidden': pageHidden});
             if (this.worker) {
                 console.log(`[${GameConstants.formatDate(new Date())}] %cWeb worker started`, 'color:#2ecc71;font-weight:900;');
             }
@@ -410,6 +373,8 @@ class Game implements TmpGameType {
             Game.achievementCounter = 0;
             AchievementHandler.checkAchievements();
             GameHelper.incrementObservable(App.game.statistics.secondsPlayed);
+            // Use the same active game time in foreground and background; never lastSeen.
+            this.dreamOrbController.tick(GameConstants.ACHIEVEMENT_TICK);
         }
 
         // Battles
@@ -481,14 +446,12 @@ class Game implements TmpGameType {
                 (App.game.farming.mutations.find(m => m instanceof EnigmaMutation) as EnigmaMutation).resetIndex();
 
                 SeededDateRand.seedWithDate(now);
-                // Give the player a free quest refresh
-                this.quests.freeRefresh(true);
                 //Refresh the Underground deals
                 BerryDeal.generateDeals(now);
                 if (App.game.quests.isDailyQuestsUnlocked()) {
                     Notifier.notify({
                         title: 'It\'s a new day!',
-                        message: `${App.game.quests.isDailyQuestsUnlocked() ? '<i>You have a free quest refresh.</i>' : ''}`,
+                        message: '<i>Each quest type has a new daily free refresh.</i>',
                         type: NotificationConstants.NotificationOption.info,
                         timeout: 3e4,
                     });
@@ -536,9 +499,9 @@ class Game implements TmpGameType {
         // Farm
         this.farming.update(GameConstants.TICK_TIME / GameConstants.SECOND);
 
-        this.dreamOrbController.update(GameConstants.TICK_TIME / GameConstants.SECOND);
-
         BreedingController.tickAutoFill(GameConstants.TICK_TIME);
+
+        this.quests.tick(GameConstants.TICK_TIME);
 
         // Effect Engine (battle items and flutes)
         EffectEngineRunner.counter += GameConstants.TICK_TIME;

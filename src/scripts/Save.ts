@@ -54,6 +54,9 @@ class Save {
         // Load our settings, or the saved default settings, or no settings
         const settings = localStorage.getItem(`settings${Save.key}`) || localStorage.getItem('settings') || '{}';
         PrivateGameplay.resetSettingsForLoad();
+        PartyController.resetListFilters();
+        Settings.getSetting('partyDisplayValue').set(-1);
+        Settings.getSetting('vitaminCategoryFilter').set([]);
         Settings.fromJSON(JSON.parse(settings));
 
         // Sort modules now, save settings, load settings

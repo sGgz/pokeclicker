@@ -13,6 +13,7 @@ export enum SortOptions {
     category = 11,
     vitaminsUsed = 12,
     evs = 13,
+    stepsPerAttack = 14,
 }
 
 export type SortOptionConfig = {
@@ -28,6 +29,10 @@ export type SortOptionConfig = {
 };
 
 export const SortOptionConfigs: Record<SortOptions, SortOptionConfig> = {
+    [SortOptions.stepsPerAttack]: {
+        text: 'Steps per Attack Bonus',
+        getValue: (p) => p.getEggSteps() / p.getBreedingAttackBonus(),
+    },
     [SortOptions.id]: {
         text: 'Pokémon ID #',
         getValue: (p) => p.id,
