@@ -15,8 +15,10 @@ class BattleFrontier implements Feature {
     }
 
     public enter(): void {
-        BattleFrontierBattle.enemyPokemon(null);
+        // Route and frontier battles share this observable. Dispose the route
+        // view before clearing its enemy so its templates never render null.
         App.game.gameState = GameConstants.GameState.battleFrontier;
+        BattleFrontierBattle.enemyPokemon(null);
     }
 
     public start(useCheckpoint: boolean): void {

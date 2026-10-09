@@ -94,12 +94,38 @@ function setup(highestStage = 2000) {
         return { milestone, gain, unlocked };
     };
     return {
-        runner, battle, feature, milestones, statistics, confirm, notify, gainBattlePoints, gainMoney,
+        runner, battle, routeBattle: BattleBase, feature, milestones, statistics, confirm, notify, gainBattlePoints, gainMoney,
         defeat, progressEggsBattle, saved, clearStages, addMilestone, app,
     };
 }
 
 describe('Battle Frontier quick challenges and settlement', () => {
+    it('switches away from the route view before clearing the shared enemy on entry', () => {
+        const h = setup();
+        const gameState = ko.observable(GameConstants.GameState.fighting);
+        Object.defineProperty(h.app.game, 'gameState', { get: () => gameState(), set: value => gameState(value) });
+        h.routeBattle.enemyPokemon({ displayName: 'Route enemy' });
+        const index = readFileSync('src/index.html', 'utf8');
+        const routeContainer = index.match(/<div id="routeBattleContainer"[^>]*>/)[0];
+        const nameBinding = index.match(/<knockout data-bind="template: \{ name: 'pokemonNameTemplate'.*?<\/knockout>/)[0];
+        const host = document.createElement('div');
+        host.innerHTML = readFileSync('src/components/templates/pokemonNameTemplate.html', 'utf8')
+            + '<script type="text/html" id="pokemonGenderTemplate"></script>'
+            + routeContainer + nameBinding + '</div>';
+        document.body.appendChild(host);
+        ko.applyBindings({ App: h.app, GameConstants, Battle: h.routeBattle }, host);
+        try {
+            expect(host.textContent).toContain('Route enemy');
+            expect(() => h.feature.enter()).not.toThrow();
+            expect(gameState()).toBe(GameConstants.GameState.battleFrontier);
+            expect(h.routeBattle.enemyPokemon()).toBeNull();
+            expect(host.textContent).not.toContain('Route enemy');
+        } finally {
+            ko.cleanNode(host);
+            host.remove();
+        }
+    });
+
     it('skips cleared low stages without awarding resources or increasing completion statistics', async () => {
         const h = setup();
         await h.runner.start(false, true);

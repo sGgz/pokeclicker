@@ -452,6 +452,7 @@ async function run() {
             BattleFrontierBattle.pokemonAttack = window.frontierSmoke.attack;
             BattleFrontierRunner.tick = window.frontierSmoke.tick;
             delete window.frontierSmoke;
+            Battle.generateNewEnemy();
             App.game.gameState = GameConstants.GameState.fighting;
             Save.store(player);
         });
