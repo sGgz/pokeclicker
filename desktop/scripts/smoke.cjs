@@ -74,6 +74,7 @@ async function run() {
     const profiles = [path.join(work, 'device-a'), path.join(work, 'device-b')];
     const running = new Set();
     const checks = [];
+    const desktopVersion = JSON.parse(await fs.readFile(path.join(root, 'desktop/package.json'), 'utf8')).version;
     const errors = [];
     let browser;
     let lastPage;
@@ -94,6 +95,7 @@ async function run() {
             };
         }, serverOrigin);
         assert.equal(await app.evaluate(({ app }) => app.getPath('userData')), profile);
+        assert.equal(await app.evaluate(({ app }) => app.getVersion()), desktopVersion);
         return { app, page };
     }
     async function status(page, text) {
@@ -397,6 +399,57 @@ async function run() {
         await pageA.evaluate(() => { App.game.dreamOrbController.onlineTimeMs(20 * GameConstants.MINUTE); Save.store(player); });
         checks.push('A minimized packaged client earns exactly one Dream Orb at the online threshold through the background game clock.');
         checks.push('Local game cold-starts without a network, has isolated storage/Web Locks, no renderer Node, and continues ticking while minimized.');
+
+        // Freeze only the frontier combat clock in this disposable fixture so real
+        // buttons and settlement can be checked against a precise completed range.
+        const frontierBefore = await pageA.evaluate(() => {
+            window.frontierSmoke = { attack: BattleFrontierBattle.pokemonAttack, tick: BattleFrontierRunner.tick };
+            BattleFrontierBattle.pokemonAttack = () => {};
+            BattleFrontierRunner.tick = () => {};
+            BattleFrontierMilestones.milestoneRewards.forEach(m => m.obtained(true));
+            App.game.statistics.battleFrontierHighestStageCompleted(2000);
+            App.game.statistics.battleFrontierTotalStagesCompleted(0);
+            App.game.battleFrontier.enter();
+            return { bp: App.game.wallet.currencies[GameConstants.Currency.battlePoint](), money: App.game.wallet.currencies[GameConstants.Currency.money]() };
+        });
+        const frontierPanel = pageA.locator('#battleFrontierInformation');
+        await frontierPanel.getByRole('button', { name: 'Quick Challenge (Stage 1,901)', exact: true }).click();
+        assert.deepEqual(await pageA.evaluate(() => ({ stage: BattleFrontierRunner.stage(), total: App.game.statistics.battleFrontierTotalStagesCompleted(), rewards: BattleFrontierRunner.pendingRewards() })),
+            { stage: 1901, total: 0, rewards: { stages: 0, battlePoints: 0, money: 0 } });
+        await pageA.evaluate(() => { for (let i = 0; i < 6; i++) BattleFrontierBattle.defeatPokemon(); });
+        assert.ok((await frontierPanel.innerText()).includes('This run: 2 stages completed'));
+        assert.ok((await frontierPanel.innerText()).includes('7,604'));
+        await pageA.screenshot({ path: path.join(output, 'battle-frontier-rewards.png') });
+        checks.push('The packaged Quick Challenge button skips to stage 1,901 with zero skipped rewards or completion count, then shows only the two actually cleared stages.');
+        await frontierPanel.getByRole('button', { name: 'Pause & Save Progress', exact: true }).click();
+        await pageA.locator('.modal.show').filter({ hasText: 'Pause Battle Frontier?' }).getByRole('button', { name: 'Pause', exact: true }).click();
+        await pageA.waitForFunction(() => !BattleFrontierRunner.started() && !BattleFrontierRunner.confirmationPending());
+        await pageA.waitForFunction(() => !document.querySelector('.modal[id^="modal"]'));
+        assert.deepEqual(await pageA.evaluate(() => App.game.battleFrontier.toJSON().runStartStage), 1901);
+        await frontierPanel.getByRole('button', { name: 'Resume (Stage 1,903)', exact: true }).click();
+        await frontierPanel.getByRole('button', { name: 'Finish & Claim Rewards', exact: true }).click();
+        await pageA.locator('.modal.show').filter({ hasText: 'Finish Battle Frontier?' }).getByRole('button', { name: 'Finish & Claim', exact: true }).click();
+        await pageA.waitForFunction(() => !BattleFrontierRunner.started() && !BattleFrontierRunner.confirmationPending());
+        await pageA.waitForFunction(() => !document.querySelector('.modal[id^="modal"]'));
+        assert.deepEqual(await pageA.evaluate(before => ({
+            bp: App.game.wallet.currencies[GameConstants.Currency.battlePoint]() - before.bp,
+            money: App.game.wallet.currencies[GameConstants.Currency.money]() - before.money,
+            checkpoint: BattleFrontierRunner.checkpoint(), start: BattleFrontierRunner.runStartStage(),
+        }), frontierBefore), { bp: 76, money: 7604, checkpoint: 1, start: 1 });
+        checks.push('Real Pause, Resume and Finish & Claim dialogs preserve the quick-run baseline and pay exactly 76 BP and 7,604 money once before clearing the checkpoint.');
+        await frontierPanel.getByRole('button', { name: 'Quick Challenge (Stage 1,901)', exact: true }).click();
+        await pageA.evaluate(() => { for (let i = 0; i < 6; i++) BattleFrontierBattle.defeatPokemon(); });
+        await frontierPanel.getByRole('button', { name: 'Pause & Save Progress', exact: true }).click();
+        await pageA.locator('.modal.show').filter({ hasText: 'Pause Battle Frontier?' }).getByRole('button', { name: 'Pause', exact: true }).click();
+        await pageA.waitForFunction(() => !BattleFrontierRunner.started() && !BattleFrontierRunner.confirmationPending());
+        await pageA.waitForFunction(() => !document.querySelector('.modal[id^="modal"]'));
+        await pageA.evaluate(() => {
+            BattleFrontierBattle.pokemonAttack = window.frontierSmoke.attack;
+            BattleFrontierRunner.tick = window.frontierSmoke.tick;
+            delete window.frontierSmoke;
+            App.game.gameState = GameConstants.GameState.fighting;
+            Save.store(player);
+        });
         await panel(pageA);
         await pageA.screenshot({ path: path.join(output, 'offline-game.png') });
         await a.evaluate(({ dialog }) => { globalThis.testDialogs = []; dialog.showMessageBox = async (_window, options) => { globalThis.testDialogs.push(options.message); return { response: 0 }; }; });
@@ -414,6 +467,10 @@ async function run() {
         const restoredOrbs = await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key))['dream-orbs'], keyA);
         assert.equal(restoredOrbs.orbs.find(orb => orb.color === 'Pink').amount, 9);
         assert.ok(restoredOrbs.onlineTimeMs >= 20 * 60000 && restoredOrbs.onlineTimeMs < 21 * 60000);
+        const restartedFrontier = await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key)).battleFrontier, keyA);
+        assert.equal(restartedFrontier.checkpoint, 1903);
+        assert.equal(restartedFrontier.runStartStage, 1901);
+        checks.push('The quick-run checkpoint and original starting stage persist through closing and restarting the actual packaged EXE.');
         checks.push('Graceful close saves local progress; restarting the same profile restores it without uploading.');
 
         online = true;
@@ -477,6 +534,9 @@ async function run() {
         assert.equal(restoredSettings.partyDisplayValue, 2);
         assert.deepEqual(restoredSettings.vitaminCategoryFilter, [1]);
         const restoredGame = await web.evaluate(key => JSON.parse(localStorage.getItem('save' + key)), webKey);
+        assert.equal(restoredGame.battleFrontier.checkpoint, 1903);
+        assert.equal(restoredGame.battleFrontier.runStartStage, 1901);
+        checks.push('The same paused Battle Frontier run retains its starting stage and checkpoint through desktop-to-web cloud restoration.');
         assert.deepEqual(restoredGame['dream-orbs'], remote.envelope.payload.save['dream-orbs']);
         assert.equal(restoredGame['dream-orbs'].orbs.find(orb => orb.color === 'Pink').amount, 9);
         assert.ok(restoredGame['dream-orbs'].onlineTimeMs >= 20 * 60000);
@@ -562,13 +622,15 @@ async function run() {
         await help.screenshot({ path: path.join(output, 'offline-manual.png') });
         assert.ok((await help.locator('body').innerText()).includes('同步后换设备'));
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('原价的 1%'));
+        assert.ok((await help.locator('#private-gameplay').innerText()).includes('Battle Frontier 快速挑战与主动结算'));
+        assert.ok((await help.locator('.meta').innerText()).includes('桌面程序 ' + desktopVersion));
         await help.locator('#private-gameplay').scrollIntoViewIfNeeded();
         await help.locator('#private-gameplay').screenshot({ path: path.join(output, 'private-gameplay-manual.png') });
         checks.push('The Chinese operation manual, including private gameplay instructions, opens locally while offline.');
         await quit(b); await quit(a);
         assert.deepEqual(errors, []);
         checks.push('No uncaught renderer errors during the desktop acceptance flow.');
-        await fs.writeFile(path.join(output, 'smoke-report.json'), JSON.stringify({ passed: true, executable, packaged: !dev, checks, requests: requests.filter(item => item.path.startsWith('/api/') || item.path.startsWith('/auth/')), note: 'Isolated fixtures only; this does not replace the user’s real two-device acceptance.' }, null, 2));
+        await fs.writeFile(path.join(output, 'smoke-report.json'), JSON.stringify({ passed: true, executable, desktopVersion, packaged: !dev, checks, requests: requests.filter(item => item.path.startsWith('/api/') || item.path.startsWith('/auth/')), note: 'Isolated fixtures only; this does not replace the user’s real two-device acceptance.' }, null, 2));
         console.log(JSON.stringify({ passed: true, checks }, null, 2));
     } catch (error) {
         console.error('SMOKE FAILED:', error.message);
