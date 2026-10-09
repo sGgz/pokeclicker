@@ -137,7 +137,12 @@ async function run() {
         await pageA.locator('#routeBattleContainer > .clickable').click({ clickCount: 10, delay: 100 });
         await pageA.locator('#starterCaughtModal').getByRole('button', { name: 'Next', exact: true }).click();
         await pageA.locator('#starterCaughtModal').waitFor({ state: 'hidden' });
-        await pageA.evaluate(() => Information.hide());
+        await pageA.evaluate(() => {
+            Information.hide();
+            // The level-100 fixture below clears Route 1 quickly. Unlock its map
+            // silently now so its tutorial cannot interrupt unrelated UI checks.
+            App.game.keyItems.gainKeyItem(KeyItemType.Town_map, true);
+        });
         // Exercise the actual Knockout controls and game objects in this isolated save.
         await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('shown.bs.modal', () => resolve()).modal('show')));
         await pageA.locator('#settingsModal a[href="#settings-game"]').click();
