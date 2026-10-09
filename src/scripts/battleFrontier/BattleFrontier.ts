@@ -32,6 +32,7 @@ class BattleFrontier implements Feature {
         return {
             milestones: this.milestones.milestoneRewards.filter(m => m.obtained()).map(m => [m.stage, m.description]),
             checkpoint: BattleFrontierRunner.checkpoint(),
+            runStartStage: BattleFrontierRunner.runStartStage(),
         };
     }
 
@@ -44,6 +45,11 @@ class BattleFrontier implements Feature {
             this.milestones.milestoneRewards.find(m => m.stage == stage && m.description == description)?.obtained(true);
         });
 
-        BattleFrontierRunner.checkpoint(json.checkpoint);
+        const checkpoint = Number.isSafeInteger(json.checkpoint) && json.checkpoint >= 1 ? json.checkpoint : 1;
+        BattleFrontierRunner.checkpoint(checkpoint);
+        // Existing saves started at stage one and keep their full pending rewards.
+        const runStartStage = Number.isSafeInteger(json.runStartStage) && json.runStartStage >= 1 && json.runStartStage <= checkpoint
+            ? json.runStartStage : 1;
+        BattleFrontierRunner.runStartStage(runStartStage);
     }
 }

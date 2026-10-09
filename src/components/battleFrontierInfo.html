@@ -4,22 +4,39 @@
     <div class="card-header p-0" data-toggle="collapse" href="#battleFrontierRewards">
         <span>Battle Frontier</span>
     </div>
+    <!-- ko if: BattleFrontierRunner.started() || BattleFrontierRunner.hasCheckpoint() -->
+    <div class="p-2 text-center border-bottom" aria-live="polite">
+        <div>This run: <knockout data-bind="text: BattleFrontierRunner.pendingRewards().stages.toLocaleString('en-US')"></knockout> stages completed</div>
+        <div>
+            Available to claim:
+            <img src="assets/images/currency/battlePoint.svg" height="20" alt="Battle Points"/>
+            <knockout data-bind="text: BattleFrontierRunner.pendingRewards().battlePoints.toLocaleString('en-US')"></knockout>
+            <img src="assets/images/currency/money.svg" height="20" alt="Pokédollars"/>
+            <knockout data-bind="text: BattleFrontierRunner.pendingRewards().money.toLocaleString('en-US')"></knockout>
+        </div>
+    </div>
+    <!-- /ko -->
     <!-- ko ifnot: BattleFrontierRunner.started -->
     <div class="card-body text-center">
         <h5>Welcome to the Battle Frontier!</h5>
         <p>
             Here you will be battling through many stages to earn Battle Points.<br/>
             There is no regional attack debuff or weather effects.<br/>
-            You can leave early and return to your checkpoint later on.<br/>
+            Pause to save your progress, or finish to claim Battle Points and money.<br/>
             You'll get special items if you reach special milestone stages.<br/>
             When you are ready, click Start!<br/>
             <i>Note: there is no click damage in the Battle Frontier.</i>
         </p>
-        <a class="btn btn-block btn-success text-light" onclick="BattleFrontierRunner.start(false)">Start</a>
-        <!-- ko if: BattleFrontierRunner.hasCheckpoint() -->
-            <a class="btn btn-block btn-success text-light" onclick="BattleFrontierRunner.start(true)">Start at latest checkpoint (Stage <knockout data-bind="text: BattleFrontierRunner.checkpoint().toLocaleString('en-US')">0</knockout>)</a>
+        <button type="button" class="btn btn-block btn-success" onclick="BattleFrontierRunner.start(false)" data-bind="disable: BattleFrontierRunner.confirmationPending">Start from Stage 1</button>
+        <!-- ko if: BattleFrontierRunner.quickStartStage() > 1 -->
+            <button type="button" class="btn btn-block btn-primary" onclick="BattleFrontierRunner.start(false, true)" data-bind="disable: BattleFrontierRunner.confirmationPending">Quick Challenge (Stage <knockout data-bind="text: BattleFrontierRunner.quickStartStage().toLocaleString('en-US')"></knockout>)</button>
+            <p class="small mt-2 mb-2">Skip cleared low stages and replay the last 100 stages before your record. Unclaimed, unlocked milestones are kept. Skipped stages give no rewards or quest progress.</p>
         <!-- /ko -->
-        <a class="btn btn-block btn-danger text-light" onclick="App.game.battleFrontier.leave()">Leave</a>
+        <!-- ko if: BattleFrontierRunner.hasCheckpoint() -->
+            <button type="button" class="btn btn-block btn-success" onclick="BattleFrontierRunner.start(true)" data-bind="disable: BattleFrontierRunner.confirmationPending">Resume (Stage <knockout data-bind="text: BattleFrontierRunner.checkpoint().toLocaleString('en-US')">0</knockout>)</button>
+            <button type="button" class="btn btn-block btn-warning" onclick="BattleFrontierRunner.battleFinish()" data-bind="disable: BattleFrontierRunner.confirmationPending">Finish &amp; Claim Rewards</button>
+        <!-- /ko -->
+        <button type="button" class="btn btn-block btn-danger" onclick="App.game.battleFrontier.leave()" data-bind="disable: BattleFrontierRunner.confirmationPending">Leave</button>
     </div>
     <!-- /ko -->
     <!-- ko if: BattleFrontierRunner.started -->
@@ -38,7 +55,7 @@
             <tbody>
                 <!-- ko foreach: availableMilestones -->
                 <tr>
-                    <th class="tight" data-bind="text: $data.stage.toLocaleString('en-US')"></td>
+                    <th class="tight" data-bind="text: $data.stage.toLocaleString('en-US')"></th>
                     <td class="text-left">
                         <img width="28px" data-bind="attr:{ src: $data.image }" />
                         <knockout data-bind="text: $data.displayName"></knockout>
@@ -47,7 +64,7 @@
                 <!-- /ko -->
                 <!-- ko ifnot: availableMilestones.length -->
                 <tr>
-                    <th class="tight">–</td>
+                    <th class="tight">–</th>
                     <td class="text-left">
                         You've received every available reward. Congratulations!
                     </td>
@@ -56,7 +73,8 @@
             </tbody>
         </table>
         <!-- /ko -->
-        <a class="btn btn-block btn-danger text-light" onclick="BattleFrontierRunner.battleQuit()">Quit Battle</a>
+        <button type="button" class="btn btn-block btn-success" onclick="BattleFrontierRunner.battleFinish()" data-bind="disable: BattleFrontierRunner.confirmationPending">Finish &amp; Claim Rewards</button>
+        <button type="button" class="btn btn-block btn-secondary" onclick="BattleFrontierRunner.battleQuit()" data-bind="disable: BattleFrontierRunner.confirmationPending">Pause &amp; Save Progress</button>
     </div>
     <!-- /ko -->
 </div>
