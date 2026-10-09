@@ -1,4 +1,5 @@
 /// <reference path="../../declarations/GameHelper.d.ts" />
+/// <reference path="BattleFrontierAutomation.ts" />
 
 class BattleFrontierRunner {
     public static timeLeft: KnockoutObservable<number> = ko.observable(GameConstants.GYM_TIME);
@@ -13,6 +14,7 @@ class BattleFrontierRunner {
 
     public static started = ko.observable(false);
     public static confirmationPending = ko.observable(false);
+    public static automation = new BattleFrontierAutomation();
     private static readonly retainedStages = 100;
 
     public static quickStartStage = ko.pureComputed(() => {
@@ -38,6 +40,7 @@ class BattleFrontierRunner {
     constructor() {}
 
     public static tick() {
+        this.automation.tick();
         if (!this.started()) {
             return;
         }
@@ -69,9 +72,24 @@ class BattleFrontierRunner {
             }
         }
 
+        this.automation.stop('Manual challenge. Automation is off.');
+        this.beginRun(useCheckpoint, quickStart ? this.quickStartStage() : 1);
+    }
+
+    public static startAutomaticRun(startStage: number, useCheckpoint = false): void {
+        if (!this.automation.active() || this.started() || this.confirmationPending()) {
+            return;
+        }
+        // Only cleared stages may be skipped, even when a fixed target is beyond the record.
+        const highest = App.game.statistics.battleFrontierHighestStageCompleted();
+        this.beginRun(useCheckpoint, Math.max(1, Math.min(startStage, highest + 1)));
+        this.automation.runStarted();
+    }
+
+    private static beginRun(useCheckpoint: boolean, startStage: number): void {
         if (!useCheckpoint) {
             BattleFrontierRunner.battleBackground('Default');
-            this.runStartStage(quickStart ? this.quickStartStage() : 1);
+            this.runStartStage(startStage);
             this.checkpoint(this.runStartStage());
         }
 
@@ -86,6 +104,7 @@ class BattleFrontierRunner {
     }
 
     public static nextStage() {
+        const completedStage = this.stage();
         // Gain any rewards we should have earned for defeating this stage
         BattleFrontierMilestones.gainReward(this.stage());
         if (App.game.statistics.battleFrontierHighestStageCompleted() < this.stage()) {
@@ -105,6 +124,7 @@ class BattleFrontierRunner {
             const backgrounds = Object.keys(GameConstants.BattleBackgrounds).filter((key) => key !== currentBackground);
             BattleFrontierRunner.battleBackground(Rand.fromArray(backgrounds) as GameConstants.BattleBackground);
         }
+        this.automation.stageCompleted(completedStage);
     }
 
     public static end() {
@@ -115,11 +135,19 @@ class BattleFrontierRunner {
 
     public static battleLost() {
         if (this.started()) {
-            this.settle();
+            if (this.automation.active()) {
+                this.automation.lost();
+            } else {
+                this.settle();
+            }
         }
     }
 
-    private static settle() {
+    public static settleAutomatic(): void {
+        this.settle(true);
+    }
+
+    private static settle(quiet = false) {
         if (!this.started() && !this.hasCheckpoint()) {
             return;
         }
@@ -138,15 +166,17 @@ class BattleFrontierRunner {
             ? `You completed ${rewards.stages.toLocaleString('en-US')} stages this run, reaching stage ${stageBeaten.toLocaleString('en-US')}.`
             : 'You ended this run without completing a stage.';
 
-        Notifier.notify({
-            title: 'Battle Frontier',
-            message: `${progressMessage}\nYou received <img src="./assets/images/currency/battlePoint.svg" height="24px"/> ${battlePointsEarned.toLocaleString('en-US')}.\nYou received <img src="./assets/images/currency/money.svg" height="24px"/> ${moneyEarned.toLocaleString('en-US')}.`,
-            strippedMessage: `${progressMessage}\nYou received ${battlePointsEarned.toLocaleString('en-US')} Battle Points.\nYou received ${moneyEarned.toLocaleString('en-US')} Pokédollars.`,
-            type: NotificationConstants.NotificationOption.success,
-            setting: NotificationConstants.NotificationSetting.General.battle_frontier,
-            sound: NotificationConstants.NotificationSound.General.battle_frontier,
-            timeout: 30 * GameConstants.MINUTE,
-        });
+        if (!quiet) {
+            Notifier.notify({
+                title: 'Battle Frontier',
+                message: `${progressMessage}\nYou received <img src="./assets/images/currency/battlePoint.svg" height="24px"/> ${battlePointsEarned.toLocaleString('en-US')}.\nYou received <img src="./assets/images/currency/money.svg" height="24px"/> ${moneyEarned.toLocaleString('en-US')}.`,
+                strippedMessage: `${progressMessage}\nYou received ${battlePointsEarned.toLocaleString('en-US')} Battle Points.\nYou received ${moneyEarned.toLocaleString('en-US')} Pokédollars.`,
+                type: NotificationConstants.NotificationOption.success,
+                setting: NotificationConstants.NotificationSetting.General.battle_frontier,
+                sound: NotificationConstants.NotificationSound.General.battle_frontier,
+                timeout: 30 * GameConstants.MINUTE,
+            });
+        }
         if (rewards.stages > 0) {
             App.game.logbook.newLog(
                 LogBookTypes.FRONTIER,
@@ -170,6 +200,7 @@ class BattleFrontierRunner {
                 type: NotificationConstants.NotificationOption.warning,
                 confirm: 'Finish & Claim',
             })) {
+                this.automation.stop('Finished manually. Rewards claimed; automation is off.');
                 this.settle();
             }
         } finally {
@@ -190,6 +221,7 @@ class BattleFrontierRunner {
                 confirm: 'Pause',
             });
             if (confirmed && this.started()) {
+                this.automation.stop('Paused manually. Progress and unclaimed rewards are saved.');
                 Notifier.notify({
                     title: 'Battle Frontier',
                     message: `Checkpoint set for stage ${this.stage()}.`,

@@ -218,6 +218,10 @@
         <p>在 Battle Frontier 选择 <strong>Quick Challenge</strong>，默认从历史最高层数附近开始，保留最后 100 个已通关层再向上挑战。例如最高已完成 2,000 层，就从 1,901 层开始；如果较低层有已解锁但未领取的里程碑奖励，会提前从最早的待领取层开始。跳过层数不发经验、宝石、孵蛋进度，也不计入任务或累计通关数量。</p>
         <p><strong>Finish &amp; Claim Rewards</strong> 结束本轮并领取已完整通关层数对应的 BP 和金币，清空检查点；无需等打输，暂停状态下也能领取。<strong>Pause &amp; Save Progress</strong> 保留本轮进度但暂不领奖，下次点 <strong>Resume</strong> 继续。界面实时显示本轮已完成层数和可领取奖励。</p>
         <p>快速挑战只结算本轮实际挑战区间。例如从 1,901 层开始并完成到 2,000 层，可领取 3,900 BP 和 390,000 金币。旧存档保留原结算规则；新版本保存本轮起始层数，暂停、重启和跨端同步后继续使用同一结算口径。请配套更新网页和桌面端，旧端会丢失这一新字段。</p>
+        <h3>Battle Frontier 自动挂机</h3>
+        <p>在 <strong>Auto Challenge</strong> 选择模式，点击 <strong>Start Auto Challenge / Resume Saved Run</strong> 开始；已有本轮进度时直接续打，不丢弃待领取奖励。默认 <strong>BP efficiency</strong> 每 5 秒根据当前队伍、属性克制和孵蛋输出变化重新估算刷取区间，比较继续推进与结算重开的 BP/分钟。输出下降会下调下一轮区间，恢复后允许提高；不改变孵化队列。较低层有已解锁但未领取的里程碑时会保留该层。</p>
+        <p><strong>Fixed stage</strong> 打完指定层数自动领奖并循环；<strong>Record attempt</strong> 持续推进，打输后领奖并停止。循环领奖后等待 1 秒重开，不弹确认窗口；手动暂停或结算仍保留确认窗口并停止自动循环。<strong>Stop Automation (Keep Current Run)</strong> 只停止自动决策，正在进行的战斗继续，已有进度和收益保留。无安全刷取区间时暂停；连续 3 轮没有完整通关一层时停止，避免空转。</p>
+        <p>面板显示最近 5 层的实际 BP/分钟、下一轮预计区间、包含重开时间的预计循环收益及本次自动挂机已领取收益。预计区间是有界搜索的近似结果，结束层会动态变化，不保证全局最优。自动挂机只在游戏运行时执行；设置随存档保存，重启后需手动开启，不补发离线 BP。</p>
         <h3>维生素按标签筛选</h3>
         <p>打开 <strong>Vitamins → 标签</strong> 可选择一个或多个已有标签，与名称、地区和属性等条件组合筛选；选择“全部标签”清除标签限制。这里的筛选不改变孵化和外部列表。<strong>Remove ALL Vitamins (entire party)</strong> 仍会作用于整个队伍，范围不受筛选影响。</p>
     </section>
