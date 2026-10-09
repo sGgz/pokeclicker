@@ -15,8 +15,10 @@ class BattleFrontier implements Feature {
     }
 
     public enter(): void {
-        BattleFrontierBattle.enemyPokemon(null);
+        // Route and frontier battles share this observable. Dispose the route
+        // view before clearing its enemy so its templates never render null.
         App.game.gameState = GameConstants.GameState.battleFrontier;
+        BattleFrontierBattle.enemyPokemon(null);
     }
 
     public start(useCheckpoint: boolean): void {
@@ -32,6 +34,7 @@ class BattleFrontier implements Feature {
         return {
             milestones: this.milestones.milestoneRewards.filter(m => m.obtained()).map(m => [m.stage, m.description]),
             checkpoint: BattleFrontierRunner.checkpoint(),
+            runStartStage: BattleFrontierRunner.runStartStage(),
         };
     }
 
@@ -44,6 +47,11 @@ class BattleFrontier implements Feature {
             this.milestones.milestoneRewards.find(m => m.stage == stage && m.description == description)?.obtained(true);
         });
 
-        BattleFrontierRunner.checkpoint(json.checkpoint);
+        const checkpoint = Number.isSafeInteger(json.checkpoint) && json.checkpoint >= 1 ? json.checkpoint : 1;
+        BattleFrontierRunner.checkpoint(checkpoint);
+        // Existing saves started at stage one and keep their full pending rewards.
+        const runStartStage = Number.isSafeInteger(json.runStartStage) && json.runStartStage >= 1 && json.runStartStage <= checkpoint
+            ? json.runStartStage : 1;
+        BattleFrontierRunner.runStartStage(runStartStage);
     }
 }

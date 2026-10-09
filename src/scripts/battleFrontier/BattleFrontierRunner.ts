@@ -5,12 +5,35 @@ class BattleFrontierRunner {
     public static timeLeftPercentage: KnockoutObservable<number> = ko.observable(100);
     static stage: KnockoutObservable<number> = ko.observable(1); // Start at stage 1
     public static checkpoint: KnockoutObservable<number> = ko.observable(1); // Start at stage 1
+    public static runStartStage: KnockoutObservable<number> = ko.observable(1);
     public static highest: KnockoutObservable<number> = ko.observable(1);
     public static battleBackground: KnockoutObservable<GameConstants.BattleBackground> = ko.observable('Default');
 
     public static counter = 0;
 
     public static started = ko.observable(false);
+    public static confirmationPending = ko.observable(false);
+    private static readonly retainedStages = 100;
+
+    public static quickStartStage = ko.pureComputed(() => {
+        const startStage = Math.max(1, App.game.statistics.battleFrontierHighestStageCompleted() - BattleFrontierRunner.retainedStages + 1);
+        // Replay any unlocked, unclaimed milestone instead of skipping its reward.
+        return BattleFrontierMilestones.milestoneRewards
+            .filter(m => m.isUnlocked() && !m.obtained() && m.stage < startStage)
+            .reduce((stage, m) => Math.min(stage, m.stage), startStage);
+    });
+
+    public static pendingRewards = ko.pureComputed(() => {
+        const stageBeaten = Math.max(0, BattleFrontierRunner.checkpoint() - 1);
+        const skippedStages = BattleFrontierRunner.runStartStage() - 1;
+        const totalReward = stageBeaten * Math.max(stageBeaten / 100, 1);
+        const skippedReward = skippedStages * Math.max(skippedStages / 100, 1);
+        return {
+            stages: Math.max(0, stageBeaten - skippedStages),
+            battlePoints: Math.max(0, Math.round(totalReward) - Math.round(skippedReward)),
+            money: Math.max(0, stageBeaten * Math.max(stageBeaten, 100) - skippedStages * Math.max(skippedStages, 100)),
+        };
+    });
 
     constructor() {}
 
@@ -20,29 +43,40 @@ class BattleFrontierRunner {
         }
         if (this.timeLeft() < 0) {
             this.battleLost();
+            return;
         }
         this.timeLeft(this.timeLeft() - GameConstants.GYM_TICK);
         this.timeLeftPercentage(Math.floor(this.timeLeft() / GameConstants.GYM_TIME * 100));
     }
 
-    public static async start(useCheckpoint: boolean) {
+    public static async start(useCheckpoint: boolean, quickStart = false) {
+        if (this.started() || this.confirmationPending()) {
+            return;
+        }
         if (!useCheckpoint && this.hasCheckpoint()) {
-            if (!await Notifier.confirm({
-                title: 'Restart Battle Frontier?',
-                message: 'Current progress will be lost and you will restart from the first stage.',
-                type: NotificationConstants.NotificationOption.warning,
-                confirm: 'OK',
-            })) {
-                return;
+            this.confirmationPending(true);
+            try {
+                if (!await Notifier.confirm({
+                    title: 'Restart Battle Frontier?',
+                    message: 'Your saved run and its unclaimed Battle Points and money will be lost. Start a new challenge?',
+                    type: NotificationConstants.NotificationOption.warning,
+                    confirm: 'Restart',
+                })) {
+                    return;
+                }
+            } finally {
+                this.confirmationPending(false);
             }
         }
 
         if (!useCheckpoint) {
             BattleFrontierRunner.battleBackground('Default');
+            this.runStartStage(quickStart ? this.quickStartStage() : 1);
+            this.checkpoint(this.runStartStage());
         }
 
         this.started(true);
-        this.stage(useCheckpoint ? this.checkpoint() : 1);
+        this.stage(this.checkpoint());
         this.highest(App.game.statistics.battleFrontierHighestStageCompleted());
         BattleFrontierBattle.pokemonIndex(0);
         BattleFrontierBattle.generateNewEnemy();
@@ -80,47 +114,82 @@ class BattleFrontierRunner {
     }
 
     public static battleLost() {
-        // Current stage - 1 as the player didn't beat the current stage
-        const stageBeaten = this.stage() - 1;
-        // Give Battle Points and Money based on how far the user got
-        const battleMultiplier = Math.max(stageBeaten / 100, 1);
-        let battlePointsEarned = Math.round(stageBeaten * battleMultiplier);
-        let moneyEarned = stageBeaten * 100 * battleMultiplier;
+        if (this.started()) {
+            this.settle();
+        }
+    }
 
-        // Award battle points and dollars and retrieve their computed values
-        battlePointsEarned = App.game.wallet.gainBattlePoints(battlePointsEarned).amount;
-        moneyEarned = App.game.wallet.gainMoney(moneyEarned, true).amount;
+    private static settle() {
+        if (!this.started() && !this.hasCheckpoint()) {
+            return;
+        }
+        const stageBeaten = this.checkpoint() - 1;
+        const rewards = this.pendingRewards();
+
+        // Clear the run before awarding anything so it cannot be claimed twice.
+        this.checkpoint(1);
+        this.runStartStage(1);
+        this.end();
+
+        // Wallet.addAmount converts zero into one, so don't send empty rewards.
+        const battlePointsEarned = rewards.battlePoints > 0 ? App.game.wallet.gainBattlePoints(rewards.battlePoints).amount : 0;
+        const moneyEarned = rewards.money > 0 ? App.game.wallet.gainMoney(rewards.money, true).amount : 0;
+        const progressMessage = rewards.stages > 0
+            ? `You completed ${rewards.stages.toLocaleString('en-US')} stages this run, reaching stage ${stageBeaten.toLocaleString('en-US')}.`
+            : 'You ended this run without completing a stage.';
 
         Notifier.notify({
             title: 'Battle Frontier',
-            message: `You managed to beat stage ${stageBeaten.toLocaleString('en-US')}.\nYou received <img src="./assets/images/currency/battlePoint.svg" height="24px"/> ${battlePointsEarned.toLocaleString('en-US')}.\nYou received <img src="./assets/images/currency/money.svg" height="24px"/> ${moneyEarned.toLocaleString('en-US')}.`,
-            strippedMessage: `You managed to beat stage ${stageBeaten.toLocaleString('en-US')}.\nYou received ${battlePointsEarned.toLocaleString('en-US')} Battle Points.\nYou received ${moneyEarned.toLocaleString('en-US')} Pokédollars.`,
+            message: `${progressMessage}\nYou received <img src="./assets/images/currency/battlePoint.svg" height="24px"/> ${battlePointsEarned.toLocaleString('en-US')}.\nYou received <img src="./assets/images/currency/money.svg" height="24px"/> ${moneyEarned.toLocaleString('en-US')}.`,
+            strippedMessage: `${progressMessage}\nYou received ${battlePointsEarned.toLocaleString('en-US')} Battle Points.\nYou received ${moneyEarned.toLocaleString('en-US')} Pokédollars.`,
             type: NotificationConstants.NotificationOption.success,
             setting: NotificationConstants.NotificationSetting.General.battle_frontier,
             sound: NotificationConstants.NotificationSound.General.battle_frontier,
             timeout: 30 * GameConstants.MINUTE,
         });
-        App.game.logbook.newLog(
-            LogBookTypes.FRONTIER,
-            createLogContent.gainBattleFrontierPoints({
-                stage: stageBeaten.toLocaleString('en-US'),
-                points: battlePointsEarned.toLocaleString('en-US'),
-            })
-        );
-
-        this.checkpoint(1);
-
-        this.end();
+        if (rewards.stages > 0) {
+            App.game.logbook.newLog(
+                LogBookTypes.FRONTIER,
+                createLogContent.gainBattleFrontierPoints({
+                    stage: stageBeaten.toLocaleString('en-US'),
+                    points: battlePointsEarned.toLocaleString('en-US'),
+                })
+            );
+        }
     }
-    public static battleQuit() {
-        Notifier.confirm({
-            title: 'Battle Frontier',
-            message: 'Are you sure you want to leave?\n\nYou can always return later and start off where you left.',
-            type: NotificationConstants.NotificationOption.danger,
-            confirm: 'Leave',
-        }).then(confirmed => {
-            if (confirmed) {
-                // Don't give any points, user quit the challenge
+
+    public static async battleFinish() {
+        if ((!this.started() && !this.hasCheckpoint()) || this.confirmationPending()) {
+            return;
+        }
+        this.confirmationPending(true);
+        try {
+            if (await Notifier.confirm({
+                title: 'Finish Battle Frontier?',
+                message: 'End this run and claim Battle Points and money for the stages you completed? Your checkpoint will be cleared.',
+                type: NotificationConstants.NotificationOption.warning,
+                confirm: 'Finish & Claim',
+            })) {
+                this.settle();
+            }
+        } finally {
+            this.confirmationPending(false);
+        }
+    }
+
+    public static async battleQuit() {
+        if (!this.started() || this.confirmationPending()) {
+            return;
+        }
+        this.confirmationPending(true);
+        try {
+            const confirmed = await Notifier.confirm({
+                title: 'Pause Battle Frontier?',
+                message: 'Save this run and return later? Battle Points and money will remain unclaimed until you finish the run.',
+                type: NotificationConstants.NotificationOption.warning,
+                confirm: 'Pause',
+            });
+            if (confirmed && this.started()) {
                 Notifier.notify({
                     title: 'Battle Frontier',
                     message: `Checkpoint set for stage ${this.stage()}.`,
@@ -130,7 +199,9 @@ class BattleFrontierRunner {
 
                 this.end();
             }
-        });
+        } finally {
+            this.confirmationPending(false);
+        }
     }
 
     public static timeLeftSeconds = ko.pureComputed(() => {
