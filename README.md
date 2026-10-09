@@ -17,11 +17,13 @@ You can reach out on discord to discuss your ideas and how to implement them: ht
 
 本分支增加了个人云存档：Cloudflare 托管网页、游戏专用密码登录和存档 API，GitHub 私有仓库保存进度。Windows 定制客户端可离线运行，联网后与网页共用云档。
 
-- [新手部署与日常使用手册](design/cloud-save-user-guide.md)（按 ggzz.fun 编写）
+**公开文档约定：** 本项目的代码 fork 为 public；存档使用独立新建的 private 仓库。文档中的个人部署域名、关联子域名、DNS 服务器和桌面应用标识统一使用 `YOUR_*` 占位符，操作时从本地记录手动填写。实际配置只保存在仓库外，或被 Git 忽略的 `.local/private-docs/` 和 `cloud-save-worker/wrangler.local.json` 中；不要把真实配置、截图或导出的 DNS 记录提交到公开仓库。官方参考链接保留。
+
+- [新手部署与日常使用手册](design/cloud-save-user-guide.md)（域名和 DNS 按本地记录手填）
 - [项目架构与云存档设计](design/cloud-save-design.md)
 - [实现和验收记录](design/cloud-save-implementation.md)
 - [Windows 客户端与开发说明](desktop/README.md)
-- [自用玩法实现与兼容说明：优化寻路、固定道具价格、助手服务费 1%](design/private-gameplay-design.md)（2026-09-28 已部署到 play.ggzz.fun；使用方法见 Windows 手册）
+- [自用玩法实现与兼容说明：优化寻路、固定道具价格、助手服务费 1%](design/private-gameplay-design.md)（2026-09-28 已部署到 YOUR_GAME_HOST；使用方法见 Windows 手册）
 
 GitHub token 只录入 Worker Secret。先完成手册中的账号配置与验收，再开启自动同步。
 

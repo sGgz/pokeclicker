@@ -1,6 +1,20 @@
 # PokéClicker 私人云存档操作手册
 
-适用：Windows；**域名 ggzz.fun 购买于火山引擎**；游戏入口为 **https://play.ggzz.fun**。更新日期：2026-09-28。
+适用：Windows；本手册以火山引擎注册商、Cloudflare DNS 和自定义游戏域名为例。游戏入口按本地记录填写。文档脱敏更新日期：2026-10-09；各节历史部署和验收日期保持原记录。
+
+**本手册属于 public 代码仓库，个人部署信息只使用占位符。** `YOUR_*` 都不能直接输入浏览器、配置向导或平台控制台，必须替换为你自己的实际值。官方参考链接保留；真实域名、DNS 记录、账号对应关系和配置截图只在本地保存。
+
+| 占位符 | 从本地记录填写 |
+| --- | --- |
+| `YOUR_ROOT_DOMAIN` | 注册商管理的根域名 |
+| `YOUR_GAME_HOST` | 游戏网站的完整主机名，不含协议或路径 |
+| `YOUR_EXISTING_HOST_1`、`YOUR_EXISTING_HOST_2` | 已有其他业务的主机名；仅为示例，按实际记录数量核对 |
+| `YOUR_CLOUDFLARE_NAMESERVER_1`、`YOUR_CLOUDFLARE_NAMESERVER_2` | Cloudflare 控制台为你的域名实际分配的两条名称服务器 |
+| `YOUR_DESKTOP_APP_ID` | 现有桌面应用标识；更新时保持原值，避免更改应用身份 |
+
+已有环境的本地对应表位于 `.local/private-docs/deployment-record.json`，原文备份位于同目录的 `original-documents/`；整个 `.local/` 已被 Git 忽略，克隆仓库不会带上这些文件。也可以使用仓库外的“游戏上线资料/配置记录.txt”。这些是本地明文记录，未做加密；不要使用 `git add -f` 强行提交、上传附件或分享包含它们的源码压缩包。GitHub token 和游戏密码仍只保存到密码管理器、平台 Secret，不写入这份记录。
+
+本次脱敏处理公开文档和随包离线帮助。历史提交及程序源码中的固定服务地址仍可能包含实际域名；清理文档不代表整个仓库或已发布安装包已隐藏地址。
 
 **你的网站和游戏密码已经配置好，网页首次上传也已确认成功。现在安装 Windows 云存档客户端，直接看[第十六节](#十六安装-windows-云存档客户端并迁移进度)。** 不用重新设置域名、创建仓库、生成 token，也不用重新部署 Cloudflare。安装和使用桌面客户端不需要输入命令。
 
@@ -8,7 +22,7 @@
 
 本手册前十五节保留首次部署和日后维护步骤，已完成的账号、域名和密钥设置不用重做。
 
-**优化寻路、固定道具价格和助手服务费 1% 已于 2026-09-28 发布到 play.ggzz.fun。** 使用新版后，在 **Start Menu → Settings → Gameplay → 自用玩法** 打开“优化寻路”和“固定基础价（购买不涨价）”；费用默认就是“原价的 1%（门票原价）”。详细操作和更新顺序见 [Windows 使用说明](../desktop/README.md#打开优化寻路和固定价格)。本次网页已单独发布，但源码修改和打包通常不会自动更新网页；关闭旧网页标签、更新所有电脑上的 EXE 后再同步，避免旧端丢失新设置。发布未代做用户真实存档的两设备往返验收。
+**优化寻路、固定道具价格和助手服务费 1% 已于 2026-09-28 发布到 YOUR_GAME_HOST。** 使用新版后，在 **Start Menu → Settings → Gameplay → 自用玩法** 打开“优化寻路”和“固定基础价（购买不涨价）”；费用默认就是“原价的 1%（门票原价）”。详细操作和更新顺序见 [Windows 使用说明](../desktop/README.md#打开优化寻路和固定价格)。本次网页已单独发布，但源码修改和打包通常不会自动更新网页；关闭旧网页标签、更新所有电脑上的 EXE 后再同步，避免旧端丢失新设置。发布未代做用户真实存档的两设备往返验收。
 
 本手册使用命令提示符 **cmd**。每次只复制代码框中的一行，按回车，等它执行完再运行下一行。出现报错先停在该步骤，不要跳过检查继续发布。
 
@@ -16,7 +30,7 @@
 
 | 名称 | 你可以把它理解为 | 本次填写 |
 | --- | --- | --- |
-| 域名 | 游戏的网址 | play.ggzz.fun |
+| 域名 | 游戏的网址 | YOUR_GAME_HOST |
 | Cloudflare | 放网页、处理登录和存档请求的平台 | 用你自己的账号 |
 | GitHub 私有仓库 | 只给你看的存档文件夹，带修改历史 | 建议 pokeclicker-saves |
 | GitHub token | Cloudflare 访问这个文件夹的钥匙 | 只录入 Cloudflare Secret |
@@ -30,12 +44,14 @@
 先在桌面新建一个“游戏上线资料”文件夹，用来保存旧 DNS 记录、存档备份和后面生成的配置文件。再在其中建一个普通文本文件“配置记录.txt”，逐步记录以下内容，**这里不记录 token 或游戏密码**：
 
 ```text
-游戏网址：https://play.ggzz.fun
+游戏网址：https://YOUR_GAME_HOST
+根域名：YOUR_ROOT_DOMAIN
+已有业务主机：按实际情况逐项填写
 GitHub 用户名：稍后填写
 存档仓库：pokeclicker-saves
 仓库分支：填写仓库页面显示的实际名称，通常是 main
-Cloudflare 名称服务器 1：maxine.ns.cloudflare.com
-Cloudflare 名称服务器 2：michael.ns.cloudflare.com
+Cloudflare 名称服务器 1：YOUR_CLOUDFLARE_NAMESERVER_1
+Cloudflare 名称服务器 2：YOUR_CLOUDFLARE_NAMESERVER_2
 ```
 
 下面有些操作在浏览器里做，有些在黑色的 cmd 窗口里做。只有标成命令的代码框需要粘贴到 cmd；网址在浏览器地址栏打开。按钮的中文翻译可能略有不同，以旁边的英文名称帮助定位。
@@ -47,30 +63,30 @@ Cloudflare 名称服务器 2：michael.ns.cloudflare.com
 3. 在电脑上另建“宝可梦存档备份”文件夹，把它放进去；也可以额外复制到 U 盘。
 4. 在新网址验证导入和同步成功前，保留原网站的数据和这个文件。
 
-浏览器按域名隔离存档，所以原网站的进度不会自动出现在 play.ggzz.fun。不要先清理浏览器缓存或卸载浏览器。
+浏览器按域名隔离存档，所以原网站的进度不会自动出现在 YOUR_GAME_HOST。不要先清理浏览器缓存或卸载浏览器。
 
-## 三、把 ggzz.fun 的 DNS 接入 Cloudflare
+## 三、把 YOUR_ROOT_DOMAIN 的 DNS 接入 Cloudflare
 
-**你的这一步已经完成。** 你提供的截图已显示“Your domain is now protected by Cloudflare”。分配给 ggzz.fun 的服务器为 **maxine.ns.cloudflare.com** 和 **michael.ns.cloudflare.com**，不用再次修改。域名仍在火山引擎续费，只把 DNS 管理交给 Cloudflare。
+已有部署如果已显示“Your domain is now protected by Cloudflare”，无需再次修改。名称服务器以控制台显示和你的本地记录为准；**YOUR_CLOUDFLARE_NAMESERVER_1** 和 **YOUR_CLOUDFLARE_NAMESERVER_2** 只是占位符。域名仍在原注册商续费，只把 DNS 管理交给 Cloudflare。
 
-原解析有 ggzz.fun、clw.ggzz.fun 和 memos.ggzz.fun 三条 A 记录，核对 Cloudflare 已保留三条各自的原 IP，避免影响已有网站。以下步骤保留供以后查阅，当前可从第四节继续。
+迁移时逐项核对根域名及已有业务主机的原解析记录，确保 Cloudflare 保留各自的原值，避免影响已有网站。实际主机名、记录数量和 IP 只在本地 DNS 导出文件中记录。以下步骤保留供首次部署和以后查阅；已有部署确认 Active 后可从第四节继续。
 
 **3.1 先在火山引擎备份旧解析记录。**
 
 1. 打开 [火山引擎控制台](https://console.volcengine.com/)，登录购买域名的账号。
 2. 在顶部产品搜索中找 **云解析 DNS**，进入后点 **公网域名管理**。
-3. 找到并点击 **ggzz.fun**，打开 **记录管理**。
+3. 找到并点击 **YOUR_ROOT_DOMAIN**，打开 **记录管理**。
 4. 点击记录列表右侧的 **导出**，格式选 **xlsx**，点击 **确认导出**，把下载的文件保存到“游戏上线资料”。这是手工导出，不需要购买自动备份服务。
 5. 同时把现有记录截个图；如果有多页，每页都保存。记录类型、主机记录、记录值、MX 优先级都要能看清。TXT 值可能很长，导出文件用于保存完整内容。
 6. 若列表没有自建记录，就记录“目前没有业务解析记录”；不要为凑齐记录而新增内容。
 
 **完成标志：** 你手里已有旧记录文件或完整截图。官方入口说明：[导出解析记录](https://www.volcengine.com/docs/6758/155158?lang=zh)。
 
-**3.2 在 Cloudflare 添加 ggzz.fun。**
+**3.2 在 Cloudflare 添加 YOUR_ROOT_DOMAIN。**
 
 1. 打开 [Cloudflare 控制台](https://dash.cloudflare.com/)。没有账号就点 Sign up 注册，并完成邮箱验证；已有账号直接登录。
 2. 在 **Domains / 域名** 页面点 **Onboard a domain / 添加域名**；旧界面可能显示 Add a site。
-3. 输入 **ggzz.fun**，不带 https://，也不填 play.ggzz.fun；继续。
+3. 输入 **YOUR_ROOT_DOMAIN**，不带 https://，也不填 YOUR_GAME_HOST；继续。
 4. 本次选择 **Free / 免费** 计划，继续。
 5. 扫描现有 DNS 后，对照刚才导出的文件逐项核对。缺记录时点 **Add record / 添加记录**，照旧记录填写 Type、Name、Content、TTL；MX 还要核对 Priority。不要自行猜 IP。
 6. 保留原有网站和邮箱所需的 A、AAAA、CNAME、MX、TXT、SRV、CAA 等记录。旧平台默认的根域 NS、SOA 不需要当业务记录搬过去。邮件主机的 A/CNAME 使用 **DNS only / 仅 DNS**；有特殊线路解析的记录不能机械照搬，需要先核对用途。
@@ -81,19 +97,21 @@ Cloudflare 名称服务器 2：michael.ns.cloudflare.com
 **3.3 回火山引擎修改域名服务器。**
 
 1. 回到 [火山引擎控制台](https://console.volcengine.com/)，这次在产品搜索里找 **域名服务**。
-2. 进入 **域名列表**，找到 **ggzz.fun**，点击这一行的 **管理**。
+2. 进入 **域名列表**，找到 **YOUR_ROOT_DOMAIN**，点击这一行的 **管理**。
 3. 在域名管理页面找到 **域名服务 → DNS服务器 → 修改**。
 4. 选择 **自定义DNS**，把旧服务器地址替换为 Cloudflare 分配的两条。每个输入框填一条服务器名称，不带 https://。不要同时保留旧服务器。
 5. 点 **提交**；如果要求短信或身份验证，按火山引擎页面完成。
-6. 回 Cloudflare 的 ggzz.fun 页面，若有“我已更新名称服务器 / 检查名称服务器”就点击，然后等待状态成为 **Active / 有效**。
+6. 回 Cloudflare 的 YOUR_ROOT_DOMAIN 页面，若有“我已更新名称服务器 / 检查名称服务器”就点击，然后等待状态成为 **Active / 有效**。
 
 这里改的是“域名服务器”，**不是在“记录管理”里新增两条 NS 解析记录**，也不需要点“域名转出”。火山引擎官方路径见[配置域名 DNS](https://www.volcengine.com/docs/6758/1472583?lang=zh)；[DNS 修改说明](https://www.volcengine.com/docs/6568/81326)提示全球生效可能最长需要 72 小时，以 Cloudflare 的实际状态为准。
 
-**完成标志：** Cloudflare 显示 ggzz.fun 为 Active；如果原来有网站、域名邮箱，它们仍可正常使用。等待期间可以继续建 GitHub 仓库，正式部署前应已 Active。
+**完成标志：** Cloudflare 显示 YOUR_ROOT_DOMAIN 为 Active；如果原来有网站、域名邮箱，它们仍可正常使用。等待期间可以继续建 GitHub 仓库，正式部署前应已 Active。
 
 play 子域由后面的发布命令创建，无需现在填写 IP。若 play 已被其他业务使用，先核对，不直接覆盖。迁移后如果要重新开启 DNSSEC，使用 Cloudflare 新生成的 DS 配回注册商。完整迁移依据：[Cloudflare Full setup](https://developers.cloudflare.com/dns/zone-setups/full-setup/setup/)。
 
 ## 四、新建专门存档的 GitHub 私有仓库
+
+这里创建的是独立的存档数据仓库，选择 Private；它与本项目的 public 代码 fork 分开。不要通过 fork 游戏代码仓库来创建存档仓库。
 
 1. 登录 [GitHub](https://github.com/)，再打开 [新建仓库页面](https://github.com/new)。没有账号先注册并验证邮箱。
 2. Owner 选你自己的个人账号，Repository name 填 **pokeclicker-saves**。
@@ -114,14 +132,14 @@ play 子域由后面的发布命令创建，无需现在填写 IP。若 play 已
 
 | 内容 | 用在哪儿 | 怎样设置 |
 | --- | --- | --- |
-| 游戏专用密码 | 在 play.ggzz.fun 的登录页输入 | 第八节运行 cloud:password 自动生成 |
+| 游戏专用密码 | 在 YOUR_GAME_HOST 的登录页输入 | 第八节运行 cloud:password 自动生成 |
 | GitHub token | 让 Cloudflare 访问私有存档仓库 | 第八节运行 cloud:secret 录入 |
 
 程序会生成一串 **32 个字符的随机密码**，避免弱密码被反复猜测。不需要提前在聊天里告诉我密码，也不要在 Cloudflare 普通变量里填写明文密码。设置成功时密码只在你的本机命令窗口显示一次，保存到密码管理器；以后在电脑、手机上使用同一游戏专用密码登录。
 
 **如果尚未创建 Access 应用：** 不用再做其他操作，继续第六节。
 
-**如果已经创建了保护 play.ggzz.fun 的 Access 应用：** 它会继续在游戏密码页前要求邮箱验证码。若旧网站已经上线，先保留这层保护，等第八节新版本和两项 Secret 都设置成功后，再解除旧门禁。到 Zero Trust → Access controls → Applications，找到对应 My Pokeclicker 应用，核对保护的域名，只移除 **play.ggzz.fun** 的保护。如果该应用只服务这个游戏，可以删除这一项应用；如果还包含其他域名，只移除游戏对应的 hostname，保留其他域名的规则。不要删除其他业务的 Access 应用，也不要取消整个 Cloudflare 账号或其他订阅。原有云存档和 DNS 不受这个登录方式变更影响。
+**如果已经创建了保护 YOUR_GAME_HOST 的 Access 应用：** 它会继续在游戏密码页前要求邮箱验证码。若旧网站已经上线，先保留这层保护，等第八节新版本和两项 Secret 都设置成功后，再解除旧门禁。到 Zero Trust → Access controls → Applications，找到对应 My Pokeclicker 应用，核对保护的域名，只移除 **YOUR_GAME_HOST** 的保护。如果该应用只服务这个游戏，可以删除这一项应用；如果还包含其他域名，只移除游戏对应的 hostname，保留其他域名的规则。不要删除其他业务的 Access 应用，也不要取消整个 Cloudflare 账号或其他订阅。原有云存档和 DNS 不受这个登录方式变更影响。
 
 本节不需要生成任何凭据。正式密码在第八节成功部署 Worker 后，通过专用命令设置；未设置时网站会显示“服务尚未配置”，不会直接放行游戏。
 
@@ -188,12 +206,12 @@ npm run cloud:setup
 
 | 提示 | 填写内容 |
 | --- | --- |
-| 游戏域名 | 默认 play.ggzz.fun，直接回车 |
+| 游戏域名 | 手动填写本地记录中的实际游戏主机名，不带协议或路径；已有配置时先核对默认值 |
 | GitHub 用户名 | 第四节仓库拥有者 |
 | 私有存档仓库名 | 默认 pokeclicker-saves |
 | 存档仓库分支 | 仓库的实际分支名；默认通常 main，已有其他名称则原样填写 |
 
-每回答一个问题按回车；方括号内是默认值，直接回车就采用它。**完成标志：** 窗口出现“已保存：...”和“云槽位 ID：...”。
+每回答一个问题按回车；方括号内是默认值，只有核对为你自己的实际配置后才直接回车。不要输入 `YOUR_GAME_HOST` 等文档占位符，也不要直接接受他人的默认地址。**完成标志：** 窗口出现“已保存：...”和“云槽位 ID：...”。
 
 向导不需要 token，也不询问游戏密码、团队地址、AUD 或邮箱。结果保存在 **cloud-save-worker/wrangler.local.json**，已加入 Git 忽略。用资源管理器打开项目里的 cloud-save-worker 文件夹，把 **wrangler.local.json** 复制到桌面“游戏上线资料”备份。其中 CLOUD_SLOT_ID 是云档编号，重装或换电脑部署时保持不变。不要删除原配置后重新生成不同编号。已有配置时重复运行向导会保留现有编号。
 
@@ -223,7 +241,7 @@ npm run cloud:preview
 npm run cloud:login
 ```
 
-它会打开浏览器，让你登录并授权 Wrangler 管理 Cloudflare。选择拥有 ggzz.fun 的那个账号，按提示点 **Allow / 允许**。看到授权成功后回命令窗口，等命令结束。如果浏览器没有自动打开，复制命令窗口给出的授权网址到浏览器。
+它会打开浏览器，让你登录并授权 Wrangler 管理 Cloudflare。选择拥有 YOUR_ROOT_DOMAIN 的那个账号，按提示点 **Allow / 允许**。看到授权成功后回命令窗口，等命令结束。如果浏览器没有自动打开，复制命令窗口给出的授权网址到浏览器。
 
 **8.2 发布网页。**
 
@@ -231,11 +249,11 @@ npm run cloud:login
 npm run cloud:deploy
 ```
 
-该命令上传游戏网页和 Worker，并绑定 play.ggzz.fun。自定义域由 Workers 创建，不需要自己买服务器或填服务器 IP。首次发布时游戏密码尚未配置，整个网站会显示服务未配置；这是预期的关闭状态，继续完成后面两项密钥设置。
+该命令上传游戏网页和 Worker，并绑定 YOUR_GAME_HOST。自定义域由 Workers 创建，不需要自己买服务器或填服务器 IP。首次发布时游戏密码尚未配置，整个网站会显示服务未配置；这是预期的关闭状态，继续完成后面两项密钥设置。
 
-如果询问使用哪个 Cloudflare 账号，选有 ggzz.fun 的账号。若询问确认绑定域名，核对显示的是 play.ggzz.fun 再按提示确认。出现同名 DNS 记录冲突时先核对已有用途，不盲目删除。
+如果询问使用哪个 Cloudflare 账号，选有 YOUR_ROOT_DOMAIN 的账号。若询问确认绑定域名，核对显示的是 YOUR_GAME_HOST 再按提示确认。出现同名 DNS 记录冲突时先核对已有用途，不盲目删除。
 
-**完成标志：** 发布命令成功结束，输出包含 play.ggzz.fun 的绑定信息；Cloudflare **Workers & Pages** 列表里能看到 **pokeclicker-cloud-save**。本流程由命令创建项目，无需另外用 Git 导入建立 Pages 项目。
+**完成标志：** 发布命令成功结束，输出包含 YOUR_GAME_HOST 的绑定信息；Cloudflare **Workers & Pages** 列表里能看到 **pokeclicker-cloud-save**。本流程由命令创建项目，无需另外用 Git 导入建立 Pages 项目。
 
 **8.3 生成游戏专用密码。**
 
@@ -250,7 +268,7 @@ npm run cloud:password
 1. 命令询问是否生成并更新密码时，输入 **y**，按回车。如果只按回车，会取消，不会修改密码。
 2. 等命令明确报告设置成功。成功之前不要关闭窗口。
 3. 成功后，窗口会显示本次生成的 **32 字符游戏专用密码**。
-4. **立即保存到你的密码管理器**，条目的网址可填写 https://play.ggzz.fun。不把密码写入普通“配置记录.txt”，也不发聊天、截图或提交代码仓库。
+4. **立即保存到你的密码管理器**，条目的网址可填写 https://YOUR_GAME_HOST。不把密码写入普通“配置记录.txt”，也不发聊天、截图或提交代码仓库。
 5. 保存好后，按窗口提示再按回车结束。保留大小写和全部字符，之后在游戏登录页粘贴这串密码。
 
 这个命令要在你自己打开的交互式 cmd 窗口运行，不要让远程日志、聊天工具代跑，也不要把输出重定向到文件。命令不会把明文密码写进项目配置。
@@ -285,11 +303,11 @@ npm run cloud:secret
 
 命令输入不方便时，也可在 Cloudflare **Workers & Pages → pokeclicker-cloud-save → Settings → Variables and Secrets → Add** 中录入：Type 选 **Secret**，Variable name 填 **GITHUB_SAVE_TOKEN**，Value 粘贴 token，按页面 **Save / Deploy** 保存发布。不要把 Type 选成普通 Text。
 
-新版本和两项 Secret 都成功设置后，如果仍有旧游戏 Access 应用，按第五节仅解除 play.ggzz.fun 的旧邮箱门禁。未创建过则跳过。
+新版本和两项 Secret 都成功设置后，如果仍有旧游戏 Access 应用，按第五节仅解除 YOUR_GAME_HOST 的旧邮箱门禁。未创建过则跳过。
 
 发布后在 Cloudflare Workers & Pages 找到 **pokeclicker-cloud-save**，核对：
 
-- Custom Domain 是 play.ggzz.fun，HTTPS 证书已就绪。
+- Custom Domain 是 YOUR_GAME_HOST，HTTPS 证书已就绪。
 - workers.dev 和 Preview URLs 都关闭（本项目配置已关闭它们）。
 - Variables 中公开字段完整；Secret 中存在 GAME_AUTH 和 GITHUB_SAVE_TOKEN。
 - 访问 /login 是游戏专用密码页，不再跳转邮箱验证码。
@@ -299,7 +317,7 @@ npm run cloud:secret
 
 ## 九、第一次验收：先成功同步一次，再开启自动同步
 
-1. 在普通浏览器窗口打开 **https://play.ggzz.fun**。首次访问应先看到游戏专用密码登录页。正式游玩使用普通窗口，无痕窗口只用来检查门禁，不用于保留本地存档。
+1. 在普通浏览器窗口打开 **https://YOUR_GAME_HOST**。首次访问应先看到游戏专用密码登录页。正式游玩使用普通窗口，无痕窗口只用来检查门禁，不用于保留本地存档。
 2. 粘贴第八节生成的游戏专用密码并登录，不填 GitHub token。成功后会显示已登录的确认页，点击 **进入游戏**。另开无痕窗口确认未登录时仍需密码，再关闭无痕窗口。如果未登录也能直接进入游戏，先检查发布的版本和域名。
 3. 点 **云存档 · 本地模式** 展开面板，点 **检查连接**，应显示“连接成功，可以上传本地进度或下载云档。”
 4. 在选档页点击 **Import Save**，选择第二节备份的 .txt；页面刷新后选择导入的存档。原版按钮仍可能是英文。
@@ -383,8 +401,8 @@ npm run cloud:recover
 | 现象 | 处理 |
 | --- | --- |
 | node 版本错误 / EBADDEVENGINES | 使用第六节 Node 24；重开 cmd 后先执行 cd 和 set，再检查 node --version |
-| 域名打不开 / 证书尚未就绪 | 检查 ggzz.fun 是否 Active、NS 是否换对、Workers Custom Domain 是否成功绑定，等待传播和证书 |
-| 仍要求邮箱验证码 | 旧 Access 应用仍保护 play.ggzz.fun，按第五节只移除游戏这一项；不用继续开通 Zero Trust |
+| 域名打不开 / 证书尚未就绪 | 检查 YOUR_ROOT_DOMAIN 是否 Active、NS 是否换对、Workers Custom Domain 是否成功绑定，等待传播和证书 |
+| 仍要求邮箱验证码 | 旧 Access 应用仍保护 YOUR_GAME_HOST，按第五节只移除游戏这一项；不用继续开通 Zero Trust |
 | 忘记游戏密码 / 密码错误 | 确认没有误贴 GitHub token、额外空格或旧密码；忘记时按第十四节重设 |
 | 登录尝试过多 | 按提示等待再试；不要连续点击或反复猜密码 |
 | 进入网站没登录页面 | 当前浏览器可能仍在登录有效期；用无痕窗口确认，核对发布版本与正确域名 |
@@ -406,7 +424,7 @@ npm run cloud:recover
 
 2026-09-20 的这次报错已在 Cloudflare 使用的 Worker 运行时中复现：旧代码调用网络请求的方式不兼容，并使用了该运行时不接受的重定向选项，所以还没有正常发出 GitHub 请求就失败。这不是仅凭报错推测 token 填错，也不是带斜杠的分支名导致；修复不需要更换游戏密码、GitHub token、仓库或分支。
 
-**本次修复版已成功发布到 play.ggzz.fun，直接从下面第 4 步开始，无需再次运行命令。** 第 1～3 步保留为以后自己发布同类修复时的操作参考：
+**本次修复版已成功发布到 YOUR_GAME_HOST，直接从下面第 4 步开始，无需再次运行命令。** 第 1～3 步保留为以后自己发布同类修复时的操作参考：
 
 1. 在当前游戏的云存档面板点击 **导出本地备份**，保存下载的 .txt 文件。保留当前游戏页，不清除浏览器数据，自动同步暂时保持关闭。
 2. 打开 cmd，进入本手册使用的项目目录并选择已准备好的 Node 24：
@@ -476,7 +494,7 @@ GitHub 会积累保存历史，10 分钟一次、全天开启理论上每天可�
 
 ## 十六、安装 Windows 云存档客户端并迁移进度
 
-新的程序名称是 **Pokeclicker Cloud**。游戏文件随程序一起安装，本地进度保存在当前电脑；联网后使用现有游戏密码连接 **play.ggzz.fun**，和网页共用你的 GitHub 云档。它可以离线打开，也不要求浏览器一直开着。
+新的程序名称是 **Pokeclicker Cloud**。游戏文件随程序一起安装，本地进度保存在当前电脑；联网后使用现有游戏密码连接 **YOUR_GAME_HOST**，和网页共用你的 GitHub 云档。它可以离线打开，也不要求浏览器一直开着。
 
 从官网下载的原 **PokéClicker** 客户端仍不支持本项目的云存档；两个程序独立安装、独立保存，互不覆盖。新程序不会自动读取旧程序里的档，所以第一次需要按下面的步骤选择恢复云档，或者手动导入旧程序的 `.txt`。[官方客户端代码](https://github.com/RedSparr0w/Pokeclicker-desktop/blob/master/src/main.js)
 
@@ -488,7 +506,7 @@ GitHub 会积累保存历史，10 分钟一次、全天开启理论上每天可�
 2. 打开原来的官方 Windows 客户端，进入自己的存档。
 3. 点 **Start Menu → Save / Enter Code → Download Save**，保存下载的 `.txt` 文件。若停在选档页，可从卡片的 **⋮ → Download (backup)** 导出。
 4. 把文件复制到刚建的备份文件夹，可以在文件名前加 **官方客户端-当天日期**，保留结尾的 `.txt`。然后关闭官方客户端。
-5. 在原来常用的浏览器打开 **https://play.ggzz.fun**，进入自己的进度，在云存档面板点 **导出本地备份**。也复制到备份文件夹，文件名前加 **网页-当天日期**。
+5. 在原来常用的浏览器打开 **https://YOUR_GAME_HOST**，进入自己的进度，在云存档面板点 **导出本地备份**。也复制到备份文件夹，文件名前加 **网页-当天日期**。
 6. 核对两边的训练家、地区、宝可梦和大致游戏时间。网页的云端保存时间，只说明那次上传发生的时间；不替你决定哪份进度更值得保留。
 7. 如果网页里的进度就是接下来要用的，点 **同步后换设备**，等提示成功后关闭网页。如果官方客户端里的进度更新，保留双方文件，稍后走 **16.4 的第二条路线**。
 
@@ -522,7 +540,7 @@ ZIP 版免安装，但本地存档仍在当前 Windows 账户的数据目录里�
 1. 让电脑连上网络，打开 **Pokeclicker Cloud**。
 2. 在游戏选档页找到 **云存档**，点击展开。先不要勾选 **每 10 分钟自动同步**。
 3. 点 **登录云存档**。桌面版会弹出一个单独的密码窗口，游戏主窗口保留。也可以点顶部菜单 **游戏 → 登录云存档**，它会使用同一套登录流程并更新云存档面板。
-4. 输入你现在用于 **play.ggzz.fun** 的**游戏专用密码**，按密码窗口中的登录按钮；不是 GitHub token，也不是 GitHub、Cloudflare 的账号密码。
+4. 输入你现在用于 **YOUR_GAME_HOST** 的**游戏专用密码**，按密码窗口中的登录按钮；不是 GitHub token，也不是 GitHub、Cloudflare 的账号密码。
 5. 看到登录成功后，点密码窗口里的 **返回游戏**。主窗口会自动检查连接；也可再点 **检查连接**。确认连接成功，再按下一节恢复进度。
 
 你不用填仓库名、分支或服务器地址，它们沿用已上线后台的配置。GitHub token 不装进 EXE，也不需要在新电脑上填写。游戏密码校验仍由现有 Cloudflare 后台完成；程序保存的是有期限的登录会话，并使用 Windows 的加密存储，不保存你的明文游戏密码。
@@ -563,7 +581,7 @@ Dream Orbs 从 1.0.5 起改为解锁后每累计在线游戏 1 小时获得 1 �
 用很小的进度变化做第一次核对，例如记住当前地区、查看一只宝可梦的等级，并正常玩一小会儿。全程保持自动同步关闭，一次只在一端游玩。
 
 1. **桌面端：** 点 **同步后换设备**。等到成功提示，并记下显示的最后云端保存时间；然后关闭客户端。
-2. **网页端：** 用 Chrome 或 Edge 打开 **https://play.ggzz.fun**，输入同一个游戏密码。Chrome 可以正常使用，不要求必须用 Edge。
+2. **网页端：** 用 Chrome 或 Edge 打开 **https://YOUR_GAME_HOST**，输入同一个游戏密码。Chrome 可以正常使用，不要求必须用 Edge。
 3. 如果这个浏览器第一次使用，按第九节下载云档；已关联的浏览器按提示检查最新云档再进入。若出现冲突，核对后选择刚才桌面上传的 **云端进度**。
 4. 核对关键进度一致，正常玩一小会儿，然后在网页点 **同步后换设备**，等待成功，再关闭网页。
 5. **再回桌面端：** 打开 **Pokeclicker Cloud**，检查云档并进入已关联的存档，核对刚才网页玩的进度已经接上。如果出现冲突，先比较双方，确认后选择刚上传的云端进度。
@@ -626,7 +644,7 @@ Dream Orbs 从 1.0.5 起改为解锁后每累计在线游戏 1 小时获得 1 �
 
 ### 16.9 Chrome 网页、原官方客户端仍然能用
 
-**Chrome 可以使用。** 用 Chrome 或 Edge 访问 **https://play.ggzz.fun** 都是同一套网页版云存档，浏览器之间的本地存档和登录各自独立。只需要桌面图标和独立网页窗口时，也可以使用浏览器提供的“安装为应用”功能；这个方式仍加载网站，离线能力不等于这里的本地桌面客户端。
+**Chrome 可以使用。** 用 Chrome 或 Edge 访问 **https://YOUR_GAME_HOST** 都是同一套网页版云存档，浏览器之间的本地存档和登录各自独立。只需要桌面图标和独立网页窗口时，也可以使用浏览器提供的“安装为应用”功能；这个方式仍加载网站，离线能力不等于这里的本地桌面客户端。
 
 原官方客户端仍可通过普通 `.txt` 手动交换进度：官方 **Download Save** 导出后，在新客户端或网页 **Import Save** 导入；反方向也一样，先 **导出本地备份**，再去官方客户端导入。每次先备份旧档，确认游戏数据版本兼容。它本身不会自动接入你的 GitHub 云档；以后主要使用新客户端和自建网页，可以减少重复手工转档。
 

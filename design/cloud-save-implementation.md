@@ -1,22 +1,22 @@
 # GitHub 私有仓库云存档：实现与验收记录
 
-更新日期：2026-09-28。游戏版本：0.10.26。目标地址：play.ggzz.fun。
+更新日期：2026-09-28。游戏版本：0.10.26。目标地址：YOUR_GAME_HOST。
 
 ## 交付状态
 
-第一版云存档代码、配置工具、操作手册和本地验证已完成；随后根据用户要求，将 Access 邮箱验证码改为游戏专用密码。初次密码版本交付时没有代用户创建资源或部署。**用户随后已完成 play.ggzz.fun 发布，Cloudflare 部署记录和 GAME_AUTH、GITHUB_SAVE_TOKEN 两项 Secret 名称已核实存在，未读取 Secret 值。** 用户截图显示已进入游戏，但云存档提示 GitHub 无法连接；已在真实 Worker 运行时复现并修复代码兼容问题，修复版也已成功发布，处理记录见下一节。Secret 存在与网页可用均不能替代 GitHub 权限和真实同步验收。
+第一版云存档代码、配置工具、操作手册和本地验证已完成；随后根据用户要求，将 Access 邮箱验证码改为游戏专用密码。初次密码版本交付时没有代用户创建资源或部署。**用户随后已完成 YOUR_GAME_HOST 发布，Cloudflare 部署记录和 GAME_AUTH、GITHUB_SAVE_TOKEN 两项 Secret 名称已核实存在，未读取 Secret 值。** 用户截图显示已进入游戏，但云存档提示 GitHub 无法连接；已在真实 Worker 运行时复现并修复代码兼容问题，修复版也已成功发布，处理记录见下一节。Secret 存在与网页可用均不能替代 GitHub 权限和真实同步验收。
 
 本地测试使用独立临时浏览器资料和生成的测试存档，没有读取或替换用户真实进度。
 
 ## 2026-09-28：三项自用玩法发布
 
-用户明确授权后，已将优化地牢助手寻路、固定道具基础价、助手服务费默认原价的 1% 发布到现有 `play.ggzz.fun`。先前交付说明中的“源码已实现、网页未部署”状态至此结束。功能入口为 **Start Menu → Settings → Gameplay → 自用玩法**；寻路和固定价默认保留官方模式，需要手动开启，服务费默认系数为 `0.01`，门票原价。
+用户明确授权后，已将优化地牢助手寻路、固定道具基础价、助手服务费默认原价的 1% 发布到现有 `YOUR_GAME_HOST`。先前交付说明中的“源码已实现、网页未部署”状态至此结束。功能入口为 **Start Menu → Settings → Gameplay → 自用玩法**；寻路和固定价默认保留官方模式，需要手动开启，服务费默认系数为 `0.01`，门票原价。
 
 | 项目 | 结果 |
 | --- | --- |
 | 已发布源码提交 | `58ccd0cbb0794d6af32af6caf63de760e5ab8bfc` |
 | 部署命令 | `npm run cloud:deploy`，沿用现有 `wrangler.local.json`，退出码 0 |
-| Worker 与域名 | `pokeclicker-cloud-save`；`play.ggzz.fun (custom domain)` |
+| Worker 与域名 | `pokeclicker-cloud-save`；`YOUR_GAME_HOST (custom domain)` |
 | Cloudflare 版本 ID | `5ca52d14-1c10-4a7c-928a-a06e2b6120e0` |
 | 更新的静态资产 | `index.html`、`scripts/script.min.js`、`scripts/modules.min.js`、`package.json`，Wrangler 确认上传 4 项 |
 | 本地发布来源核对 | 四项网页文件 SHA-256 与生产 build 一致；按既有离线转换规则处理后，与已通过 17 项成品流程的 EXE 内资源一致 |
@@ -32,7 +32,7 @@
 
 ## 上线后的 GitHub 连接故障
 
-2026-09-20，用户确认在 https://play.ggzz.fun 看到“GitHub 暂时无法连接，本地进度仍保留”。核查 Cloudflare 部署和 Secret 名称后，在 Miniflare/workerd 运行时复现了两处错误：
+2026-09-20，用户确认在 https://YOUR_GAME_HOST 看到“GitHub 暂时无法连接，本地进度仍保留”。核查 Cloudflare 部署和 Secret 名称后，在 Miniflare/workerd 运行时复现了两处错误：
 
 1. GithubStore 将原生 fetch 保存为对象属性，再以 this.fetcher 调用，导致 Illegal invocation；Node 下的假 fetch 没有真实运行时的接收者约束，旧测试未发现。
 2. 修正调用上下文后，redirect: error 又被该 Worker 运行时拒绝。应使用 manual 并显式拒绝 3xx，不能用 follow 向可能变化的目标继续发送 Authorization。
@@ -48,7 +48,7 @@
 | Worker strict TypeScript | 通过 |
 | Worker 自动测试 | **48/48 通过**，包含新增真实 workerd 运行时回归 |
 | Wrangler dry-run | 通过；扫描 8,604 个静态资源条目，Worker 打包约 65.16 KiB |
-| 实际部署 | 成功发布 Worker pokeclicker-cloud-save，自定义域名 play.ggzz.fun |
+| 实际部署 | 成功发布 Worker pokeclicker-cloud-save，自定义域名 YOUR_GAME_HOST |
 | 发布版本 | 7543d032-ad6a-4c5f-ae64-4d8eb25aa4e1 |
 | 前端资产 | Wrangler 显示 No updated asset files to upload；本次未修改游戏资产 |
 | 真实 GitHub 连接与首次上传 | 用户补建分支、修正 token 的私有仓库权限后，截图显示“已关联”“云端已确认保存”，云端保存时间为 2026/9/20 17:50:52；未直接读取用户真实存档内容 |
@@ -183,9 +183,9 @@
 
 ## 已上线后的配置保留与真实验收
 
-- ggzz.fun 接入已由用户完成；确认 Cloudflare 保留根域、clw、memos 三条各自的原 DNS 记录。
+- 根域名接入已由用户完成；确认 Cloudflare 保留根域及其他业务各自的原 DNS 记录，实际主机名和记录值只在本地保存。
 - 现有 GitHub 仓库和分支保持不变；已确认 GITHUB_SAVE_TOKEN Secret 名称存在，真实有效期和权限以成功连接、上传验收为准。
-- 不再开通 Zero Trust。如已创建 Access 应用，仅解除 play.ggzz.fun 的旧邮箱门禁，保留其他业务规则。
+- 不再开通 Zero Trust。如已创建 Access 应用，仅解除 YOUR_GAME_HOST 的旧邮箱门禁，保留其他业务规则。
 - 网站已发布、两项 Secret 已存在；这次代码修复只需更新 Worker，无需重跑向导或密钥生成命令。
 - 保存游戏密码到密码管理器，保留 wrangler.local.json 和 CLOUD_SLOT_ID；无需团队地址、AUD 或允许邮箱。
 - 按手册在真实两台设备完成首次上传、恢复和切换，确认后再开启自动同步。
@@ -200,7 +200,7 @@
 
 ## Windows 本地云存档客户端
 
-用户选择“游戏文件保存在电脑，支持离线，联网后复用当前云存档”的桌面方案。应用名称 **Pokeclicker Cloud**，应用 ID **fun.ggzz.pokeclicker.cloud**，桌面外壳版本 **1.0.0**，包内游戏版本 **0.10.26**，交付目标为 Windows x64。
+用户选择“游戏文件保存在电脑，支持离线，联网后复用当前云存档”的桌面方案。应用名称 **Pokeclicker Cloud**，应用 ID **YOUR_DESKTOP_APP_ID**，桌面外壳版本 **1.0.0**，包内游戏版本 **0.10.26**，交付目标为 Windows x64。
 
 桌面客户端已完成实现、打包和运行验收。桌面实现边界如下，实际验证范围见后面的检查记录：
 
@@ -209,7 +209,7 @@
 | 本地游戏 | Electron 加载随包生产资源，入口为 pokeclicker://game；不加载远程游戏首页，不需本机 HTTP 服务 |
 | 离线资源 | 翻译走随包 locales，Bootswatch 4 主题随包，去掉远程字体依赖并使用系统字体；渲染进程不直接联网 |
 | 数据隔离 | 独立 userData 为 %APPDATA%\\PokeclickerCloud；不读取或修改官方客户端数据；安装版与 ZIP 版共用当前用户的这一目录 |
-| 网络边界 | 受限 IPC 交主进程，只请求固定 https://play.ggzz.fun 的既有白名单 API，不提供任意 URL、文件路径或请求头代理 |
+| 网络边界 | 受限 IPC 交主进程，只请求固定 https://YOUR_GAME_HOST 的既有白名单 API，不提供任意 URL、文件路径或请求头代理 |
 | 游戏登录 | 独立密码窗口输入现有游戏密码；成功会话用 Windows safeStorage 加密保存，明文密码不落盘、不写日志；系统加密不可用时只保留内存会话 |
 | 本机访问 | 可以不登录云端直接玩本地档；游戏密码只保护云端访问，不锁定应用、不加密本地游戏存档；能使用当前 Windows 账户的人可以打开本地进度 |
 | 服务凭据 | GitHub token 继续只留在 Worker，桌面包无 token；不新增 Secret，不修改已有分支、槽位和 Origin 保护 |

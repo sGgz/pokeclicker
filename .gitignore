@@ -15,6 +15,7 @@ coverage/
 .stylelintcache
 
 # Private cloud-save configuration and local runtime data
+.local/
 cloud-save-worker/.dev.vars*
 cloud-save-worker/.env*
 cloud-save-worker/.wrangler/

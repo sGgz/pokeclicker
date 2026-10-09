@@ -8,10 +8,10 @@
 - 未满 600 秒的进度保存在原 `dream-orbs` 存档模块的 `onlineTime` 字段中，刷新及退出后续接；旧存档默认从 0 开始。离线每小时 1 个、单次最多 24 个的规则保留。
 - Dream Orbs 弹窗展示产出规则及累计秒数。游戏版本及更新日志升至 `0.10.27`。
 - 源码提交：`ee5a5675b`。218 项游戏测试、ESLint、Stylelint、生产构建，以及 Worker 类型检查和 48 项测试通过。
-- 网页已发布到 `https://play.ggzz.fun`，Cloudflare Version ID：`227e032b-89ca-4825-99ec-2a2ddd18ee8b`；上传 4 个变更静态资源。未登录首页返回 303，登录保护仍生效。未使用用户真实存档做线上游玩验收。
+- 网页已发布到 `https://YOUR_GAME_HOST`，Cloudflare Version ID：`227e032b-89ca-4825-99ec-2a2ddd18ee8b`；上传 4 个变更静态资源。未登录首页返回 303，登录保护仍生效。未使用用户真实存档做线上游玩验收。
 - 本次发布为网页更新，已有桌面安装包需要重新构建才包含该功能。
 
-> 日期：2026-09-28。状态：三项功能已在源码实现，并已部署到 play.ggzz.fun；未读取、上传或迁移用户真实存档，真实两台设备往返仍需用户验收。
+> 日期：2026-09-28。状态：三项功能已在源码实现，并已部署到 YOUR_GAME_HOST；未读取、上传或迁移用户真实存档，真实两台设备往返仍需用户验收。
 > 代码核查起点：提交 `08083ee05209424a2542d375e6672fc05ebc7fad`，游戏 `0.10.26`。本文记录当前实现及发布边界。
 > 本次线上发布：代码 `58ccd0cbb`；Worker `pokeclicker-cloud-save`；Cloudflare Version ID `5ca52d14-1c10-4a7c-928a-a06e2b6120e0`。`cloud:deploy` 成功退出并确认自定义域名绑定，上传 4 个变更静态资源；发布回执不代替用户登录后的游玩与真实云同步验收。
 > 目标：提高自用体验，同时控制合并官方更新、旧存档导入、网页与桌面同步的维护成本。本文依据当前仓库，不代表未来官方版本的兼容承诺。
@@ -418,7 +418,7 @@ Windows x64 安装包、完整 ZIP 和可直接运行的程序位于 `output/des
 
 发布前通过 227 项游戏测试、ESLint、Stylelint、29 项桌面测试、Worker 类型检查与 48 项测试、生产构建和 Cloudflare dry-run。实际打包 EXE 已核对运行版本为 1.0.3，并通过 21 项隔离存档验收，涵盖新玩法、离线运行、跨端恢复、同步冲突与备份导入导出；没有读取或改写用户真实存档。
 
-网页已部署到 `https://play.ggzz.fun`，Worker 为 `pokeclicker-cloud-save`，Cloudflare Version ID 为 `80afd748-2bc8-4ff4-8463-a41dca26b12b`，部署列表确认 100% 流量。此次更新了 `index.html`、`script.min.js`、`modules.min.js` 三个静态资源。部署后登录页返回 HTTP 200，未登录的云存档状态接口返回预期的 HTTP 401 / `LOGIN_REQUIRED`；真实用户存档的两设备往返仍由用户在更新全部客户端后确认。
+网页已部署到 `https://YOUR_GAME_HOST`，Worker 为 `pokeclicker-cloud-save`，Cloudflare Version ID 为 `80afd748-2bc8-4ff4-8463-a41dca26b12b`，部署列表确认 100% 流量。此次更新了 `index.html`、`script.min.js`、`modules.min.js` 三个静态资源。部署后登录页返回 HTTP 200，未登录的云存档状态接口返回预期的 HTTP 401 / `LOGIN_REQUIRED`；真实用户存档的两设备往返仍由用户在更新全部客户端后确认。
 
 ## 16. 普通任务按类型独立循环与维生素标签筛选（2026-10-06）
 
@@ -460,7 +460,7 @@ Windows x64 安装包 `PokeclickerCloud-Setup-1.0.4.exe`、免安装完整 ZIP `
 
 发布检查通过 243 项游戏测试、ESLint、Stylelint、29 项桌面测试、Worker 类型检查与 48 项测试、生产网页构建和 Cloudflare dry-run。随后启动实际打包的 EXE，核对运行版本为 1.0.4，并通过全部 24 项隔离验收，涵盖单条任务按钮、自动领奖续接、旧档补奖去重、维生素标签筛选、最小化运行、跨端恢复、同步冲突及备份往返。未读取或写入真实用户存档。
 
-网页版 `https://play.ggzz.fun` 已部署同一份构建，Worker 为 `pokeclicker-cloud-save`，Cloudflare Version ID 为 `18e8b4c9-719a-49b3-a3cb-ddfa9748c796`，部署列表确认 100% 流量。此次上传 3 个变更静态资源。部署后登录页返回 HTTP 200，未登录的云存档状态接口返回预期 HTTP 401 / `LOGIN_REQUIRED`。网页发布与安装包生成均已完成，真实两台设备同步仍按手册在关闭旧端、统一更新后核对。
+网页版 `https://YOUR_GAME_HOST` 已部署同一份构建，Worker 为 `pokeclicker-cloud-save`，Cloudflare Version ID 为 `18e8b4c9-719a-49b3-a3cb-ddfa9748c796`，部署列表确认 100% 流量。此次上传 3 个变更静态资源。部署后登录页返回 HTTP 200，未登录的云存档状态接口返回预期 HTTP 401 / `LOGIN_REQUIRED`。网页发布与安装包生成均已完成，真实两台设备同步仍按手册在关闭旧端、统一更新后核对。
 
 ## 18. Dream Orbs 在线获取（1.0.5）
 
@@ -478,7 +478,7 @@ Windows x64 安装包 `PokeclickerCloud-Setup-1.0.4.exe`、免安装完整 ZIP `
 
 258 项游戏测试（含新增 15 项 Dream Orbs 测试）、ESLint、Stylelint、29 项桌面测试、云存档服务类型检查及 48 项测试、生产网页构建和部署预检查全部通过。实际打包 EXE 核对版本为 1.0.5，27 项隔离验收通过，覆盖解锁前不计时、旧档余额保留、离线不发宝珠、前台和最小化在线产出、倒计时显示、重启与桌面到网页进度恢复，以及既有任务和同步流程。没有未捕获的 renderer 错误，未读取或修改真实用户存档。
 
-网页版 `https://play.ggzz.fun` 已部署同一份游戏构建，Cloudflare Version ID 为 `bec6dca3-c495-4ab2-995a-6e638a173f22`，部署列表确认 100% 流量。线上登录页返回 HTTP 200，未登录云存档状态接口返回预期 HTTP 401 / `LOGIN_REQUIRED`。升级需关闭旧客户端，并配套使用 1.0.5 与新版网页，以保留新增在线计时字段。
+网页版 `https://YOUR_GAME_HOST` 已部署同一份游戏构建，Cloudflare Version ID 为 `bec6dca3-c495-4ab2-995a-6e638a173f22`，部署列表确认 100% 流量。线上登录页返回 HTTP 200，未登录云存档状态接口返回预期 HTTP 401 / `LOGIN_REQUIRED`。升级需关闭旧客户端，并配套使用 1.0.5 与新版网页，以保留新增在线计时字段。
 
 ## 19. 合并到 develop（2026-10-08）
 
