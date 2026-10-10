@@ -28,7 +28,7 @@ async function main(args = process.argv.slice(2), {
             + '查看玩家：cloud-windows.cmd players list\n'
             + '重置密码：cloud-windows.cmd players reset\n'
             + '其他命令：' + COMMANDS.join('、') + '；version 查看所选 Node/npm 版本。\n'
-            + 'CMD 中直接运行；Git Bash 的 mintty 窗口运行密码命令时，可使用 winpty ./cloud-windows.cmd players init。\n');
+            + 'CMD 中直接运行；Git Bash 的 mintty 窗口可用 winpty node cloud-save-worker/scripts/windows.cjs players init。\n');
         return 0;
     }
     const [command, ...forwarded] = args;

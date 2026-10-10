@@ -14,7 +14,7 @@ cloud-windows.cmd players init
 cloud-windows.cmd players add
 ```
 
-在 Git Bash 的 mintty 窗口中，原生 Node 的输入输出可能不被识别为交互终端。密码操作使用 `winpty ./cloud-windows.cmd players init`、`winpty ./cloud-windows.cmd players add`；也可以改用 Windows CMD。不要重定向密码命令的输出。
+在 Git Bash 的 mintty 窗口中，原生 Node 的输入输出可能不被识别为交互终端。密码操作使用 `winpty node cloud-save-worker/scripts/windows.cjs players init`、`winpty node cloud-save-worker/scripts/windows.cjs players add`；这是同一自动选择 Node 24 的入口，通过 node.exe 启动，避免 winpty 直接启动批处理文件的兼容问题。也可以改用 Windows CMD。不要重定向密码命令的输出。
 
 其他云命令同样可用：`cloud-windows.cmd setup`、`cloud-windows.cmd login`、`cloud-windows.cmd build`、`cloud-windows.cmd deploy`、`cloud-windows.cmd check`、`cloud-windows.cmd preview`。已有 Node.js 24 环境仍可使用下文原来的 npm 命令。
 
