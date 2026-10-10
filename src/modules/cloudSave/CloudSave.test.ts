@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CloudApi, { CloudApiError } from './api';
 import CloudSave from './CloudSave';
 import { SyncEngine } from './SyncEngine';
-import { emptyState, type StateStorage } from './storage';
+import { CloudStorage, emptyState, type StateStorage } from './storage';
 import Notifier from '../notifications/Notifier';
 import type { DesktopBridge } from './desktop';
 
@@ -30,6 +30,25 @@ afterEach(() => {
 });
 
 describe('password session API', () => {
+    it('reads identity separately from repository availability and validates the player fields', async () => {
+        const identity = { playerId: 'a50115bd-2634-40aa-a069-d7d6d7d5e47c', playerName: '朋友', primaryPlayerId: 'player', slotId: slot };
+        const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(identity), { headers: { 'Content-Type': 'application/json' } }));
+        vi.stubGlobal('fetch', fetchMock);
+        await expect(new CloudApi().identity()).resolves.toEqual(identity);
+        expect(fetchMock).toHaveBeenCalledWith('/api/cloud-save/identity', expect.objectContaining({ credentials: 'same-origin' }));
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({ ...identity, playerId: '../other' }), { headers: { 'Content-Type': 'application/json' } }));
+        await expect(new CloudApi().identity()).rejects.toThrow('玩家身份无效');
+    });
+
+    it('falls back to the original player only when an older deployment lacks the identity endpoint', async () => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(new Response('{"code":"NOT_FOUND"}', { status: 404, headers: { 'Content-Type': 'application/json' } }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ slotId: slot }), { headers: { 'Content-Type': 'application/json' } }));
+        vi.stubGlobal('fetch', fetchMock);
+        await expect(new CloudApi().identity()).resolves.toMatchObject({ playerId: 'player', slotId: slot });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
     it('reports expiration without navigating or refreshing the active game', async () => {
         const navigate = vi.fn();
         const reload = vi.fn();
@@ -126,6 +145,10 @@ describe('logout preserves local progress', () => {
         CloudSave['blocked'] = '';
         CloudSave['stopped'] = false;
         CloudSave['loginRequired'] = false;
+        CloudSave['profileId'] = 'player';
+        CloudSave['retryAt'] = 0;
+        CloudSave['lastAttempt'] = 0;
+        CloudSave['failures'] = 0;
         CloudSave['writer'] = true;
         CloudSave['writerRequest'] = Promise.resolve(true);
         CloudSave['captureQueue'] = Promise.resolve();
@@ -210,6 +233,7 @@ describe('logout preserves local progress', () => {
     });
 
     it('pauses automatic retries on expiration until a connection check succeeds', async () => {
+        vi.spyOn(CloudApi.prototype, 'identity').mockResolvedValue({ playerId: 'player', playerName: '我', primaryPlayerId: 'player', slotId: slot });
         const status = vi.spyOn(CloudApi.prototype, 'status').mockRejectedValue(new CloudApiError(401, 'LOGIN_REQUIRED', 'please sign in'));
         await CloudSave['action']('check');
         expect(CloudSave['loginRequired']).toBe(true);
@@ -218,6 +242,57 @@ describe('logout preserves local progress', () => {
         await CloudSave['action']('check');
         expect(CloudSave['loginRequired']).toBe(false);
         expect(CloudSave.canSave()).toBe(true);
+    });
+
+    it('saves and pauses the old player before switching profiles, without uploading old progress', async () => {
+        const reload = vi.fn();
+        vi.stubGlobal('location', { reload });
+        const identity = { playerId: 'a50115bd-2634-40aa-a069-d7d6d7d5e47c', playerName: '朋友', primaryPlayerId: 'player', slotId: 'b50115bd-2634-40aa-a069-d7d6d7d5e47c' };
+        vi.spyOn(CloudApi.prototype, 'identity').mockResolvedValue(identity);
+        const upload = vi.spyOn(CloudApi.prototype, 'upload');
+        const select = vi.fn(async () => {
+            expect(localStorage.getItem('save')).toContain('123');
+            expect(stopGame).toHaveBeenCalledOnce();
+            expect(CloudSave.canSave()).toBe(false);
+        });
+        CloudSave['profiles'] = { selectProfile: select } as unknown as CloudStorage;
+        await CloudSave['action']('upload');
+        expect(select).toHaveBeenCalledWith(identity.playerId, 'player');
+        expect(reload).toHaveBeenCalledOnce();
+        expect(upload).not.toHaveBeenCalled();
+    });
+
+    it('keeps the active profile when saving old progress fails during an identity switch', async () => {
+        const reload = vi.fn();
+        vi.stubGlobal('location', { reload });
+        vi.spyOn(CloudApi.prototype, 'identity').mockResolvedValue({ playerId: 'a50115bd-2634-40aa-a069-d7d6d7d5e47c', playerName: '朋友', primaryPlayerId: 'player', slotId: slot });
+        const select = vi.fn();
+        CloudSave['profiles'] = { selectProfile: select } as unknown as CloudStorage;
+        saveLocal.mockImplementation(() => { throw new Error('quota'); });
+        await CloudSave['action']('check');
+        expect(select).not.toHaveBeenCalled();
+        expect(stopGame).not.toHaveBeenCalled();
+        expect(reload).not.toHaveBeenCalled();
+        expect(CloudSave['profileId']).toBe('player');
+    });
+
+    it('does not install a previously displayed conflict after another player logs in', async () => {
+        const reload = vi.fn();
+        vi.stubGlobal('location', { reload });
+        vi.spyOn(CloudApi.prototype, 'identity').mockResolvedValue({ playerId: 'a50115bd-2634-40aa-a069-d7d6d7d5e47c', playerName: '朋友', primaryPlayerId: 'player', slotId: slot });
+        const stage = vi.spyOn(CloudSave as any, 'stage');
+        CloudSave['profiles'] = { selectProfile: vi.fn() } as unknown as CloudStorage;
+        await CloudSave['action']('remote');
+        expect(reload).toHaveBeenCalledOnce();
+        expect(stage).not.toHaveBeenCalled();
+    });
+
+    it('refuses to start from partial local data when profile initialization failed', async () => {
+        CloudSave['engine'] = undefined;
+        CloudSave['blocked'] = '玩家切换中断';
+        await expect(CloudSave.prepareStart('', '0.10.27')).resolves.toBe(false);
+        expect(CloudSave.canSelectSaves()).toBe(false);
+        expect(document.getElementById('cloud-save-status').textContent).toContain('玩家切换中断');
     });
 
     describe('desktop lifecycle', () => {

@@ -208,3 +208,60 @@ test('password CLI refuses non-interactive invocation without displaying credent
         return true;
     });
 });
+
+const playerTools = await import(new URL('../scripts/players.mjs', import.meta.url).href);
+
+test('multi-player migration retains the original password verifier and cloud slot', () => {
+    const { password, auth: old } = passwordTools.createGameCredentials();
+    const slot = '66cf8d51-2bac-4a66-a608-5f08a77ed50a';
+    const registry = playerTools.initializePlayers(slot, '我', password);
+    assert.equal(registry.version, 2);
+    assert.equal(registry.players[0].id, 'player');
+    assert.equal(registry.players[0].slotId, slot);
+    assert.equal(registry.players[0].passwordHash, old.passwordHash);
+    assert.ok(!JSON.stringify(registry).includes(password));
+    assert.throws(() => playerTools.initializePlayers(slot, '我', 'short'));
+});
+
+test('adding and rotating a player preserves every existing identity and does not mutate input', () => {
+    const mine = playerTools.initializePlayers('66cf8d51-2bac-4a66-a608-5f08a77ed50a', '我', passwordTools.createGameCredentials().password);
+    const added = playerTools.changePlayer(mine, '朋友');
+    assert.equal(mine.players.length, 1);
+    assert.deepEqual(added.auth.players[0], mine.players[0]);
+    assert.notEqual(added.player.slotId, mine.players[0].slotId);
+    assert.match(added.password, /^[A-Za-z0-9_-]{32}$/);
+    const rotated = playerTools.changePlayer(added.auth, undefined, added.player.id);
+    assert.equal(rotated.player.id, added.player.id);
+    assert.equal(rotated.player.slotId, added.player.slotId);
+    assert.equal(rotated.player.name, '朋友');
+    assert.notEqual(rotated.password, added.password);
+    assert.notEqual(rotated.player.sessionKey, added.player.sessionKey);
+    assert.deepEqual(rotated.auth.players[0], mine.players[0]);
+    assert.ok(!JSON.stringify(rotated.auth).includes(rotated.password));
+    assert.throws(() => playerTools.changePlayer(mine, ''));
+    assert.throws(() => playerTools.changePlayer(mine, undefined, 'missing'));
+});
+
+test('player CLI refuses non-interactive execution before reading secrets', async () => {
+    await assert.rejects(exec(process.execPath, [fileURLToPath(new URL('../scripts/players.mjs', import.meta.url)), 'add']), error => {
+        const failure = error as Error & { stdout: string; stderr: string };
+        assert.equal(failure.stdout, '');
+        assert.match(failure.stderr, /请在本机交互终端/);
+        return true;
+    });
+});
+
+test('migration validates the old password at the fixed origin without following redirects or retaining the session', async () => {
+    const password = passwordTools.createGameCredentials().password;
+    await playerTools.verifyExistingPassword(password, 'https://game.example', async (url: string, init: RequestInit) => {
+        assert.equal(url, 'https://game.example/auth/login');
+        assert.equal(init.redirect, 'manual');
+        assert.equal((init.headers as any).Origin, 'https://game.example');
+        assert.equal(new URLSearchParams(String(init.body)).get('password'), password);
+        return new Response(null, { status: 303, headers: { Location: '/login?returnTo=%2F' } });
+    });
+    for (const status of [401, 429, 503]) {
+        await assert.rejects(playerTools.verifyExistingPassword(password, 'https://game.example', async () => new Response(null, { status })));
+    }
+    await assert.rejects(playerTools.verifyExistingPassword(password, 'https://game.example', async () => new Response(null, { status: 303, headers: { Location: 'https://evil.example' } })));
+});

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stdin, stdout } from 'node:process';
@@ -48,6 +48,15 @@ export async function runPasswordSetup({
 } = {}) {
     if (!input.isTTY || !output.isTTY) {
         throw new Error('请在自己的 cmd 交互窗口运行 npm run cloud:password；请勿重定向输出或通过聊天记录运行，以免泄露游戏密码。');
+    }
+    for (const file of ['cloud-players.json', 'cloud-players.pending.json']) {
+        try {
+            await access(new URL('../../.local/' + file, import.meta.url));
+        } catch (error) {
+            if (error.code === 'ENOENT') continue;
+            throw error;
+        }
+        throw new Error('已启用多人存档或有待处理玩家配置。请使用 npm run cloud:players -- reset 单独重置玩家密码；不能覆盖为单人配置。');
     }
     try { await readFile(config, 'utf8'); } catch {
         throw new Error('没有找到本机配置。请先运行 npm run cloud:setup，再按手册完成 cloud:login 和 cloud:deploy。');

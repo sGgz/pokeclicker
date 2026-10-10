@@ -8,6 +8,8 @@ let player;
  * Start the application when all html elements are loaded.
  */
 document.addEventListener('DOMContentLoaded', async () => {
+    // Select the player's local data before loading default settings or save cards.
+    await CloudSave.initialize('$VERSION');
     try {
         Settings.loadDefault();
         document.body.className = `no-select ${Settings.getSetting('theme').observableValue()} ${Settings.getSetting('backgroundImage').observableValue()}`;
@@ -18,8 +20,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('use-our-client-message').style.display = 'block';
     }
     // Load list of saves
-    await CloudSave.initialize('$VERSION');
-    SaveSelector.loadSaves();
+    if (CloudSave.canSelectSaves()) {
+        SaveSelector.loadSaves();
+    }
 });
 
 // Nested modals can be opened while they are in the middle of hiding.

@@ -19,6 +19,13 @@ export interface SaveApi {
     upload(slotId: string, request: UploadRequest): Promise<RemoteSave>;
 }
 
+export interface CloudIdentity {
+    playerId: string;
+    playerName: string;
+    primaryPlayerId: string;
+    slotId: string;
+}
+
 export default class CloudApi implements SaveApi {
     private async request(path: string, init: RequestInit = {}): Promise<unknown> {
         const controller = new AbortController();
@@ -75,6 +82,31 @@ export default class CloudApi implements SaveApi {
             throw new Error('云存档配置无效。');
         }
         return value.slotId;
+    }
+
+    async identity(): Promise<CloudIdentity> {
+        let value;
+        try {
+            value = await this.request('/api/cloud-save/identity');
+        } catch (error) {
+            if (!(error instanceof CloudApiError) || error.code !== 'NOT_FOUND') {
+                throw error;
+            }
+            value = await this.request('/api/cloud-save/status');
+        }
+        if (!isRecord(value) || !isUuid(value.slotId)) {
+            throw new Error('云存档配置无效。');
+        }
+        const validId = (id: unknown) => id === 'player' || isUuid(id);
+        // Older deployments expose just one slot, which belongs to the original player.
+        if (value.playerId === undefined && value.primaryPlayerId === undefined) {
+            return { playerId: 'player', primaryPlayerId: 'player', playerName: '我的存档', slotId: value.slotId };
+        }
+        if (!validId(value.playerId) || !validId(value.primaryPlayerId)
+            || typeof value.playerName !== 'string' || !value.playerName.trim() || value.playerName.length > 40) {
+            throw new Error('云存档玩家身份无效。');
+        }
+        return value as unknown as CloudIdentity;
     }
 
     async logout(): Promise<void> {

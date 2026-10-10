@@ -33,6 +33,8 @@ export default class CloudSave {
     private static captureQueue: Promise<void> = Promise.resolve();
     private static stopped = false;
     private static loginRequired = false;
+    private static profiles: CloudStorage;
+    private static profileId: string;
 
     static initialize(version?: string): Promise<void> {
         if (version) {
@@ -62,8 +64,26 @@ export default class CloudSave {
             void this.action('automatic');
         });
         try {
-            this.storage = new CloudStorage();
+            this.profiles = new CloudStorage();
+            let identity;
+            try {
+                identity = await this.api.identity();
+            } catch (error) {
+                if (!(error instanceof CloudApiError)) {
+                    throw error;
+                }
+                // Offline desktop play continues under the last local identity.
+                this.loginRequired = error.code === 'LOGIN_REQUIRED';
+            }
+            await this.requireWriter();
+            this.profileId = identity?.playerId || await this.profiles.getProfile() || 'player';
+            await this.profiles.selectProfile(this.profileId, identity?.primaryPlayerId || 'player');
+            this.storage = new CloudStorage(this.profileId === (identity?.primaryPlayerId || 'player') ? undefined : this.profileId);
             this.engine = new SyncEngine(this.storage, this.api, await this.storage.getState());
+            if (identity) {
+                this.serverSlot = identity.slotId;
+                this.showPlayer(identity.playerName);
+            }
             const journal = await this.storage.getJournal();
             if (journal) {
                 await this.requireWriter();
@@ -101,6 +121,17 @@ export default class CloudSave {
         if (element) {
             element.textContent = message;
         }
+    }
+
+    private static showPlayer(name: string): void {
+        const element = document.getElementById('cloud-save-player');
+        if (element) {
+            element.textContent = name;
+        }
+    }
+
+    static canSelectSaves(): boolean {
+        return !this.blocked;
     }
 
     private static errorMessage(error: unknown): string {
@@ -263,15 +294,15 @@ export default class CloudSave {
 
     private static async prepare(key: string, version: string): Promise<boolean> {
         await this.initialize();
+        if (this.blocked) {
+            throw new Error(this.blocked);
+        }
         if (!this.engine && !localStorage.getItem('pcCloud:install')) {
             if (navigator.locks) {
                 await this.requireWriter();
             }
             this.activeKey = key;
             return true;
-        }
-        if (this.blocked) {
-            throw new Error(this.blocked);
         }
         this.gameVersion = version;
         if (navigator.locks) {
@@ -398,12 +429,36 @@ export default class CloudSave {
     }
 
     private static async connection(): Promise<string> {
-        const slot = await this.api.status();
+        const identity = await this.api.identity();
+        const slot = identity.slotId;
+        if (this.profileId && identity.playerId !== this.profileId) {
+            await this.requireWriter();
+            if (this.running && this.activeKey !== null && !this.stopped) {
+                await this.current(this.activeKey);
+            }
+            await this.captureQueue;
+            await this.engine.wait();
+            if (this.blocked) {
+                throw new Error('当前玩家的本地备份未完成，请导出存档后再切换玩家。');
+            }
+            this.stopped = true;
+            if (this.running) {
+                App.game.stop();
+            }
+            await this.profiles.selectProfile(identity.playerId, identity.primaryPlayerId);
+            window.onbeforeunload = () => {};
+            location.reload();
+            throw new Error('登录玩家已切换，本地进度已分别保存，正在重新加载该玩家的存档。');
+        }
         if (this.engine.state.slotId && this.engine.state.slotId !== slot) {
             throw new Error('服务器云槽位与本机已关联槽位不同，请检查配置，不要覆盖存档。');
         }
+        if (await this.api.status() !== slot) {
+            throw new Error('登录身份在连接过程中发生变化，请重新检查连接。');
+        }
         this.serverSlot = slot;
         this.loginRequired = false;
+        this.showPlayer(identity.playerName);
         return slot;
     }
 
@@ -529,7 +584,8 @@ export default class CloudSave {
     }
 
     private static async restore(useConflict: boolean): Promise<void> {
-        const remote = useConflict ? this.engine.state.remoteConflict : await this.api.read(await this.connection());
+        await this.connection();
+        const remote = useConflict ? this.engine.state.remoteConflict : await this.api.read(this.serverSlot);
         if (!remote) {
             throw new Error('云端还没有存档，请先在有进度的设备上传。');
         }
@@ -560,6 +616,7 @@ export default class CloudSave {
     }
 
     private static async overwrite(): Promise<void> {
+        await this.connection();
         const key = this.conflictKey();
         const remote = this.engine.state.remoteConflict;
         if (!await Notifier.confirm({

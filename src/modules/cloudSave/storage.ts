@@ -68,9 +68,9 @@ export interface StateStorage {
 export class CloudStorage implements StateStorage {
     private database: Promise<IDBDatabase>;
 
-    constructor() {
+    constructor(profile?: string) {
         this.database = new Promise((resolve, reject) => {
-            const request = indexedDB.open('pokeclicker-cloud-save', 1);
+            const request = indexedDB.open('pokeclicker-cloud-save' + (profile ? ':' + profile : ''), 1);
             request.onupgradeneeded = () => {
                 request.result.createObjectStore('kv');
                 request.result.createObjectStore('backups', { autoIncrement: true });
@@ -148,6 +148,56 @@ export class CloudStorage implements StateStorage {
             transaction.oncomplete = () => resolve(request.result);
             transaction.onerror = () => reject(transaction.error);
         });
+    }
+
+    getProfile(): Promise<string | undefined> {
+        return this.get<string>('activeProfile');
+    }
+
+    // Called with the origin-wide writer lock held, before the game reads localStorage.
+    // The durable journal can replay a switch interrupted by quota failure or process exit.
+    async selectProfile(id: string, primaryId: string, local: Storage = localStorage): Promise<void> {
+        type Values = Record<string, string>;
+        type Journal = { id: string; values: Values };
+        const replace = (values: Values) => {
+            const keys = Array.from({ length: local.length }, (_, index) => local.key(index));
+            keys.filter((key) => key !== null).forEach((key) => local.removeItem(key));
+            Object.entries(values).forEach(([key, value]) => local.setItem(key, value));
+        };
+        const finish = async (journal: Journal) => {
+            replace(journal.values);
+            await this.mutate(['kv'], (transaction) => {
+                const store = transaction.objectStore('kv');
+                store.put(journal.id, 'activeProfile');
+                store.delete('profileJournal');
+            });
+        };
+        const journal = await this.get<Journal>('profileJournal');
+        if (journal) {
+            await finish(journal);
+        }
+        const active = await this.getProfile() || primaryId;
+        if (active === id) {
+            await this.mutate(['kv'], (transaction) => transaction.objectStore('kv').put(id, 'activeProfile'));
+            return;
+        }
+        const before: Values = {};
+        for (let index = 0; index < local.length; index++) {
+            const key = local.key(index);
+            if (key !== null) {
+                const value = local.getItem(key);
+                if (value !== null) {
+                    before[key] = value;
+                }
+            }
+        }
+        const next: Journal = { id, values: await this.get<Values>('profile:' + id) || {} };
+        await this.mutate(['kv'], (transaction) => {
+            const store = transaction.objectStore('kv');
+            store.put(before, 'profile:' + active);
+            store.put(next, 'profileJournal');
+        });
+        await finish(next);
     }
 }
 

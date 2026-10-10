@@ -17,7 +17,7 @@ export function loginPage(options: { returnTo: string; message?: string; loggedI
         <a class="primary" href="${target}">进入游戏</a>
         <form method="post" action="/auth/logout"><button class="secondary" type="submit">退出登录</button></form>
         <p class="hint">退出只清除当前浏览器的登录状态，不会删除本地或云端存档，也不会自动上传进度。</p>` : `
-        <p>输入部署时生成的游戏专用密码，继续你的冒险。</p>
+        <p>输入你自己的游戏专用密码，继续你的冒险。不同玩家的密码对应各自的存档。</p>
         ${options.message ? `<p class="error" role="alert">${escapeHtml(options.message)}</p>` : ''}
         <form method="post" action="/auth/login">
             <input type="hidden" name="returnTo" value="${target}">
@@ -26,7 +26,7 @@ export function loginPage(options: { returnTo: string; message?: string; loggedI
             <button class="primary" type="submit">登录游戏</button>
         </form>
         <p class="hint">登录有效期为 7 天。请使用游戏专用密码，GitHub token 不应填写在这里。</p>
-        <details><summary>忘记密码了？</summary><p>在部署电脑的项目目录运行 <code>npm run cloud:password</code> 生成新密码。所有旧登录会失效，存档会保留。</p></details>`;
+        <details><summary>忘记密码了？</summary><p>请联系网站管理员重置你自己的游戏密码。重置后需要重新登录，原存档会保留。</p></details>`;
     return new Response(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>私人游戏 · PokéClicker</title><style>
         *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#eef3f9;color:#23314b;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.65}main{width:100%;max-width:460px;background:white;border:1px solid #dce4ef;border-radius:20px;padding:36px;box-shadow:0 14px 48px #16346212}.eyebrow{color:#4960b4;font-size:12px;font-weight:700;letter-spacing:2px}h1{font-size:28px;line-height:1.3;margin:10px 0 18px}p{margin:14px 0}label{display:block;font-weight:650;margin:22px 0 8px}input[type=password]{width:100%;min-height:48px;padding:12px;border:1px solid #8997ad;border-radius:9px;font-size:16px}input:focus{outline:3px solid #bacbff;outline-offset:2px}button,.primary{display:block;width:100%;padding:12px 16px;border:0;border-radius:9px;text-align:center;font:inherit;font-weight:650;cursor:pointer;text-decoration:none}.primary{background:#3655ba;color:white;margin-top:18px}.primary:hover{background:#294392}.secondary{background:#edf1f7;color:#334566;margin-top:12px}.hint,details{font-size:13px;color:#5d6b80}.error{padding:12px;background:#fff0f0;color:#972c35;border-radius:8px}.notice{padding:12px;background:#edf8f1;color:#23663b;border-radius:8px}summary{cursor:pointer}code{overflow-wrap:anywhere}@media(max-width:420px){main{padding:24px}body{padding:16px}}
         </style></head><body><main><div class="eyebrow">POKÉCLICKER · 私人游戏</div><h1>${options.loggedIn ? '欢迎回来' : '登录你的游戏'}</h1>${content}</main></body></html>`, {

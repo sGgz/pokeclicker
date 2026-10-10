@@ -1,8 +1,10 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, decodeJwt, jwtVerify } from 'jose';
 import { ApiError } from './github';
+import { isUuid } from '../../src/modules/cloudSave/protocol';
 
 export interface AuthConfig {
     GAME_AUTH: string;
+    CLOUD_SLOT_ID?: string;
 }
 
 export interface PasswordSecret {
@@ -11,17 +13,45 @@ export interface PasswordSecret {
     sessionKey: string;
 }
 
+export interface PlayerSecret {
+    id: string;
+    name: string;
+    slotId: string;
+    passwordHash: string;
+    sessionKey: string;
+}
+
+export interface PlayersSecret {
+    version: 2;
+    primaryPlayerId: string;
+    players: PlayerSecret[];
+}
+
+type GameSecret = PasswordSecret | PlayersSecret;
+
 export const SESSION_COOKIE = '__Host-pokeclicker_session';
 export const SESSION_SECONDS = 7 * 24 * 60 * 60;
 const encoder = new TextEncoder();
-let cachedSecret: { raw: string; value: PasswordSecret } | undefined;
+let cachedSecret: { raw: string; value: GameSecret } | undefined;
 
-export function parseAuth(config: AuthConfig): PasswordSecret {
+export function parseAuth(config: AuthConfig): GameSecret {
     if (cachedSecret && cachedSecret.raw === config.GAME_AUTH) return cachedSecret.value;
     try {
         const value = JSON.parse(config.GAME_AUTH);
-        if (value?.version !== 1 || !/^[a-f0-9]{64}$/.test(value.passwordHash)
-            || !/^[A-Za-z0-9_-]{43}$/.test(value.sessionKey)) throw new Error('Invalid secret');
+        const validCredentials = (entry: PlayerSecret | PasswordSecret) => entry
+            && /^[a-f0-9]{64}$/.test(entry.passwordHash) && /^[A-Za-z0-9_-]{43}$/.test(entry.sessionKey);
+        if (value?.version === 1) {
+            if (!validCredentials(value)) throw new Error('Invalid secret');
+        } else if (value?.version === 2) {
+            if (value.primaryPlayerId !== 'player' || !Array.isArray(value.players) || !value.players.length || value.players.length > 20
+                || !value.players.every((player: PlayerSecret) => validCredentials(player)
+                    && (player.id === 'player' || isUuid(player.id)) && isUuid(player.slotId)
+                    && typeof player.name === 'string' && player.name.trim().length > 0 && player.name.length <= 40)
+                || !value.players.some((player: PlayerSecret) => player.id === value.primaryPlayerId)) throw new Error('Invalid players');
+            for (const key of ['id', 'slotId', 'passwordHash', 'sessionKey']) {
+                if (new Set(value.players.map((player: Record<string, string>) => player[key])).size !== value.players.length) throw new Error('Duplicate player');
+            }
+        } else throw new Error('Invalid version');
         cachedSecret = { raw: config.GAME_AUTH, value };
         return value;
     } catch {
@@ -29,15 +59,35 @@ export function parseAuth(config: AuthConfig): PasswordSecret {
     }
 }
 
+export function players(config: AuthConfig): PlayerSecret[] {
+    const auth = parseAuth(config);
+    return auth.version === 2 ? auth.players : [{
+        id: 'player', name: '我的存档', slotId: config.CLOUD_SLOT_ID || '',
+        passwordHash: auth.passwordHash, sessionKey: auth.sessionKey,
+    }];
+}
+
+export function primaryPlayerId(config: AuthConfig): string {
+    const auth = parseAuth(config);
+    return auth.version === 2 ? auth.primaryPlayerId : 'player';
+}
+
 // Only for the setup tool's 192-bit random passwords, NOT for human-chosen passwords.
 export async function verifyPassword(password: string, config: AuthConfig): Promise<boolean> {
-    const auth = parseAuth(config);
-    if (!/^[A-Za-z0-9_-]{32}$/.test(password)) return false;
+    return !!await authenticatePassword(password, config);
+}
+
+export async function authenticatePassword(password: string, config: AuthConfig): Promise<PlayerSecret | null> {
+    const entries = players(config);
+    if (!/^[A-Za-z0-9_-]{32}$/.test(password)) return null;
     const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(password)));
-    const expected = Uint8Array.from(auth.passwordHash.match(/../g)!, hex => parseInt(hex, 16));
-    const key = await crypto.subtle.importKey('raw', encoder.encode(auth.sessionKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
-    const signature = await crypto.subtle.sign('HMAC', key, expected);
-    return crypto.subtle.verify('HMAC', key, signature, hash);
+    const matches = await Promise.all(entries.map(async entry => {
+        const expected = Uint8Array.from(entry.passwordHash.match(/../g)!, hex => parseInt(hex, 16));
+        const key = await crypto.subtle.importKey('raw', encoder.encode(entry.sessionKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+        const signature = await crypto.subtle.sign('HMAC', key, expected);
+        return await crypto.subtle.verify('HMAC', key, signature, hash) ? entry : null;
+    }));
+    return matches.find(Boolean) || null;
 }
 
 export function sessionToken(request: Request): string | null {
@@ -48,23 +98,29 @@ export function sessionToken(request: Request): string | null {
     return token.length > 0 && token.length < 2048 ? token : null;
 }
 
-export async function verifySession(token: string, config: AuthConfig, origin: string, now = Date.now()): Promise<void> {
-    const { payload } = await jwtVerify(token, encoder.encode(parseAuth(config).sessionKey), {
-        algorithms: ['HS256'], issuer: origin, audience: 'pokeclicker-game', subject: 'player',
+export async function verifySession(token: string, config: AuthConfig, origin: string, now = Date.now()): Promise<PlayerSecret> {
+    // Decode only to select a key; no identity is trusted until signature verification succeeds.
+    const entry = players(config).find(player => player.id === decodeJwt(token).sub);
+    if (!entry) throw new Error('Unknown player');
+    const { payload } = await jwtVerify(token, encoder.encode(entry.sessionKey), {
+        algorithms: ['HS256'], issuer: origin, audience: 'pokeclicker-game', subject: entry.id,
         requiredClaims: ['exp', 'iat', 'jti', 'sub'], currentDate: new Date(now), maxTokenAge: SESSION_SECONDS,
     });
-    if (payload.v !== 1 || typeof payload.iat !== 'number' || typeof payload.exp !== 'number'
+    if ((payload.v !== 2 && !(payload.v === 1 && entry.id === 'player')) || typeof payload.iat !== 'number' || typeof payload.exp !== 'number'
         || payload.iat > Math.floor(now / 1000) || payload.exp > payload.iat + SESSION_SECONDS) {
         throw new Error('Invalid session');
     }
+    return entry;
 }
 
-export async function createSessionCookie(config: AuthConfig, origin: string, now = Date.now()): Promise<string> {
-    const token = await new SignJWT({ v: 1 }).setProtectedHeader({ alg: 'HS256' })
-        .setIssuer(origin).setAudience('pokeclicker-game').setSubject('player')
+export async function createSessionCookie(config: AuthConfig, origin: string, now = Date.now(), playerId = primaryPlayerId(config)): Promise<string> {
+    const entry = players(config).find(player => player.id === playerId);
+    if (!entry) throw new Error('Unknown player');
+    const token = await new SignJWT({ v: 2 }).setProtectedHeader({ alg: 'HS256' })
+        .setIssuer(origin).setAudience('pokeclicker-game').setSubject(entry.id)
         .setJti(crypto.randomUUID()).setIssuedAt(Math.floor(now / 1000))
         .setExpirationTime(Math.floor(now / 1000) + SESSION_SECONDS)
-        .sign(encoder.encode(parseAuth(config).sessionKey));
+        .sign(encoder.encode(entry.sessionKey));
     return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_SECONDS}`;
 }
 

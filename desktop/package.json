@@ -1,6 +1,6 @@
 {
   "name": "pokeclicker-cloud-desktop",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Local Pokeclicker game with private cloud save sync",
   "author": "Pokeclicker contributors; private cloud desktop customization",
   "license": "ISC",

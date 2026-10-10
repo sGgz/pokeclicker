@@ -78,3 +78,58 @@ test('malformed recovery data never replaces local data', async () => {
     assert.equal(local.getItem('save'), 'original');
     assert.ok(await storage.getJournal());
 });
+
+test('switching players preserves every local slot and settings, and a new player starts empty', async () => {
+    const profiles = fixture();
+    const local = browserStorage();
+    local.setItem('save', 'original');
+    local.setItem('save2', 'second-slot');
+    local.setItem('settings', 'original-settings');
+    await profiles.selectProfile('friend', 'player', local);
+    assert.equal(local.length, 0);
+    assert.equal(await profiles.getProfile(), 'friend');
+    local.setItem('save', 'friends-save');
+    local.setItem('settings', 'friends-settings');
+    await profiles.selectProfile('player', 'player', local);
+    assert.equal(local.getItem('save'), 'original');
+    assert.equal(local.getItem('save2'), 'second-slot');
+    assert.equal(local.getItem('settings'), 'original-settings');
+    await profiles.selectProfile('friend', 'player', local);
+    assert.equal(local.getItem('save'), 'friends-save');
+    assert.equal(local.getItem('save2'), null);
+    assert.equal(local.getItem('settings'), 'friends-settings');
+});
+
+test('interrupted player switch replays the journal without adopting partial data', async () => {
+    const profiles = fixture();
+    const local = browserStorage();
+    local.setItem('save', 'mine');
+    await profiles.selectProfile('friend', 'player', local);
+    local.setItem('save', 'theirs');
+    local.setItem('settings', 'their-settings');
+    await profiles.selectProfile('player', 'player', local);
+    local.failAt = 5;
+    await assert.rejects(profiles.selectProfile('friend', 'player', local), /quota/);
+    assert.equal(await profiles.getProfile(), 'player');
+    await new CloudStorage().selectProfile('friend', 'player', local);
+    assert.equal(local.getItem('save'), 'theirs');
+    assert.equal(local.getItem('settings'), 'their-settings');
+    await profiles.selectProfile('player', 'player', local);
+    assert.equal(local.getItem('save'), 'mine');
+});
+
+test('sync state, pending uploads, backups and installation journals are isolated by player', async () => {
+    const mine = fixture();
+    const theirs = new CloudStorage('friend');
+    const state = emptyState();
+    state.autoSync = true;
+    state.localKey = 'mine';
+    await mine.saveState(state);
+    await mine.stageInstall({ key: '', before: payloadRaw(payload(1)), after: payloadRaw(payload(2)), remote: null });
+    assert.equal((await theirs.getState()).autoSync, false);
+    assert.equal((await theirs.getState()).localKey, null);
+    assert.equal(await theirs.getJournal(), undefined);
+    assert.deepEqual(await theirs.allBackups(), []);
+    assert.equal((await mine.getState()).localKey, 'mine');
+    assert.ok(await mine.getJournal());
+});
