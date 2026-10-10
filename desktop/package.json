@@ -25,6 +25,7 @@
     "executableName": "PokeclickerCloud",
     "asar": true,
     "npmRebuild": false,
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "../output/desktop"
     },

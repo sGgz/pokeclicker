@@ -49,7 +49,7 @@ Windows x64 安装包为 `PokeclickerCloud-Setup-1.0.6.exe`，完整 ZIP 为 `Po
 先备份进度并关闭正在运行的游戏，再双击 `build-windows.cmd`。脚本按顺序完成：
 
 1. 准备 Node 24。CMD 入口先检查现有 Node 是否至少为 18；符合条件但不是 24 时，自动从 Node.js 官方下载 **v24.21.0**，核对固定 SHA-256 后放在项目 `.desktop-build/runtime/`；只供本次项目构建使用，不改系统全局 Node。
-2. 对根项目、`cloud-save-worker`、`desktop` 三份依赖分别执行 `npm ci`，按锁文件重新准备，再显式执行 Electron 官方安装脚本下载运行文件。下载缓存复用，仍应保持联网；npm、Electron、打包缓存与临时文件都在项目 `.desktop-build/`。Windows 打包辅助工具默认从 npmmirror 下载，保留 electron-builder 的固定校验和验证，避免 GitHub 直连超时；已有 `ELECTRON_BUILDER_BINARIES_MIRROR` 或 npm 对应镜像环境变量时优先使用原设置。此设置仅影响辅助工具，不改变 Node.js、npm 包或 Electron 的下载配置。
+2. 对根项目、`cloud-save-worker`、`desktop` 三份依赖分别执行 `npm ci`，按锁文件重新准备，再显式执行 Electron 官方安装脚本下载运行文件。electron-builder 直接复用该步骤准备的 `desktop/node_modules/electron/dist`，避免再次下载相同版本。下载缓存复用，仍应保持联网；npm、打包工具缓存与临时文件保存在项目 `.desktop-build/`，Electron 安装器使用自己的下载缓存。Windows 打包辅助工具默认从 npmmirror 下载，保留 electron-builder 的固定校验和验证，避免 GitHub 直连超时；已有 `ELECTRON_BUILDER_BINARIES_MIRROR` 或 npm 对应镜像环境变量时优先使用原设置。此设置仅影响辅助工具，不改变 Node.js、npm 包或 Electron 的下载配置。
 3. 执行桌面测试、Worker 检查，以及包含游戏测试和检查的生产构建。
 4. 生成 Windows x64 EXE、NSIS 安装包和完整 ZIP，检查必需文件及包内版本，写出校验值与本次构建记录。
 5. 成功后自动打开本次独立输出目录：`output/desktop-builds/game-游戏版本_时间-随机后缀/`。
