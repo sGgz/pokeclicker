@@ -17,6 +17,21 @@ const DESKTOP = { version: '1.0.0' };
 const INSTALLER = `PokeclickerCloud-Setup-${DESKTOP.version}.exe`;
 const ZIP = `PokeclickerCloud-${DESKTOP.version}-win-x64.zip`;
 
+test('Windows packaging uses an accessible binary mirror and retains explicit download overrides', () => {
+    const runtime = { node: 'C:\\node24\\node.exe', npm: 'C:\\node24\\npm-cli.js' };
+    const buildDirectory = path.resolve(__dirname, '../../.desktop-build');
+    const shimDirectory = path.join(buildDirectory, 'bin');
+    const defaultEnv = childEnvironment({ PATH: 'system-node' }, runtime, buildDirectory, shimDirectory);
+    assert.equal(defaultEnv.ELECTRON_BUILDER_BINARIES_MIRROR, 'https://npmmirror.com/mirrors/electron-builder-binaries/');
+    for (const key of ['ELECTRON_BUILDER_BINARIES_MIRROR', 'npm_config_electron_builder_binaries_mirror']) {
+        const env = childEnvironment({ PATH: 'system-node', [key]: 'https://example.com/binaries/' }, runtime, buildDirectory, shimDirectory);
+        assert.equal(env.ELECTRON_BUILDER_BINARIES_MIRROR, 'https://example.com/binaries/');
+    }
+    const env = childEnvironment({ PATH: 'system-node', ELECTRON_BUILDER_BINARIES_DOWNLOAD_OVERRIDE_URL: 'https://example.com/custom' }, runtime, buildDirectory, shimDirectory);
+    assert.equal(env.ELECTRON_BUILDER_BINARIES_DOWNLOAD_OVERRIDE_URL, 'https://example.com/custom');
+    assert.equal(env.ELECTRON_BUILDER_BINARIES_ALLOW_HTTP, undefined);
+});
+
 test('Windows cloud entry is reachable without npm rejecting the bootstrap Node version', async () => {
     const root = path.resolve(__dirname, '../..');
     const { stdout, stderr } = await promisify(execFile)(process.env.ComSpec || 'cmd.exe',
