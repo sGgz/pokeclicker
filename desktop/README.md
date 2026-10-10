@@ -1,6 +1,16 @@
 # Windows 私人云存档客户端
 
-## 1.0.6 源码（2026-10-09）
+## 多玩家密码登录（2026-10-10）
+
+本次源码支持不同专用密码进入不同玩家的云存档。后台仍共用现有域名、私有存档仓库和分支，每个人拥有独立存档文件；桌面本地选档、设置、自动同步记录和恢复备份按玩家隔离。更换登录玩家会先保存当前本地进度、暂停游戏，再刷新到另一人的选档界面；离线使用最后选择的本地玩家。
+
+本次桌面包版本提升为 **1.0.7**，游戏版本保持 **0.10.27**，用于区分此前的单玩家客户端。重新打包后的安装包名为 `PokeclickerCloud-Setup-1.0.7.exe`，ZIP 名为 `PokeclickerCloud-1.0.7-win-x64.zip`；具体成品以对应输出目录中的 `打包成功.txt` 和 `SHA256SUMS.txt` 为准，旧包不会随源码修改自动更新。
+
+启用步骤见[操作手册：多玩家共用域名](../design/cloud-save-user-guide.md)。必须重新构建并更新桌面客户端；本节描述源码行为，不表示已有 1.0.6 安装包具备此功能。
+
+玩家管理已改为私有存档仓库的 `config/players.json`，不再需要本地 `.local/cloud-players.json`。这次只修改 Worker 和管理脚本，身份与云存档接口保持兼容，已包含多玩家隔离的桌面 1.0.7 可以继续使用，无需为此次迁移再次打包。
+
+## 1.0.6 历史交付（2026-10-09）
 
 客户端包版本为 `1.0.6`，游戏版本保持 `0.10.27`。新增 Battle Frontier 快速挑战和主动结算；快速挑战保留历史最高层附近的 100 层，并照顾未领取的已解锁里程碑，跳过层数不发奖励或任务进度。主动结算按本轮实际挑战区间领取 BP 和金币，暂停、重启和跨端同步保留本轮起始层数。客户端包版本与游戏版本分别维护；实际打包与网页发布结果见[发布记录](../design/private-gameplay-design.md)。
 
@@ -10,7 +20,7 @@ Windows x64 安装包为 `PokeclickerCloud-Setup-1.0.6.exe`，完整 ZIP 为 `Po
 
 本地游戏资源通过 `pokeclicker://game/` 加载；云端固定连接既有 HTTPS 后台。本文使用 `YOUR_GAME_HOST` 代指实际游戏主机名，网址从被 Git 忽略的 `.local/private-docs/deployment-record.json` 或仓库外配置记录中查阅，不要直接访问占位符。这是有离线资源的 Electron 应用，游戏逻辑在本机运行。GitHub 私库、槽位及 Worker 认证均沿用现有实现，无需另行部署后台。
 
-当前桌面程序版本为 **1.0.6**，游戏版本为 **0.10.27**。Battle Frontier 增加 `Quick Challenge`、`Finish & Claim Rewards` 和 `Pause & Save Progress`，界面实时显示可领取奖励，暂停后也能直接结算。继续包含每在线游戏 1 小时获取一个 Dream Orb、任务按类型独立循环、维生素标签筛选、Magic Ball 后期经验调整、Rocky Helmet 30 级、可配置的 4/8/12/16 孵化槽上限和独立的外部宝可梦列表筛选；详细操作见随包离线手册第九节。请配套使用本版网页与客户端，避免经旧端写回丢失 Battle Frontier 起始层数、在线宝珠进度或任务字段。
+当前源码的桌面程序版本为 **1.0.7**，游戏版本为 **0.10.27**。Battle Frontier 增加 `Quick Challenge`、`Finish & Claim Rewards` 和 `Pause & Save Progress`，界面实时显示可领取奖励，暂停后也能直接结算。继续包含每在线游戏 1 小时获取一个 Dream Orb、任务按类型独立循环、维生素标签筛选、Magic Ball 后期经验调整、Rocky Helmet 30 级、可配置的 4/8/12/16 孵化槽上限和独立的外部宝可梦列表筛选；详细操作见随包离线手册第九节。请配套使用本版网页与客户端，避免经旧端写回丢失 Battle Frontier 起始层数、在线宝珠进度或任务字段。
 
 ## 打开优化寻路和固定价格
 
@@ -41,7 +51,7 @@ Windows x64 安装包为 `PokeclickerCloud-Setup-1.0.6.exe`，完整 ZIP 为 `Po
 先备份进度并关闭正在运行的游戏，再双击 `build-windows.cmd`。脚本按顺序完成：
 
 1. 准备 Node 24。CMD 入口先检查现有 Node 是否至少为 18；符合条件但不是 24 时，自动从 Node.js 官方下载 **v24.21.0**，核对固定 SHA-256 后放在项目 `.desktop-build/runtime/`；只供本次项目构建使用，不改系统全局 Node。
-2. 对根项目、`cloud-save-worker`、`desktop` 三份依赖分别执行 `npm ci`，按锁文件重新准备，再显式执行 Electron 官方安装脚本下载运行文件。下载缓存复用，仍应保持联网；npm、Electron、打包缓存与临时文件都在项目 `.desktop-build/`。
+2. 对根项目、`cloud-save-worker`、`desktop` 三份依赖分别执行 `npm ci`，按锁文件重新准备，再显式执行 Electron 官方安装脚本下载运行文件。electron-builder 直接复用该步骤准备的 `desktop/node_modules/electron/dist`，避免再次下载相同版本。下载缓存复用，仍应保持联网；npm、打包工具缓存与临时文件保存在项目 `.desktop-build/`，Electron 安装器使用自己的下载缓存。Windows 打包辅助工具默认从 npmmirror 下载，保留 electron-builder 的固定校验和验证，避免 GitHub 直连超时；已有 `ELECTRON_BUILDER_BINARIES_MIRROR` 或 npm 对应镜像环境变量时优先使用原设置。此设置仅影响辅助工具，不改变 Node.js、npm 包或 Electron 的下载配置。
 3. 执行桌面测试、Worker 检查，以及包含游戏测试和检查的生产构建。
 4. 生成 Windows x64 EXE、NSIS 安装包和完整 ZIP，检查必需文件及包内版本，写出校验值与本次构建记录。
 5. 成功后自动打开本次独立输出目录：`output/desktop-builds/game-游戏版本_时间-随机后缀/`。

@@ -38,6 +38,10 @@ function batchQuote(value) {
 
 function childEnvironment(base, runtime, buildDirectory, shimDirectory) {
     const env = { ...base };
+    const binariesMirror = [
+        'NPM_CONFIG_ELECTRON_BUILDER_BINARIES_MIRROR', 'npm_config_electron_builder_binaries_mirror',
+        'npm_package_config_electron_builder_binaries_mirror', 'ELECTRON_BUILDER_BINARIES_MIRROR',
+    ].map(key => base[key]).find(value => typeof value === 'string' && value.trim());
     let originalPath = '';
     for (const key of Object.keys(env)) {
         if (key.toLowerCase() === 'path') { originalPath = env[key]; delete env[key]; }
@@ -49,6 +53,8 @@ function childEnvironment(base, runtime, buildDirectory, shimDirectory) {
     env.npm_config_cache = path.join(buildDirectory, 'npm-cache');
     env.ELECTRON_CACHE = path.join(buildDirectory, 'electron-cache');
     env.ELECTRON_BUILDER_CACHE = path.join(buildDirectory, 'builder-cache');
+    // Builder still verifies its pinned tool checksums; only the download host changes.
+    env.ELECTRON_BUILDER_BINARIES_MIRROR = binariesMirror || 'https://npmmirror.com/mirrors/electron-builder-binaries/';
     env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = '1';
     // npm scripts must use the selected Node even if the system's global npm belongs to Node 25/26.
     env.npm_node_execpath = runtime.node;
@@ -220,6 +226,7 @@ async function main() {
         log('\n[6/7] 检查并构建游戏资源\n');
         await npm(['run', 'cloud:build']);
         log('\n[7/7] 生成 Windows EXE、安装包和 ZIP\n');
+        log('打包工具使用镜像下载并由 electron-builder 校验，已有缓存会复用。\n');
         await npm(['run', 'package', '--', '--config.directories.output=' + output], path.join(ROOT, 'desktop'));
         checkLog();
         const indexWritten = await finishRelease(output, game, desktop, sourceRevision, logFile);
@@ -244,5 +251,5 @@ async function main() {
     }
 }
 
-module.exports = { NODE_VERSION, NODE_ZIP_SHA256, timestamp, inside, batchQuote, childEnvironment, writeShims, finishRelease, run };
+module.exports = { NODE_VERSION, NODE_ZIP_SHA256, timestamp, inside, batchQuote, childEnvironment, writeShims, finishRelease, run, resolveRuntime };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

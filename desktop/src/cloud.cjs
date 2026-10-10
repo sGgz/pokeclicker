@@ -49,7 +49,7 @@ function allowedRequest(input) {
         || typeof input.path !== 'string' || typeof input.method !== 'string') return false;
     const { path: requestPath, method, body } = input;
     if (body !== undefined && (typeof body !== 'string' || Buffer.byteLength(body, 'utf8') > MAX_BODY_BYTES)) return false;
-    if (method === 'GET') return body === undefined && (requestPath === '/api/cloud-save/status'
+    if (method === 'GET') return body === undefined && (requestPath === '/api/cloud-save/status' || requestPath === '/api/cloud-save/identity'
         || requestPath === '/api/cloud-save/slots' || SLOT_PATH.test(requestPath));
     if (method === 'POST' && requestPath === '/auth/logout') return body === undefined || body === '{}';
     if (method === 'PUT' && SLOT_PATH.test(requestPath) && typeof body === 'string') {

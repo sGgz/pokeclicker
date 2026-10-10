@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHandler, type Env } from '../src/index';
-import { SESSION_COOKIE } from '../src/auth';
+import { SESSION_COOKIE, createSessionCookie, players } from '../src/auth';
 import { ApiError, GithubStore } from '../src/github';
 import { hashPayload, validateRemote, type CloudSaveEnvelope, type RemoteSave, type SavePayload, type UploadRequest } from '../../src/modules/cloudSave/protocol';
 import { SyncEngine, decideStartup } from '../../src/modules/cloudSave/SyncEngine';
@@ -47,7 +47,7 @@ class MemoryGithub {
 }
 function service(store = new MemoryGithub()) {
     let now = Date.now();
-    return { store, advance: () => { now += 20000; }, handler: createHandler({ authenticate: async () => {}, store: () => store, now: () => now }) };
+    return { store, advance: () => { now += 20000; }, handler: createHandler({ authenticate: async (_token, config) => players(config)[0], store: () => store, now: () => now }) };
 }
 
 test('API creates a Unicode snapshot and returns a verifiable receipt', async () => {
@@ -176,7 +176,7 @@ test('GitHub permission errors are distinguished from browser login errors', asy
 test('GitHub validation errors without a changed file are not misreported as data conflicts', async () => {
     const backing = new MemoryGithub();
     const handler = createHandler({
-        authenticate: async () => {},
+        authenticate: async (_token, config) => players(config)[0],
         store: () => ({ ...backing, read: () => backing.read(), assertAvailable: () => backing.assertAvailable(),
             write: async () => { throw new ApiError(409, 'WRITE_RACE', 'GitHub 422'); } }),
     });
@@ -293,4 +293,41 @@ test('binding another local save requires explicitly enabling automatic sync aga
     await engine.setAutomatic(true);
     await engine.bind('another-local-slot', slot, null);
     assert.equal(engine.state.autoSync, false);
+});
+
+test('concurrent authenticated players create and read independent saves in one repository and branch', async () => {
+    const otherId = crypto.randomUUID();
+    const otherSlot = crypto.randomUUID();
+    const config = { ...env, GAME_AUTH: JSON.stringify({ version: 2, primaryPlayerId: 'player', players: [
+        { id: 'player', name: '我', slotId: slot, passwordHash: 'a'.repeat(64), sessionKey: 'b'.repeat(43) },
+        { id: otherId, name: '朋友', slotId: otherSlot, passwordHash: 'c'.repeat(64), sessionKey: 'd'.repeat(43) },
+    ] }) };
+    const stores = new Map([[slot, new MemoryGithub()], [otherSlot, new MemoryGithub()]]);
+    const handler = createHandler({ store: scoped => {
+        assert.equal(scoped.GITHUB_SAVE_REPO, env.GITHUB_SAVE_REPO);
+        assert.equal(scoped.GITHUB_SAVE_BRANCH, env.GITHUB_SAVE_BRANCH);
+        return stores.get(scoped.CLOUD_SLOT_ID)!;
+    } });
+    const cookies = await Promise.all(['player', otherId].map(id => createSessionCookie(config, config.ALLOWED_ORIGIN, Date.now(), id)));
+    const call = (index: number, data?: UploadRequest) => handler(new Request(config.ALLOWED_ORIGIN + '/api/cloud-save/slots/' + [slot, otherSlot][index], {
+        method: data ? 'PUT' : 'GET', headers: { Cookie: cookies[index].split(';')[0], Origin: config.ALLOWED_ORIGIN, 'Content-Type': 'application/json' },
+        ...(data ? { body: JSON.stringify(data) } : {}),
+    }), config);
+    const writes = await Promise.all([call(0, requestData(null, payload(10))), call(1, requestData(null, payload(20)))]);
+    assert.deepEqual(writes.map(response => response.status), [201, 201]);
+    for (let index = 0; index < 2; index++) {
+        const remote = await (await call(index)).json() as RemoteSave;
+        assert.equal((remote.envelope.payload.save.wallet as any).money, [10, 20][index]);
+        assert.equal(remote.envelope.slotId, [slot, otherSlot][index]);
+        const paths: string[] = [];
+        const github = new GithubStore({ ...config, CLOUD_SLOT_ID: remote.envelope.slotId }, async (input, init) => {
+            paths.push(String(input));
+            const body = JSON.parse(String(init!.body));
+            assert.equal(body.branch, env.GITHUB_SAVE_BRANCH);
+            assert.equal(JSON.parse(Buffer.from(body.content, 'base64').toString('utf8')).slotId, remote.envelope.slotId);
+            return Response.json({ content: { sha: 'e'.repeat(40) }, commit: { sha: 'f'.repeat(40) } });
+        });
+        await github.write(remote.envelope, null);
+        assert.ok(paths[0].endsWith('/contents/saves/' + remote.envelope.slotId + '.json'));
+    }
 });

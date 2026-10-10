@@ -4,6 +4,7 @@ import { before, test } from 'node:test';
 import { build } from 'esbuild';
 import { Miniflare, Response as MiniflareResponse, convertV4MiniflareOptions, type V4FetchHandler } from 'miniflare';
 import { hashPayload, type CloudSaveEnvelope, type SavePayload } from '../../src/modules/cloudSave/protocol';
+import { migratePlayers } from '../src/players';
 
 const workerRoot = fileURLToPath(new URL('../', import.meta.url));
 const slot = '66cf8d51-2bac-4a66-a608-5f08a77ed50a';
@@ -20,6 +21,8 @@ before(async () => {
         stdin: {
             contents: `
                 import { GithubStore } from './src/github';
+                import { GithubPlayersStore, resolvePlayerAuth } from './src/players';
+                import { createSessionCookie, verifySession } from './src/auth';
                 const config = ${JSON.stringify({
         GITHUB_OWNER: 'octocat', GITHUB_SAVE_REPO: 'Hello-World', GITHUB_SAVE_BRANCH: branch,
         GITHUB_SAVE_TOKEN: fakeToken, CLOUD_SLOT_ID: slot,
@@ -28,6 +31,18 @@ before(async () => {
                     const store = new GithubStore(config);
                     try {
                         const operation = new URL(request.url).pathname;
+                        if (operation === '/players/read') return Response.json(await new GithubPlayersStore(config).readRegistry());
+                        if (operation === '/players/write') {
+                            const { registry, sha } = await request.json();
+                            return Response.json(await new GithubPlayersStore(config).writeRegistry(registry, sha));
+                        }
+                        if (operation === '/players/session') {
+                            const { registry } = await request.json();
+                            const auth = await resolvePlayerAuth({ GAME_AUTH: JSON.stringify({ version: 3, sessionKey: 'k'.repeat(43) }) }, registry);
+                            const cookie = await createSessionCookie(auth, 'https://runtime.test');
+                            const player = await verifySession(cookie.split(';')[0].split('=')[1], auth, 'https://runtime.test');
+                            return Response.json({ playerId: player.id, slotId: player.slotId });
+                        }
                         if (operation === '/available') {
                             await store.assertAvailable();
                             return Response.json({ available: true });
@@ -58,6 +73,36 @@ function runtime(outboundService: V4FetchHandler): Miniflare {
         host: '127.0.0.1', outboundService,
     }));
 }
+
+test('native workerd reads and writes a private Git registry and derives verifiable player sessions', async context => {
+    const registry = migratePlayers({ CLOUD_SLOT_ID: slot, GAME_AUTH: JSON.stringify({ version: 1, passwordHash: 'a'.repeat(64), sessionKey: 'k'.repeat(43) }) });
+    let saved: string | null = null;
+    const mf = runtime(async request => {
+        assert.equal(request.headers.get('authorization'), 'Bearer ' + fakeToken);
+        if (request.url === apiRoot) return MiniflareResponse.json({ private: true });
+        if (request.url.includes('/branches/')) return MiniflareResponse.json({ name: branch });
+        if (request.url === apiRoot + '/contents/config/players.json' && request.method === 'PUT') {
+            const body: any = await request.json();
+            assert.equal(body.branch, branch); assert.equal(body.sha, undefined);
+            saved = Buffer.from(body.content, 'base64').toString('utf8');
+            assert.deepEqual(JSON.parse(saved), registry);
+            assert.ok(!saved.includes('sessionKey'));
+            return MiniflareResponse.json({ content: { sha: blobSha } });
+        }
+        if (request.url === apiRoot + '/contents/config/players.json?ref=' + encodeURIComponent(branch)) {
+            return saved ? MiniflareResponse.json({ type: 'file', sha: blobSha, size: Buffer.byteLength(saved), encoding: 'base64', content: Buffer.from(saved).toString('base64') }) : MiniflareResponse.json({}, { status: 404 });
+        }
+        throw new Error('Unexpected outbound destination');
+    });
+    context.after(() => mf.dispose());
+    assert.equal(await (await mf.dispatchFetch('https://runtime.test/players/read')).json(), null);
+    const written = await mf.dispatchFetch('https://runtime.test/players/write', { method: 'POST', body: JSON.stringify({ registry, sha: null }) });
+    assert.equal(written.status, 200);
+    assert.deepEqual(await (await mf.dispatchFetch('https://runtime.test/players/read')).json(), { registry, blobSha });
+    const session = await mf.dispatchFetch('https://runtime.test/players/session', { method: 'POST', body: JSON.stringify({ registry }) });
+    assert.equal(session.status, 200);
+    assert.deepEqual(await session.json(), { playerId: 'player', slotId: slot });
+});
 
 async function sampleEnvelope(): Promise<CloudSaveEnvelope> {
     const payload: SavePayload = {

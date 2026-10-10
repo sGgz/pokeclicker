@@ -5,13 +5,91 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const test = require('node:test');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
+const { EventEmitter } = require('node:events');
 const { childEnvironment, finishRelease, run, writeShims } = require('../scripts/build-windows.cjs');
+const { main: cloudMain, runInteractive } = require('../../cloud-save-worker/scripts/windows.cjs');
 
 const TEST_ROOT = path.resolve(__dirname, '../../output/desktop-tests');
 const GAME = { version: '0.10.26' };
 const DESKTOP = { version: '1.0.0' };
 const INSTALLER = `PokeclickerCloud-Setup-${DESKTOP.version}.exe`;
 const ZIP = `PokeclickerCloud-${DESKTOP.version}-win-x64.zip`;
+
+test('Windows packaging uses an accessible binary mirror and retains explicit download overrides', () => {
+    const runtime = { node: 'C:\\node24\\node.exe', npm: 'C:\\node24\\npm-cli.js' };
+    const buildDirectory = path.resolve(__dirname, '../../.desktop-build');
+    const shimDirectory = path.join(buildDirectory, 'bin');
+    const defaultEnv = childEnvironment({ PATH: 'system-node' }, runtime, buildDirectory, shimDirectory);
+    assert.equal(defaultEnv.ELECTRON_BUILDER_BINARIES_MIRROR, 'https://npmmirror.com/mirrors/electron-builder-binaries/');
+    for (const key of ['ELECTRON_BUILDER_BINARIES_MIRROR', 'npm_config_electron_builder_binaries_mirror']) {
+        const env = childEnvironment({ PATH: 'system-node', [key]: 'https://example.com/binaries/' }, runtime, buildDirectory, shimDirectory);
+        assert.equal(env.ELECTRON_BUILDER_BINARIES_MIRROR, 'https://example.com/binaries/');
+    }
+    const env = childEnvironment({ PATH: 'system-node', ELECTRON_BUILDER_BINARIES_DOWNLOAD_OVERRIDE_URL: 'https://example.com/custom' }, runtime, buildDirectory, shimDirectory);
+    assert.equal(env.ELECTRON_BUILDER_BINARIES_DOWNLOAD_OVERRIDE_URL, 'https://example.com/custom');
+    assert.equal(env.ELECTRON_BUILDER_BINARIES_ALLOW_HTTP, undefined);
+});
+
+test('Windows cloud entry is reachable without npm rejecting the bootstrap Node version', async () => {
+    const root = path.resolve(__dirname, '../..');
+    const { stdout, stderr } = await promisify(execFile)(process.env.ComSpec || 'cmd.exe',
+        ['/d', '/c', 'cloud-windows.cmd --help'], { cwd: root, windowsHide: true, encoding: 'utf8' });
+    assert.match(stdout, /cloud-windows\.cmd players init/);
+    assert.ok(!stderr.includes('EBADDEVENGINES'));
+});
+
+test('cloud entry invokes npm with the selected Node and preserves player arguments in Chinese paths', async t => {
+    const root = await workspace(t);
+    const selected = { node: 'C:\\selected-node-24\\node.exe', npm: 'C:\\selected-node-24\\node_modules\\npm\\bin\\npm-cli.js' };
+    let prepared = 0, executed = 0;
+    const result = await cloudMain(['players', 'reset'], {
+        root, env: { PATH: 'C:\\system-node-25', APPDATA: 'C:\\Users\\tester\\AppData\\Roaming', npm_node_execpath: 'wrong-node' },
+        output: { write() {} }, platform: 'win32', arch: 'x64',
+        prepareRuntime: async directory => {
+            assert.equal(directory, path.join(root, '.desktop-build'));
+            prepared++;
+            return selected;
+        },
+        execute: async (node, args, options) => {
+            executed++;
+            assert.equal(node, selected.node);
+            assert.deepEqual(args, [selected.npm, 'run', 'cloud:players', '--', 'reset']);
+            assert.equal(options.cwd, root);
+            assert.equal(options.env.npm_node_execpath, selected.node);
+            assert.equal(options.env.APPDATA, 'C:\\Users\\tester\\AppData\\Roaming');
+            assert.ok(options.env.PATH.startsWith(path.join(root, '.desktop-build', 'bin') + path.delimiter + path.dirname(selected.node)));
+            assert.match(await fs.readFile(path.join(root, '.desktop-build', 'bin', 'npm.cmd'), 'utf8'), /selected-node-24/);
+            return 17;
+        },
+    });
+    assert.equal(prepared, 1);
+    assert.equal(executed, 1);
+    assert.equal(result, 17);
+});
+
+test('interactive cloud execution inherits the terminal and preserves the command exit code', async () => {
+    const result = await runInteractive('selected-node', ['selected-npm', 'run', 'cloud:players', '--', 'init'], { cwd: 'project' },
+        (node, args, options) => {
+            assert.equal(node, 'selected-node');
+            assert.equal(args.at(-1), 'init');
+            assert.equal(options.stdio, 'inherit');
+            assert.equal(options.shell, false);
+            assert.equal(options.windowsHide, true);
+            const child = new EventEmitter();
+            setImmediate(() => child.emit('close', 23));
+            return child;
+        });
+    assert.equal(result, 23);
+});
+
+test('invalid cloud commands are rejected before preparing a runtime or executing npm', async () => {
+    await assert.rejects(cloudMain(['arbitrary-command'], {
+        prepareRuntime: async () => { assert.fail('must not prepare runtime'); },
+        execute: async () => { assert.fail('must not execute npm'); },
+    }), /不支持的云存档命令/);
+});
 
 async function workspace(t) {
     await fs.mkdir(TEST_ROOT, { recursive: true });

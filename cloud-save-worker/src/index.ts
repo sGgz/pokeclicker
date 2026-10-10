@@ -1,12 +1,14 @@
-import { clearSessionCookie, createSessionCookie, parseAuth, sessionToken, verifyPassword, verifySession, type AuthConfig } from './auth';
+import { authenticatePassword, clearSessionCookie, createSessionCookie, parseAuth, primaryPlayerId, sessionToken, verifySession, type AuthConfig, type PlayerSecret } from './auth';
 import { loginPage, returnPath } from './login';
 import { ApiError, GithubStore, readLimited, type GithubConfig } from './github';
+import { GithubPlayersStore, RegistryCache, managePlayers, resolvePlayerAuth, type RegistryStore } from './players';
 import {
     MAX_SAVE_BYTES, compareVersions, hashPayload, isBlobSha, isRecord, isUuid, payloadVersion, validatePayload,
     type CloudSaveEnvelope, type RemoteSave, type UploadRequest,
 } from '../../src/modules/cloudSave/protocol';
 
 export interface Env extends AuthConfig, GithubConfig {
+    CLOUD_SLOT_ID: string;
     ALLOWED_ORIGIN: string;
     ASSETS: { fetch(request: Request): Promise<Response> };
     LOGIN_RATE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
@@ -73,8 +75,10 @@ function redirect(location: string, cookie?: string): Response {
 export function createHandler(dependencies: {
     authenticate?: typeof verifySession;
     store?: (env: Env) => Store;
+    registry?: (env: Env) => RegistryStore;
     now?: () => number;
 } = {}) {
+    const registryCache = new RegistryCache();
     return async (request: Request, env: Env): Promise<Response> => {
         const url = new URL(request.url);
         const apiRequest = url.pathname === '/api' || url.pathname.startsWith('/api/');
@@ -86,7 +90,21 @@ export function createHandler(dependencies: {
             if (url.origin !== env.ALLOWED_ORIGIN) {
                 throw new ApiError(403, 'ORIGIN', '请使用操作手册配置的游戏域名。');
             }
-            parseAuth(env);
+            const secret = parseAuth(env);
+            let authEnv = env;
+            const registryStore = () => dependencies.registry?.(env) || new GithubPlayersStore(env);
+            const loadAuth = async () => {
+                if (secret.version === 3 && authEnv === env) {
+                    checkConfig(env);
+                    const snapshot = await registryCache.read(env, registryStore(), now);
+                    if (snapshot.registry.players.find(entry => entry.id === 'player')?.slotId !== env.CLOUD_SLOT_ID) {
+                        throw new ApiError(503, 'PLAYERS_CONFIGURATION', '原玩家存档位与部署配置不一致，请恢复正确配置。');
+                    }
+                    authEnv = { ...env, ...await resolvePlayerAuth(env, snapshot.registry) };
+                }
+                return authEnv;
+            };
+            if (url.pathname === '/auth/config' && request.method === 'GET') return json({ mode: secret.version === 3 ? 'git' : 'legacy' });
             if (url.pathname === '/auth/logout') {
                 if (request.method !== 'POST') return json({ code: 'METHOD', message: '请使用退出登录按钮。' }, 405, { Allow: 'POST' });
                 sameOrigin(request, env);
@@ -114,18 +132,23 @@ export function createHandler(dependencies: {
                 }
                 const form = new URLSearchParams(await readLimited(request, 4096));
                 const target = returnPath(form.get('returnTo'), env.ALLOWED_ORIGIN);
-                if (form.getAll('password').length !== 1 || !await verifyPassword(form.get('password') || '', env)) {
+                const player = form.getAll('password').length === 1 ? await authenticatePassword(form.get('password') || '', await loadAuth()) : null;
+                if (!player) {
                     return loginPage({ returnTo: target, message: '密码不正确，请重新粘贴游戏专用密码。', status: 401 });
                 }
-                return redirect('/login?returnTo=' + encodeURIComponent(target), await createSessionCookie(env, env.ALLOWED_ORIGIN, now));
+                return redirect('/login?returnTo=' + encodeURIComponent(target), await createSessionCookie(authEnv, env.ALLOWED_ORIGIN, now, player.id));
             }
             const token = sessionToken(request);
             let loggedIn = false;
+            let player: PlayerSecret | undefined;
             if (token) {
                 try {
-                    await (dependencies.authenticate || verifySession)(token, env, env.ALLOWED_ORIGIN, now);
+                    player = await (dependencies.authenticate || verifySession)(token, await loadAuth(), env.ALLOWED_ORIGIN, now);
                     loggedIn = true;
-                } catch { /* Invalid/expired cookies never authorize assets or API calls. */ }
+                } catch (error) {
+                    if (error instanceof ApiError) throw error;
+                    // Invalid/expired cookies never authorize assets or API calls.
+                }
             }
             if (url.pathname === '/login' && (request.method === 'GET' || request.method === 'HEAD')) {
                 const page = loginPage({ returnTo: returnPath(url.searchParams.get('returnTo'), env.ALLOWED_ORIGIN), loggedIn });
@@ -134,6 +157,16 @@ export function createHandler(dependencies: {
             if (!loggedIn) {
                 if (apiRequest) throw new ApiError(401, 'LOGIN_REQUIRED', '登录已过期，请点击“重新登录”，在新标签页输入游戏密码后回到本页重试。');
                 return redirect('/login?returnTo=' + encodeURIComponent(returnPath(url.pathname + url.search, env.ALLOWED_ORIGIN)));
+            }
+            if (url.pathname === '/api/cloud-save/admin/players') {
+                if (player!.id !== primaryPlayerId(authEnv)) throw new ApiError(403, 'ADMIN_REQUIRED', '只有主玩家可以管理玩家配置。');
+                sameOrigin(request, env);
+                if (!['GET', 'POST'].includes(request.method)) return json({ code: 'METHOD', message: '不支持此操作。' }, 405, { Allow: 'GET, POST' });
+                if (request.method === 'POST' && request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json') throw new ApiError(415, 'CONTENT_TYPE', '请使用玩家管理工具。');
+                checkConfig(env);
+                const result = await managePlayers(request, env, registryStore());
+                if (request.method === 'POST') registryCache.clear();
+                return json(result);
             }
             if (!apiRequest) {
                 if (request.method !== 'GET' && request.method !== 'HEAD') return json({ code: 'METHOD', message: '不支持此操作。' }, 405, { Allow: 'GET, HEAD' });
@@ -145,17 +178,25 @@ export function createHandler(dependencies: {
                 response.headers.set('Referrer-Policy', 'same-origin');
                 return response;
             }
-            checkConfig(env);
-            const store = dependencies.store?.(env) || new GithubStore(env);
+            // The session, never a client-supplied ID, selects the storage path.
+            const scopedEnv = { ...env, CLOUD_SLOT_ID: player!.slotId };
+            if (url.pathname === '/api/cloud-save/identity' && request.method === 'GET') {
+                if (!isUuid(player!.slotId)) throw new ApiError(503, 'CONFIGURATION', '玩家存档位配置无效。');
+                return json({ playerId: player!.id, playerName: player!.name,
+                    primaryPlayerId: primaryPlayerId(authEnv), slotId: player!.slotId });
+            }
+            checkConfig(scopedEnv);
+            const store = dependencies.store?.(scopedEnv) || new GithubStore(scopedEnv);
             const base = '/api/cloud-save';
             if (url.pathname === base + '/status' && request.method === 'GET') {
                 await store.assertAvailable();
-                return json({ enabled: true, slotId: env.CLOUD_SLOT_ID, maxSaveBytes: MAX_SAVE_BYTES });
+                return json({ enabled: true, slotId: scopedEnv.CLOUD_SLOT_ID, maxSaveBytes: MAX_SAVE_BYTES,
+                    playerId: player!.id, playerName: player!.name, primaryPlayerId: primaryPlayerId(authEnv) });
             }
             if (url.pathname === base + '/slots' && request.method === 'GET') {
-                return json({ slots: [{ id: env.CLOUD_SLOT_ID, name: '我的云存档' }] });
+                return json({ slots: [{ id: scopedEnv.CLOUD_SLOT_ID, name: player!.name + '的云存档' }] });
             }
-            if (url.pathname !== base + '/slots/' + env.CLOUD_SLOT_ID) {
+            if (url.pathname !== base + '/slots/' + scopedEnv.CLOUD_SLOT_ID) {
                 throw new ApiError(404, 'NOT_FOUND', '找不到此接口或存档槽位。');
             }
             if (request.method === 'GET') {
@@ -199,7 +240,7 @@ export function createHandler(dependencies: {
             }
             const envelope: CloudSaveEnvelope = {
                 schemaVersion: 1,
-                slotId: env.CLOUD_SLOT_ID,
+                slotId: scopedEnv.CLOUD_SLOT_ID,
                 revision: upload.baseRevision + 1,
                 snapshotId: upload.snapshotId,
                 parentSnapshotId: current?.envelope.snapshotId ?? null,

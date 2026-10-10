@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { SignJWT } from 'jose';
@@ -192,4 +192,95 @@ test('return locations cannot redirect off-site or inject HTML', async () => {
     const page = await f.call(new Request(origin + '/login?returnTo=' + encodeURIComponent(target)));
     assert.ok(!(await page.text()).includes('onfocus="alert(1)'));
     assert.equal((await f.call(login(password, '/index.html?test=1'))).headers.get('Location'), '/login?returnTo=%2Findex.html%3Ftest%3D1');
+});
+
+function multiplayer(f: ReturnType<typeof fixture>) {
+    const otherPassword = randomBytes(24).toString('base64url');
+    const other = { id: randomUUID(), name: '朋友', slotId: randomUUID(),
+        passwordHash: createHash('sha256').update(otherPassword).digest('hex'), sessionKey: randomBytes(32).toString('base64url') };
+    const auth = { version: 2, primaryPlayerId: 'player', players: [
+        { id: 'player', name: '我', slotId: f.env.CLOUD_SLOT_ID, passwordHash: secret.passwordHash, sessionKey: secret.sessionKey }, other,
+    ] };
+    f.env.GAME_AUTH = JSON.stringify(auth);
+    return { auth, other, otherPassword };
+}
+
+test('different passwords select independent slots and block both reads and writes to another player', async () => {
+    const f = fixture();
+    const { other, otherPassword } = multiplayer(f);
+    for (const [value, id, slotId, forbidden] of [
+        [password, 'player', f.env.CLOUD_SLOT_ID, other.slotId],
+        [otherPassword, other.id, other.slotId, f.env.CLOUD_SLOT_ID],
+    ]) {
+        const response = await f.call(login(value));
+        const cookie = response.headers.get('Set-Cookie')!.split(';')[0];
+        const status = await f.call(new Request(origin + '/api/cloud-save/status', { headers: { Cookie: cookie } }));
+        const body = await status.json() as any;
+        assert.equal(body.playerId, id);
+        assert.equal(body.slotId, slotId);
+        assert.equal(body.primaryPlayerId, 'player');
+        assert.ok(!JSON.stringify(body).includes(secret.passwordHash));
+        for (const method of ['GET', 'PUT']) {
+            const denied = await f.call(new Request(origin + '/api/cloud-save/slots/' + forbidden, {
+                method, headers: { Cookie: cookie, Origin: origin, 'Content-Type': 'application/json' },
+                ...(method === 'PUT' ? { body: '{}' } : {}),
+            }));
+            assert.equal(denied.status, 404);
+        }
+        const own = await f.call(new Request(origin + '/api/cloud-save/slots/' + slotId, { headers: { Cookie: cookie } }));
+        assert.equal((await own.json() as any).code, 'EMPTY_SLOT');
+    }
+});
+
+test('rotating one password revokes only that player and retains both storage identities', async () => {
+    const f = fixture();
+    const { auth, other, otherPassword } = multiplayer(f);
+    const mine = await signedCookie(f);
+    const theirs = (await f.call(login(otherPassword))).headers.get('Set-Cookie')!.split(';')[0];
+    const newPassword = randomBytes(24).toString('base64url');
+    Object.assign(other, { passwordHash: createHash('sha256').update(newPassword).digest('hex'), sessionKey: randomBytes(32).toString('base64url') });
+    f.env.GAME_AUTH = JSON.stringify(auth);
+    const status = (cookie: string) => f.call(new Request(origin + '/api/cloud-save/status', { headers: { Cookie: cookie } }));
+    assert.equal((await status(mine)).status, 200);
+    assert.equal((await status(theirs)).status, 401);
+    assert.equal((await f.call(login(otherPassword))).status, 401);
+    const renewed = (await f.call(login(newPassword))).headers.get('Set-Cookie')!.split(';')[0];
+    const body = await (await status(renewed)).json() as any;
+    assert.equal(body.slotId, other.slotId);
+    assert.equal(body.playerId, other.id);
+});
+
+test('forging another player subject without their signing key cannot change identity', async () => {
+    const f = fixture();
+    const { other } = multiplayer(f);
+    const now = initialTime / 1000;
+    const token = await new SignJWT({ sub: other.id, v: 2, iss: origin, aud: 'pokeclicker-game', iat: now, exp: now + SESSION_SECONDS, jti: 'test' })
+        .setProtectedHeader({ alg: 'HS256' }).sign(new TextEncoder().encode(secret.sessionKey));
+    assert.equal((await f.call(new Request(origin + '/api/cloud-save/status', { headers: { Cookie: SESSION_COOKIE + '=' + token } }))).status, 401);
+});
+
+test('duplicate passwords, slots or identities fail closed before assets are served', async () => {
+    for (const key of ['id', 'slotId', 'passwordHash', 'sessionKey']) {
+        const f = fixture();
+        const { auth } = multiplayer(f);
+        (auth.players[1] as any)[key] = (auth.players[0] as any)[key];
+        f.env.GAME_AUTH = JSON.stringify(auth);
+        assert.equal((await f.call(new Request(origin + '/'))).status, 503);
+        assert.equal(f.stats().assets, 0);
+    }
+});
+
+test('player identity remains available during a GitHub outage without reading the repository', async () => {
+    const f = fixture();
+    const { other, otherPassword } = multiplayer(f);
+    f.env.GITHUB_SAVE_TOKEN = '';
+    const response = await f.call(login(otherPassword));
+    const cookie = response.headers.get('Set-Cookie')!.split(';')[0];
+    const identity = await f.call(new Request(origin + '/api/cloud-save/identity', { headers: { Cookie: cookie } }));
+    assert.equal(identity.status, 200);
+    const data = await identity.json() as any;
+    assert.equal(data.playerId, other.id);
+    assert.equal(data.slotId, other.slotId);
+    assert.equal(f.stats().reads, 0);
+    assert.equal((await f.call(new Request(origin + '/api/cloud-save/status', { headers: { Cookie: cookie } }))).status, 503);
 });

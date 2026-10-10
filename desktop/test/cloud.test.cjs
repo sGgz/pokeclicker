@@ -85,6 +85,7 @@ test('login uses the fixed origin, manual redirects and a password-only form; re
     assert.ok(login.options.signal instanceof AbortSignal);
     for (const request of [
         { path: '/api/cloud-save/status', method: 'GET' },
+        { path: '/api/cloud-save/identity', method: 'GET' },
         { path: '/api/cloud-save/slots', method: 'GET' },
         { path: SLOT, method: 'GET' },
         { path: SLOT, method: 'PUT', body: '{"payload":{}}' },
