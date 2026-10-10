@@ -147,6 +147,14 @@ async function run() {
         await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('shown.bs.modal', () => resolve()).modal('show')));
         await pageA.locator('#settingsModal a[href="#settings-game"]').click();
         await pageA.locator('select[name="ggzz.private.guidePathfinding"]').selectOption('optimized');
+        const chestPriority = pageA.locator('select[name="ggzz.private.drakeChestPriority"]');
+        assert.equal(await chestPriority.inputValue(), 'off');
+        await chestPriority.selectOption('mythic');
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.drakeChestPriority()), 'mythic');
+        await chestPriority.selectOption('off');
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.drakeChestPriority()), undefined);
+        await chestPriority.selectOption('epic');
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.drakeChestPriority()), 'epic');
         await pageA.locator('select[name="ggzz.private.pricingMode"]').selectOption('base-price');
         assert.equal(await pageA.evaluate(() => PrivateGameplay.optimizedPathfinding()), true);
         assert.equal(await pageA.evaluate(() => PrivateGameplay.fixedItemPrices()), true);
@@ -180,6 +188,7 @@ async function run() {
         assert.equal(purchase.multiplier, 8);
         assert.equal(purchase.refundProtected, true);
         checks.push('Private gameplay controls work in the real renderer: optimized paths, fixed-price purchase, frozen old multiplier, vitamin history and 1% guide fee.');
+        checks.push('Drake chest priority defaults to off, accepts a minimum chest tier through the real settings control, and can be disabled again.');
         // Exercise the extended progression and slot migration using this disposable save only.
         const progression = await pageA.evaluate(() => {
             const magic = App.game.oakItems.itemList[0];
@@ -549,6 +558,7 @@ async function run() {
         assert.equal(remote.envelope.revision, 1);
         assert.equal(remote.envelope.payload.settings['ggzz.private.pricingMode'], 'base-price');
         assert.equal(remote.envelope.payload.settings['ggzz.private.guidePathfinding'], 'optimized');
+        assert.equal(remote.envelope.payload.settings['ggzz.private.drakeChestPriority'], 'epic');
         assert.equal(remote.envelope.payload.settings['ggzz.private.guideFeeRate'], 0.01);
         assert.equal(remote.envelope.payload.settings['ggzz.private.fixedVitaminPurchased'], true);
         checks.push('Desktop uploads a real game snapshot through the unchanged Worker protocol and receives a revision/SHA receipt.');
@@ -586,6 +596,7 @@ async function run() {
         const restoredSettings = await web.evaluate(key => JSON.parse(localStorage.getItem('settings' + key)), webKey);
         assert.equal(restoredSettings['ggzz.private.pricingMode'], 'base-price');
         assert.equal(restoredSettings['ggzz.private.guidePathfinding'], 'optimized');
+        assert.equal(restoredSettings['ggzz.private.drakeChestPriority'], 'epic');
         assert.equal(restoredSettings['ggzz.private.guideFeeRate'], 0.01);
         assert.equal(restoredSettings['ggzz.private.fixedVitaminPurchased'], true);
         assert.equal(restoredSettings['ggzz.private.hatcherySlotLimit'], 4);
