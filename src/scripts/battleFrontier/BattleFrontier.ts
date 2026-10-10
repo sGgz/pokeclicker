@@ -26,6 +26,7 @@ class BattleFrontier implements Feature {
     }
 
     public leave(): void {
+        BattleFrontierRunner.automation.stop('Automation stopped after leaving Battle Frontier.');
         // Put the user back in the town
         App.game.gameState = GameConstants.GameState.town;
     }
@@ -35,10 +36,12 @@ class BattleFrontier implements Feature {
             milestones: this.milestones.milestoneRewards.filter(m => m.obtained()).map(m => [m.stage, m.description]),
             checkpoint: BattleFrontierRunner.checkpoint(),
             runStartStage: BattleFrontierRunner.runStartStage(),
+            automation: BattleFrontierRunner.automation.preferences(),
         };
     }
 
     fromJSON(json: Record<string, any>): void {
+        BattleFrontierRunner.automation.loadPreferences(json?.automation);
         if (json == null) {
             return;
         }

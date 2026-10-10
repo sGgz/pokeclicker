@@ -4,6 +4,40 @@
     <div class="card-header p-0" data-toggle="collapse" href="#battleFrontierRewards">
         <span>Battle Frontier</span>
     </div>
+    <!-- ko let: { frontierRunner: BattleFrontierRunner } -->
+    <div class="p-2 border-bottom" id="battleFrontierAutomation" data-bind="with: frontierRunner.automation">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong>Auto Challenge</strong>
+            <span class="badge" data-bind="text: active() ? 'Running' : 'Off', css: { 'badge-success': active(), 'badge-secondary': !active() }"></span>
+        </div>
+        <label class="small mb-1" for="frontierAutomationMode">Farming mode</label>
+        <select id="frontierAutomationMode" class="form-control form-control-sm mb-2" data-bind="value: mode, disable: active() || frontierRunner.confirmationPending()">
+            <option value="efficiency">BP efficiency — adapt to current attack</option>
+            <option value="fixed">Fixed stage — claim and repeat</option>
+            <option value="record">Record attempt — stop after defeat</option>
+        </select>
+        <!-- ko if: mode() === 'fixed' -->
+        <label class="small mb-1" for="frontierAutomationTarget">Finish after stage</label>
+        <input id="frontierAutomationTarget" type="number" min="1" max="1000000" step="1" class="form-control form-control-sm mb-2" data-bind="value: fixedEndStage, disable: active() || frontierRunner.confirmationPending()" />
+        <!-- /ko -->
+        <div class="small mb-2" data-bind="visible: active() || cycles() > 0">
+            <div>Recent: <strong data-bind="text: recentRate().toFixed(1)"></strong> BP/min</div>
+            <!-- ko if: mode() === 'efficiency' -->
+            <div>Next range: <span data-bind="text: plannedStart().toLocaleString('en-US')"></span>–<span data-bind="text: plannedEnd().toLocaleString('en-US')"></span></div>
+            <div>Estimated loop: <span data-bind="text: estimatedRate().toFixed(1)"></span> BP/min (includes restart)</div>
+            <!-- /ko -->
+            <div>Claimed: <span data-bind="text: earnedPoints().toLocaleString('en-US')"></span> BP · <span data-bind="text: cycles"></span> runs</div>
+        </div>
+        <p class="small mb-2" role="status" data-bind="text: status"></p>
+        <p class="small text-muted mb-2">Adapts to hatchery attack changes without changing your eggs. Automation runs while the game is open. Pause or finish stops it.</p>
+        <!-- ko ifnot: active -->
+        <button type="button" class="btn btn-block btn-primary btn-sm" data-bind="click: () => $data.start(), disable: frontierRunner.confirmationPending">Start Auto Challenge / Resume Saved Run</button>
+        <!-- /ko -->
+        <!-- ko if: active -->
+        <button type="button" class="btn btn-block btn-secondary btn-sm" data-bind="click: () => $data.stop(), disable: frontierRunner.confirmationPending">Stop Automation (Keep Current Run)</button>
+        <!-- /ko -->
+    </div>
+    <!-- /ko -->
     <!-- ko if: BattleFrontierRunner.started() || BattleFrontierRunner.hasCheckpoint() -->
     <div class="p-2 text-center border-bottom" aria-live="polite">
         <div>This run: <knockout data-bind="text: BattleFrontierRunner.pendingRewards().stages.toLocaleString('en-US')"></knockout> stages completed</div>

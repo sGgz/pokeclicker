@@ -442,6 +442,59 @@ async function run() {
             checkpoint: BattleFrontierRunner.checkpoint(), start: BattleFrontierRunner.runStartStage(),
         }), frontierBefore), { bp: 76, money: 7604, checkpoint: 1, start: 1 });
         checks.push('Real Pause, Resume and Finish & Claim dialogs preserve the quick-run baseline and pay exactly 76 BP and 7,604 money once before clearing the checkpoint.');
+        // Exercise the actual automation controls in the same disposable profile.
+        const autoPanel = pageA.locator('#battleFrontierAutomation');
+        await pageA.locator('#frontierAutomationMode').selectOption('fixed');
+        await pageA.locator('#frontierAutomationTarget').fill('2');
+        await pageA.locator('#frontierAutomationTarget').press('Tab');
+        await autoPanel.getByRole('button', { name: 'Start Auto Challenge / Resume Saved Run', exact: true }).click();
+        assert.equal(await pageA.evaluate(() => BattleFrontierRunner.runStartStage()), 1);
+        await pageA.evaluate(() => { for (let i = 0; i < 6; i++) BattleFrontierBattle.defeatPokemon(); });
+        assert.deepEqual(await pageA.evaluate(() => ({ cycles: BattleFrontierRunner.automation.cycles(), points: BattleFrontierRunner.automation.earnedPoints(), started: BattleFrontierRunner.started() })),
+            { cycles: 1, points: 2, started: false });
+        await pageA.waitForTimeout(1100);
+        await pageA.evaluate(() => window.frontierSmoke.tick.call(BattleFrontierRunner));
+        assert.equal(await pageA.evaluate(() => BattleFrontierRunner.started()), true);
+        await pageA.evaluate(() => { for (let i = 0; i < 6; i++) BattleFrontierBattle.defeatPokemon(); });
+        assert.equal(await pageA.evaluate(() => BattleFrontierRunner.automation.earnedPoints()), 4);
+        await autoPanel.screenshot({ path: path.join(output, 'battle-frontier-automation.png') });
+        await autoPanel.getByRole('button', { name: 'Stop Automation (Keep Current Run)', exact: true }).click();
+        await pageA.waitForTimeout(1100);
+        await pageA.evaluate(() => window.frontierSmoke.tick.call(BattleFrontierRunner));
+        assert.equal(await pageA.evaluate(() => BattleFrontierRunner.started()), false);
+        checks.push('Real fixed-stage automation controls claim two runs exactly once, restart after the delay, and respect Stop during the countdown.');
+
+        // Vary output as breeding and hatching would; never touch real saves or queues.
+        await pageA.evaluate(() => {
+            window.frontierAutomationSmoke = { attack: App.game.party.calculatePokemonAttack, health: PokemonFactory.routeHealth, damage: 1000000 };
+            App.game.party.calculatePokemonAttack = () => window.frontierAutomationSmoke.damage;
+            PokemonFactory.routeHealth = stage => Math.floor((stage - 10) ** 2.53);
+        });
+        await pageA.locator('#frontierAutomationMode').selectOption('efficiency');
+        await autoPanel.getByRole('button', { name: 'Start Auto Challenge / Resume Saved Run', exact: true }).click();
+        const strongEnd = await pageA.evaluate(() => BattleFrontierRunner.automation.plannedEnd());
+        await pageA.evaluate(() => { window.frontierAutomationSmoke.damage = 10000; });
+        await pageA.waitForTimeout(5100);
+        await pageA.evaluate(() => BattleFrontierRunner.automation.tick());
+        const weakEnd = await pageA.evaluate(() => BattleFrontierRunner.automation.plannedEnd());
+        assert.ok(weakEnd < strongEnd);
+        await pageA.evaluate(() => { window.frontierAutomationSmoke.damage = 1000000; });
+        await pageA.waitForTimeout(5100);
+        await pageA.evaluate(() => BattleFrontierRunner.automation.tick());
+        assert.ok(await pageA.evaluate(end => BattleFrontierRunner.automation.plannedEnd() > end, weakEnd));
+        await autoPanel.getByRole('button', { name: 'Stop Automation (Keep Current Run)', exact: true }).click();
+        await frontierPanel.getByRole('button', { name: 'Finish & Claim Rewards', exact: true }).click();
+        await pageA.locator('.modal.show').filter({ hasText: 'Finish Battle Frontier?' }).getByRole('button', { name: 'Finish & Claim', exact: true }).click();
+        await pageA.waitForFunction(() => !BattleFrontierRunner.started() && !BattleFrontierRunner.confirmationPending());
+        await pageA.waitForFunction(() => !document.querySelector('.modal[id^="modal"]'));
+        await pageA.evaluate(() => {
+            App.game.party.calculatePokemonAttack = window.frontierAutomationSmoke.attack;
+            PokemonFactory.routeHealth = window.frontierAutomationSmoke.health;
+            delete window.frontierAutomationSmoke;
+        });
+        checks.push('Efficiency mode re-estimates the real enemy type distribution after attack drops and recovers, moving the next farming range down and up.');
+        assert.equal(await pageA.evaluate(() => App.game.battleFrontier.toJSON().automation.mode), 'efficiency');
+        checks.push('Automation saves its mode and target without persisting a running flag; normal quick-run checkpoints remain compatible.');
         await frontierPanel.getByRole('button', { name: 'Quick Challenge (Stage 1,901)', exact: true }).click();
         await pageA.evaluate(() => { for (let i = 0; i < 6; i++) BattleFrontierBattle.defeatPokemon(); });
         await frontierPanel.getByRole('button', { name: 'Pause & Save Progress', exact: true }).click();
@@ -585,11 +638,20 @@ async function run() {
         // Test the actual download event while choosing a path through the privileged harness only.
         const exportFile = path.join(work, 'exported-save.txt');
         await b.evaluate(({ BrowserWindow }, target) => {
-            BrowserWindow.getAllWindows()[0].webContents.session.once('will-download', (_event, item) => item.setSavePath(target));
+            globalThis.exportForSmoke = new Promise(resolve => {
+                const timeout = setTimeout(() => resolve({ state: 'timeout' }), 30000);
+                BrowserWindow.getAllWindows()[0].webContents.session.once('will-download', (_event, item) => {
+                    item.setSavePath(target);
+                    item.once('done', (_doneEvent, state) => {
+                        clearTimeout(timeout);
+                        resolve({ state, path: item.getSavePath() });
+                    });
+                });
+            });
         }, exportFile);
         await panel(pageB);
         await pageB.getByRole('button', { name: '导出本地备份', exact: true }).click();
-        await pageB.waitForTimeout(500);
+        assert.deepEqual(await b.evaluate(() => globalThis.exportForSmoke), { state: 'completed', path: exportFile });
         assert.ok((await fs.stat(exportFile)).size > 100);
         const exportText = await fs.readFile(exportFile, 'utf8');
         assert.equal(JSON.parse(decodeURI(Buffer.from(exportText, 'base64').toString('latin1'))).save.profile.name, 'Web fixture progress');
