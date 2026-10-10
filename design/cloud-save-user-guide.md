@@ -22,6 +22,8 @@ cloud-windows.cmd players add
 
 管理员首次启用的顺序：
 
+若在新 worktree 中操作，先将原部署目录的 `cloud-save-worker/wrangler.local.json` 复制到当前项目的同名位置。该文件被 Git 忽略，不会随分支或 worktree 自动带过来；已有站点必须保留其中的 `CLOUD_SLOT_ID`，不要从空配置重新运行 setup 生成新存档编号。已经启用多玩家时，还需安全恢复原 `.local/cloud-players.json`；有待处理配置时一并恢复 `.local/cloud-players.pending.json`，按下文先执行 apply。
+
 1. 在现有游戏中导出本地备份，完成云同步，然后关闭所有旧页面和客户端。
 2. 在部署电脑构建并发布新网页和 Worker：`cloud-windows.cmd build`、`cloud-windows.cmd deploy`。旧版单人 `GAME_AUTH` 仍可使用，先升级代码再迁移密码配置。
 3. 在自己的交互终端运行 `cloud-windows.cmd players init`，输入原来的专用密码（输入隐藏）。工具先向游戏登录接口验证原密码，通过后保留密码和原云存档位，只轮换原玩家的会话签名密钥，所以各设备需要重新登录。验证失败不会更新配置。

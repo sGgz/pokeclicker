@@ -47,6 +47,23 @@ export function changePlayer(registry, name, id) {
     return { auth: validateRegistry(auth), password, player: player || auth.players.at(-1) };
 }
 
+export async function readMigrationConfig(file = configFile) {
+    let config;
+    try {
+        config = JSON.parse(await readFile(file, 'utf8'));
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            throw new Error('缺少 cloud-save-worker/wrangler.local.json。新 worktree 不会复制此本地配置；请从原部署目录或安全备份恢复，保留原 CLOUD_SLOT_ID，不要重新生成存档位。');
+        }
+        if (error instanceof SyntaxError) throw new Error('本地部署配置格式错误，请从原部署目录或安全备份恢复。');
+        throw error;
+    }
+    if (!uuid.test(config?.vars?.CLOUD_SLOT_ID || '') || !/^https:\/\/[^/?#]+$/.test(config?.vars?.ALLOWED_ORIGIN || '')) {
+        throw new Error('本地部署配置缺少有效的 CLOUD_SLOT_ID 或 ALLOWED_ORIGIN，请恢复原部署配置；未读取密码或修改云端配置。');
+    }
+    return config;
+}
+
 export async function verifyExistingPassword(password, origin, fetcher = fetch) {
     if (!/^[A-Za-z0-9_-]{32}$/.test(password) || !/^https:\/\/[^/?#]+$/.test(origin || '')) {
         throw new Error('原密码或游戏域名格式无效，未修改云端配置。');
@@ -112,7 +129,7 @@ export async function runPlayers(command, { input = stdin, output = stdout, uplo
     if (command === 'init' && await exists(registryFile)) throw new Error('玩家配置已经存在，请使用 add 或 reset，避免丢失原玩家。');
     let password, changed;
     if (command === 'init') {
-        const config = JSON.parse(await readFile(configFile, 'utf8'));
+        const config = await readMigrationConfig();
         const existing = await hiddenPassword(input, output);
         await verifyExistingPassword(existing, config.vars.ALLOWED_ORIGIN);
         auth = initializePlayers(config.vars.CLOUD_SLOT_ID, '我', existing);

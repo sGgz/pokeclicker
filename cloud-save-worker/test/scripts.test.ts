@@ -211,6 +211,26 @@ test('password CLI refuses non-interactive invocation without displaying credent
 
 const playerTools = await import(new URL('../scripts/players.mjs', import.meta.url).href);
 
+test('migration config reports missing worktree config safely and retains the restored slot', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'pokeclicker-player-config-test-'));
+    const file = path.join(dir, 'wrangler.local.json');
+    try {
+        await assert.rejects(playerTools.readMigrationConfig(file), /新 worktree 不会复制此本地配置.*保留原 CLOUD_SLOT_ID/);
+        await writeFile(file, '{"private":"do-not-print-this-value"');
+        await assert.rejects(playerTools.readMigrationConfig(file), error => {
+            assert.match((error as Error).message, /本地部署配置格式错误/);
+            assert.ok(!(error as Error).message.includes('do-not-print-this-value'));
+            return true;
+        });
+        await writeFile(file, JSON.stringify({ vars: { CLOUD_SLOT_ID: '', ALLOWED_ORIGIN: 'https://game.example' } }));
+        await assert.rejects(playerTools.readMigrationConfig(file), /未读取密码或修改云端配置/);
+        const config = { vars: { CLOUD_SLOT_ID: '66cf8d51-2bac-4a66-a608-5f08a77ed50a', ALLOWED_ORIGIN: 'https://game.example' } };
+        await writeFile(file, JSON.stringify(config));
+        assert.deepEqual(await playerTools.readMigrationConfig(file), config);
+        assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), config);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test('multi-player migration retains the original password verifier and cloud slot', () => {
     const { password, auth: old } = passwordTools.createGameCredentials();
     const slot = '66cf8d51-2bac-4a66-a608-5f08a77ed50a';
