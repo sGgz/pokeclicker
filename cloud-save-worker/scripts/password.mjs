@@ -44,22 +44,31 @@ export async function uploadAuthSecret(auth, { spawnProcess = spawn } = {}) {
 }
 
 export async function runPasswordSetup({
-    input = stdin, output = stdout, config = configUrl, upload = uploadAuthSecret,
+    input = stdin, output = stdout, config = configUrl, upload = uploadAuthSecret, fetcher = fetch,
 } = {}) {
     if (!input.isTTY || !output.isTTY) {
         throw new Error('请在自己的 cmd 交互窗口运行 npm run cloud:password；请勿重定向输出或通过聊天记录运行，以免泄露游戏密码。');
     }
     for (const file of ['cloud-players.json', 'cloud-players.pending.json']) {
         try {
-            await access(new URL('../../.local/' + file, import.meta.url));
+            await access(new URL('../.local/' + file, typeof config === 'string' ? pathToFileURL(config) : config));
         } catch (error) {
             if (error.code === 'ENOENT') continue;
             throw error;
         }
         throw new Error('已启用多人存档或有待处理玩家配置。请使用 cloud-windows.cmd players reset 单独重置玩家密码；不能覆盖为单人配置。');
     }
-    try { await readFile(config, 'utf8'); } catch {
+    let configuration;
+    try { configuration = JSON.parse(await readFile(config, 'utf8')); } catch {
         throw new Error('没有找到本机配置。请先运行 npm run cloud:setup，再按手册完成 cloud:login 和 cloud:deploy。');
+    }
+    if (configuration.vars?.ALLOWED_ORIGIN) {
+        let response;
+        try { response = await fetcher(configuration.vars.ALLOWED_ORIGIN + '/auth/config', { redirect: 'manual', signal: AbortSignal.timeout(20000) }); }
+        catch { throw new Error('无法确认线上认证模式，未修改密码；请检查网络后重试。'); }
+        const mode = await response.json().catch(() => null);
+        if (mode?.mode === 'git') throw new Error('已启用远端玩家配置，请使用 cloud-windows.cmd players reset，不能覆盖签名主密钥。');
+        if (mode?.mode !== 'legacy' && !(response.status === 503 && mode?.code === 'AUTH_CONFIGURATION')) throw new Error('无法确认线上认证模式，未修改密码；请先更新 Worker。');
     }
     const rl = createInterface({ input, output, terminal: false });
     const ask = prompt => new Promise((resolve, reject) => {

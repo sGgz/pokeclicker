@@ -285,3 +285,77 @@ test('migration validates the old password at the fixed origin without following
     }
     await assert.rejects(playerTools.verifyExistingPassword(password, 'https://game.example', async () => new Response(null, { status: 303, headers: { Location: 'https://evil.example' } })));
 });
+
+test('password setup cannot replace a remote registry signing master with single-player credentials', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'pokeclicker-remote-password-test-'));
+    const config = path.join(dir, 'wrangler.local.json');
+    try {
+        await writeFile(config, JSON.stringify({ vars: { ALLOWED_ORIGIN: 'https://game.example' } }));
+        await assert.rejects(passwordTools.runPasswordSetup({ config, input: { isTTY: true }, output: { isTTY: true },
+            fetcher: async () => Response.json({ mode: 'git' }), upload: async () => assert.fail('must not replace signing master'),
+        }), /不能覆盖签名主密钥/);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+async function remotePlayerWizard(command: string, answers: string[], fail = false) {
+    const dir = await mkdtemp(path.join(tmpdir(), 'pokeclicker-remote-player-test-'));
+    const config = path.join(dir, 'wrangler.local.json');
+    await writeFile(config, JSON.stringify({ vars: { ALLOWED_ORIGIN: 'https://game.example', CLOUD_SLOT_ID: '66cf8d51-2bac-4a66-a608-5f08a77ed50a' } }));
+    const input = Object.assign(new PassThrough(), { isTTY: true });
+    let text = '', upload: any, mutation: any;
+    const players = [{ id: 'player', name: '我', slotId: '66cf8d51-2bac-4a66-a608-5f08a77ed50a' }];
+    const output = Object.assign(new Writable({ write(chunk, _encoding, done) {
+        const value = chunk.toString(); text += value;
+        if (/^[A-Za-z0-9_-]{32}$/m.test(text)) assert.ok(mutation, 'password must only appear after mutation success');
+        if (value.endsWith('：')) setImmediate(() => input.write(answers.shift() + '\n'));
+        done();
+    } }), { isTTY: true });
+    const fetcher = async (url: string, init: RequestInit) => {
+        assert.equal(init.redirect, 'manual');
+        if (url.endsWith('/auth/login')) return new Response(null, { status: 303, headers: { Location: '/login?returnTo=%2F', 'Set-Cookie': '__Host-pokeclicker_session=test-session; Secure; HttpOnly' } });
+        assert.equal((init.headers as any).Cookie, '__Host-pokeclicker_session=test-session');
+        if (init.method === 'POST') {
+            if (fail) return Response.json({ code: 'PLAYERS_CONFLICT' }, { status: 409 });
+            mutation = JSON.parse(String(init.body));
+            return Response.json({ players, blobSha: 'a'.repeat(40), activate: command === 'init' });
+        }
+        return Response.json({ players, blobSha: 'a'.repeat(40) });
+    };
+    try {
+        let error;
+        try { await playerTools.runPlayers(command, { input, output, config, fetcher, readPassword: async () => 'p'.repeat(32), upload: async (value: any) => { upload = value; } }); }
+        catch (failure) { error = failure; }
+        assert.deepEqual(await readdir(dir), ['wrangler.local.json'], 'management must not create a local registry or pending secret file');
+        return { text, upload, mutation, error };
+    } finally { input.destroy(); output.destroy(); await rm(dir, { recursive: true, force: true }); }
+}
+
+test('remote init activates only a signing master and never saves or prints it locally', async () => {
+    const result = await remotePlayerWizard('init', ['y']);
+    assert.equal(result.error, undefined);
+    assert.equal(result.upload.version, 3);
+    assert.deepEqual(Object.keys(result.upload).sort(), ['sessionKey', 'version']);
+    assert.ok(!result.text.includes(result.upload.sessionKey));
+    assert.deepEqual(result.mutation, { command: 'init' });
+});
+
+test('remote add displays the generated password only after a successful SHA-checked update', async () => {
+    const result = await remotePlayerWizard('add', ['朋友', 'y', '']);
+    assert.equal(result.error, undefined);
+    const password = result.text.match(/^([A-Za-z0-9_-]{32})$/m)![1];
+    assert.equal(result.mutation.passwordHash, createHash('sha256').update(password).digest('hex'));
+    assert.equal(result.mutation.baseBlobSha, 'a'.repeat(40));
+    assert.equal(result.upload, undefined);
+    assert.ok(!result.text.includes(result.mutation.passwordHash));
+    assert.equal(result.mutation.sessionKey, undefined);
+});
+
+test('remote cancellation and conflict never upload a master or expose an unusable password', async () => {
+    const cancelled = await remotePlayerWizard('init', ['']);
+    assert.equal(cancelled.mutation, undefined);
+    assert.equal(cancelled.upload, undefined);
+    const conflict = await remotePlayerWizard('add', ['朋友', 'y'], true);
+    assert.match((conflict.error as Error).message, /远端玩家配置已变化/);
+    assert.equal(conflict.upload, undefined);
+    assert.ok(!/^[A-Za-z0-9_-]{32}$/m.test(conflict.text));
+});

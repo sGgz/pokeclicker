@@ -1,13 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, mkdir, writeFile, rename, access } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 import { stdin, stdout } from 'node:process';
 import { createGameCredentials, uploadAuthSecret } from './password.mjs';
 
-const directory = new URL('../../.local/', import.meta.url);
-const registryFile = new URL('cloud-players.json', directory);
-const pendingFile = new URL('cloud-players.pending.json', directory);
 const configFile = new URL('../wrangler.local.json', import.meta.url);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -85,8 +82,8 @@ export async function verifyExistingPassword(password, origin, fetcher = fetch) 
 }
 
 // Raw input prevents the existing password from being echoed into terminal output.
-async function hiddenPassword(input, output) {
-    output.write('原来的游戏专用密码（输入隐藏）：');
+export async function hiddenPassword(input, output) {
+    output.write('主玩家的游戏专用密码（输入隐藏）：');
     const wasRaw = input.isRaw;
     input.setRawMode(true);
     input.resume();
@@ -112,53 +109,80 @@ async function hiddenPassword(input, output) {
     }
 }
 
-async function exists(file) {
-    try { await access(file); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+export async function adminSession(password, origin, fetcher = fetch) {
+    let response;
+    try {
+        response = await fetcher(origin + '/auth/login', { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(30000),
+            headers: { Origin: origin, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ password, returnTo: '/' }).toString() });
+        await response.body?.cancel();
+    } catch { throw new Error('无法连接游戏登录接口，请检查网络后重试。'); }
+    const cookies = response.headers.getSetCookie?.() || [response.headers.get('set-cookie') || ''];
+    const cookie = cookies.find(value => value.startsWith('__Host-pokeclicker_session='))?.split(';')[0];
+    if (response.status !== 303 || response.headers.get('Location') !== '/login?returnTo=%2F' || !cookie) throw new Error('主玩家密码未通过验证，或登录尝试过多；未更新玩家配置。');
+    return cookie;
 }
 
-export async function runPlayers(command, { input = stdin, output = stdout, upload = uploadAuthSecret } = {}) {
+export async function adminRequest(origin, cookie, body, fetcher = fetch) {
+    let response;
+    try {
+        response = await fetcher(origin + '/api/cloud-save/admin/players', {
+            method: body ? 'POST' : 'GET', redirect: 'manual', signal: AbortSignal.timeout(30000),
+            headers: { Origin: origin, Cookie: cookie, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+            ...(body ? { body: JSON.stringify(body) } : {}),
+        });
+    } catch { throw new Error('玩家管理连接中断；更新可能已完成，请重新运行 list 确认，不要盲目重复新增。'); }
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+        const messages = { ADMIN_REQUIRED: '只有主玩家可以管理其他玩家。', PLAYERS_CONFLICT: '远端玩家配置已变化或拒绝更新，请重新读取后再操作。',
+            PLAYERS_NOT_INITIALIZED: '请先执行 players init。', PLAYERS_MISSING: '远端玩家配置缺失，请恢复仓库历史，不要重新初始化。',
+            PRIVATE_REPOSITORY_REQUIRED: '存档仓库必须是私有仓库。', LOGIN_REQUIRED: '登录已过期，请重新运行命令。' };
+        throw new Error(messages[result?.code] || '玩家管理失败，请确认已发布新版 Worker、仓库权限正常后重试。');
+    }
+    if (!result || !Array.isArray(result.players)) throw new Error('玩家管理返回格式无效，未显示生成的密码。');
+    return result;
+}
+
+export async function runPlayers(command, { input = stdin, output = stdout, upload = uploadAuthSecret, fetcher = fetch, config = configFile, readPassword = hiddenPassword } = {}) {
     if (!input.isTTY || !output.isTTY) throw new Error('请在本机交互终端运行 cloud:players；请勿重定向输出或通过聊天运行，以免泄露密码。');
-    if (!['init', 'add', 'reset', 'list', 'apply'].includes(command)) throw new Error('用法：cloud-windows.cmd players init|add|reset|list|apply（Node 24 环境也可用 npm run cloud:players -- 命令）');
-    if (await exists(pendingFile) && command !== 'apply') throw new Error('有尚未确认上传的玩家配置。请先运行 cloud-windows.cmd players apply；新增或重置密码若未显示，需要之后重新 reset。');
-    let auth;
-    if (command !== 'init' && command !== 'apply') auth = validateRegistry(JSON.parse(await readFile(registryFile, 'utf8')));
-    if (command === 'list') {
-        auth.players.forEach(player => output.write(`${player.name} | 玩家 ID：${player.id} | 存档位：${player.slotId}\n`));
-        return;
-    }
-    if (command === 'init' && await exists(registryFile)) throw new Error('玩家配置已经存在，请使用 add 或 reset，避免丢失原玩家。');
-    let password, changed;
-    if (command === 'init') {
-        const config = await readMigrationConfig();
-        const existing = await hiddenPassword(input, output);
-        await verifyExistingPassword(existing, config.vars.ALLOWED_ORIGIN);
-        auth = initializePlayers(config.vars.CLOUD_SLOT_ID, '我', existing);
-        output.write('原密码和原云存档位将保留；已有登录会话需要重新登录。\n');
-    }
+    if (!['init', 'add', 'reset', 'list'].includes(command)) throw new Error('用法：cloud-windows.cmd players init|add|reset|list；apply 已停用，操作以远端配置为准。');
+    const configuration = await readMigrationConfig(config);
+    const origin = configuration.vars.ALLOWED_ORIGIN;
+    const cookie = await adminSession(await readPassword(input, output), origin, fetcher);
+    const show = result => result.players.forEach(player => output.write(`${player.name} | 玩家 ID：${player.id} | 存档位：${player.slotId}\n`));
+    if (command === 'list') { show(await adminRequest(origin, cookie, undefined, fetcher)); return; }
+    let snapshot;
+    if (command !== 'init') snapshot = await adminRequest(origin, cookie, undefined, fetcher);
     const rl = createInterface({ input, output });
     try {
         if (command === 'add') {
             const name = (await rl.question('新玩家显示名称（最多 40 字）：')).trim();
-            ({ auth, password, player: changed } = changePlayer(auth, name));
+            if (!name || name.length > 40) throw new Error('玩家名称必须为 1 至 40 字。');
+            snapshot.change = { command, name };
         } else if (command === 'reset') {
-            auth.players.forEach(player => output.write(`${player.name}：${player.id}\n`));
+            show(snapshot);
             const id = (await rl.question('要重置密码的玩家 ID：')).trim();
-            ({ auth, password, player: changed } = changePlayer(auth, undefined, id));
-        } else if (command === 'apply') {
-            auth = validateRegistry(JSON.parse(await readFile(pendingFile, 'utf8')));
+            if (!snapshot.players.some(player => player.id === id)) throw new Error('找不到此玩家。');
+            snapshot.change = { command, playerId: id };
         }
         if ((await rl.question('将更新云端玩家配置。输入 y 继续，回车取消：')).trim().toLowerCase() !== 'y') {
             output.write('已取消，没有更新云端玩家配置。\n'); return;
         }
-        await mkdir(directory, { recursive: true });
-        if (command !== 'apply') await writeFile(pendingFile, JSON.stringify(auth, null, 2) + '\n', { encoding: 'utf8', flag: 'wx', mode: 0o600 });
-        await upload(auth);
-        await rename(pendingFile, registryFile);
-        output.write('玩家配置已更新。请安全备份 .local/cloud-players.json，它含登录签名密钥，不要提交或分享。\n');
-        if (password) {
-            output.write(`${changed.name} 的专用密码仅在此显示，请保存到密码管理器：\n\n${password}\n\n`);
+        if (command === 'init') {
+            const result = await adminRequest(origin, cookie, { command }, fetcher);
+            if (result.activate) {
+                const { auth } = createGameCredentials();
+                await upload({ version: 3, sessionKey: auth.sessionKey });
+                output.write('远端玩家配置已启用，密码、玩家 ID 和存档位保留；全部设备需要重新登录。\n');
+            } else output.write('远端玩家配置已经启用，无需重复迁移。\n');
+            show(result);
+        } else {
+            const { password, auth } = createGameCredentials();
+            const result = await adminRequest(origin, cookie, { ...snapshot.change, baseBlobSha: snapshot.blobSha, passwordHash: auth.passwordHash }, fetcher);
+            output.write(`玩家配置已更新。专用密码仅在此显示，请保存到密码管理器：\n\n${password}\n\n`);
+            show(result);
             await rl.question('确认已保存密码后，按回车结束：');
-        } else if (command === 'apply') output.write('待处理配置已应用。若之前未显示新密码，请对相应玩家运行 reset。\n');
+        }
     } finally { rl.close(); }
 }
 

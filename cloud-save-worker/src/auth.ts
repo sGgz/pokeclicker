@@ -27,7 +27,12 @@ export interface PlayersSecret {
     players: PlayerSecret[];
 }
 
-type GameSecret = PasswordSecret | PlayersSecret;
+export interface RemotePlayersSecret {
+    version: 3;
+    sessionKey: string;
+}
+
+type GameSecret = PasswordSecret | PlayersSecret | RemotePlayersSecret;
 
 export const SESSION_COOKIE = '__Host-pokeclicker_session';
 export const SESSION_SECONDS = 7 * 24 * 60 * 60;
@@ -51,6 +56,8 @@ export function parseAuth(config: AuthConfig): GameSecret {
             for (const key of ['id', 'slotId', 'passwordHash', 'sessionKey']) {
                 if (new Set(value.players.map((player: Record<string, string>) => player[key])).size !== value.players.length) throw new Error('Duplicate player');
             }
+        } else if (value?.version === 3) {
+            if (!/^[A-Za-z0-9_-]{43}$/.test(value.sessionKey) || Object.keys(value).some(key => !['version', 'sessionKey'].includes(key))) throw new Error('Invalid remote secret');
         } else throw new Error('Invalid version');
         cachedSecret = { raw: config.GAME_AUTH, value };
         return value;
@@ -61,6 +68,7 @@ export function parseAuth(config: AuthConfig): GameSecret {
 
 export function players(config: AuthConfig): PlayerSecret[] {
     const auth = parseAuth(config);
+    if (auth.version === 3) throw new ApiError(503, 'AUTH_CONFIGURATION', '远端玩家配置尚未加载。');
     return auth.version === 2 ? auth.players : [{
         id: 'player', name: '我的存档', slotId: config.CLOUD_SLOT_ID || '',
         passwordHash: auth.passwordHash, sessionKey: auth.sessionKey,

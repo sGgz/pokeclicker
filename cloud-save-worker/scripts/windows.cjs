@@ -23,10 +23,10 @@ async function main(args = process.argv.slice(2), {
 } = {}) {
     if (!args.length || (args.length === 1 && ['--help', '-h'].includes(args[0]))) {
         output.write('Windows 云存档管理入口（自动选择 Node.js 24）\n'
-            + '首次迁移：cloud-windows.cmd players init\n'
+            + '迁移到私有 Git 玩家配置：cloud-windows.cmd players init\n'
             + '新增玩家：cloud-windows.cmd players add\n'
             + '查看玩家：cloud-windows.cmd players list\n'
-            + '重置密码：cloud-windows.cmd players reset\n'
+            + '重置密码：cloud-windows.cmd players reset（管理命令输入主玩家密码）\n'
             + '其他命令：' + COMMANDS.join('、') + '；version 查看所选 Node/npm 版本。\n'
             + 'CMD 中直接运行；Git Bash 的 mintty 窗口可用 winpty node cloud-save-worker/scripts/windows.cjs players init。\n');
         return 0;

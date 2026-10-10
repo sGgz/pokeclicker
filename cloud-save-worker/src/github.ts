@@ -67,7 +67,7 @@ export class GithubStore {
         this.path = '/contents/saves/' + env.CLOUD_SLOT_ID + '.json';
     }
 
-    private async call(path: string, init: RequestInit = {}): Promise<Response> {
+    protected async call(path: string, init: RequestInit = {}): Promise<Response> {
         let response: Response;
         try {
             response = await this.fetcher(this.root + path, {

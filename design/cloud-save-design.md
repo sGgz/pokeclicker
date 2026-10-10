@@ -11,11 +11,11 @@
 
 ## 1. 结论与范围
 
-### 2026-10-10 多玩家扩展（源码实现，尚未部署）
+### 2026-10-10 多玩家扩展：私有 Git 玩家配置
 
-同一个域名继续使用密码登录。`GAME_AUTH` 支持 version 2：固定主玩家 `player`，以及各自独立的玩家 ID、显示名称、随机密码校验值、会话签名密钥和存档位 UUID。每个玩家目前只有一个云存档位；多人共用一个私有仓库和分支，分别保存为 `saves/<slotId>.json`，不按玩家建立 Git 分支。后端以已验证的会话选择文件路径，客户端不能指定其他玩家身份。重置某人的密码会同时轮换该人的会话签名密钥，其玩家 ID、文件路径和已有进度保持不变。
+同一个域名继续使用密码登录。私有存档仓库的 `config/players.json` 保存固定主玩家 `player`、每人的 ID、名称、随机密码校验值、存档位 UUID 和凭证版本。`GAME_AUTH` version 3 只保留签名主密钥；Worker 使用 HMAC 按玩家身份、槽位和凭证版本派生独立签名密钥，不将密钥写入 Git。每人使用一个云存档位，共用一个私有仓库和分支，分别保存为 `saves/<slotId>.json`。后端以已验证会话选择路径。重置密码时更换该人的凭证版本，保留其 ID、槽位和其他玩家会话。
 
-旧版 version 1 Secret 继续可用。迁移工具保留主玩家原密码的校验值和 `CLOUD_SLOT_ID`，只轮换主玩家签名密钥；迁移后原登录需重新登录。管理命令为 `npm run cloud:players -- init|add|list|reset|apply`，本地管理配置放在已被忽略的 `.local/cloud-players.json`，不保存明文密码。首次迁移必须在部署电脑输入原专用密码；具体顺序见操作手册“多玩家共用域名”。
+旧 version 1/2 Secret 在迁移前继续可用。主玩家登录后，管理接口将当前 Secret 中全部玩家迁入 Git，迁移可重试且拒绝覆盖不同配置；随后工具上传新的 version 3 签名主密钥。密码、ID 和槽位保持不变，全部设备重新登录。管理命令为 `cloud-windows.cmd players init|add|list|reset`，通过主玩家会话授权、同源校验和文件 SHA 更新远端配置，不保存本地注册表；apply 停用。配置读取验证仓库为私有，缓存与请求合并最多 15 秒，管理读取始终取最新值，更新后清缓存；到期后的 GitHub 错误关闭认证，不回退旧配置。
 
 网页和桌面端在展示本地选档前确认登录玩家。同一浏览器/客户端的原有 `localStorage` 游戏数据按玩家归档到 IndexedDB，再装载目标玩家的数据；整个切换持有原有的站点写入锁，并通过持久化日志恢复中断的切换。主玩家保留旧同步数据库，其他玩家使用独立数据库，自动同步、未确认上传、安装日志、冲突记录和恢复备份均隔离。离线桌面继续使用最后选择的本地玩家。`identity` 接口不依赖 GitHub 可用性，仓库暂时不可用时仍可正确选择玩家；云同步仍需通过 `status` 检查仓库连接。
 
@@ -164,7 +164,7 @@ saves/
 | Secret | GITHUB_SAVE_TOKEN | 仅 Worker 读取 |
 | 运行配置 | GITHUB_OWNER、GITHUB_SAVE_REPO、GITHUB_SAVE_BRANCH | 固定目标，不接受请求任意指定 |
 | 运行配置 | CLOUD_SLOT_ID | 固定单槽位 UUID |
-| Secret | GAME_AUTH | 随机密码验证信息及独立会话签名密钥，仅 Worker 读取，由 cloud:password 生成 |
+| Secret | GAME_AUTH | version 3 签名主密钥；迁移前兼容 version 1/2 密码配置，仅 Worker 读取 |
 | 绑定 | 登录限流器 | 向导生成 Workers 原生 Rate Limit 绑定，不让用户手填 |
 | 运行配置 | ALLOWED_ORIGIN、MAX_SAVE_BYTES | 同源约束与大小上限 |
 

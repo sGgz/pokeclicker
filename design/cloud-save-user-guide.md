@@ -1,6 +1,6 @@
 # PokéClicker 私人云存档操作手册
 
-## 多玩家共用域名（2026-10-10 网页与 Worker 已发布，玩家配置待迁移）
+## 多玩家共用域名（2026-10-10，玩家配置由私有 Git 管理）
 
 ### Windows 命令入口与 Node 版本
 
@@ -22,11 +22,11 @@ cloud-windows.cmd players add
 
 管理员首次启用的顺序：
 
-若在新 worktree 中操作，先将原部署目录的 `cloud-save-worker/wrangler.local.json` 复制到当前项目的同名位置。该文件被 Git 忽略，不会随分支或 worktree 自动带过来；已有站点必须保留其中的 `CLOUD_SLOT_ID`，不要从空配置重新运行 setup 生成新存档编号。已经启用多玩家时，还需安全恢复原 `.local/cloud-players.json`；有待处理配置时一并恢复 `.local/cloud-players.pending.json`，按下文先执行 apply。
+若在新 worktree 中操作，先将原部署目录的 `cloud-save-worker/wrangler.local.json` 复制到当前项目的同名位置。该文件被 Git 忽略，不会随分支或 worktree 自动带过来；已有站点必须保留其中的 `CLOUD_SLOT_ID`，不要从空配置重新运行 setup 生成新存档编号。玩家关系保存在现有私有存档仓库的 `config/players.json`，管理命令直接读取远端最新版，不再依赖 `.local/cloud-players.json` 或 pending 文件。
 
 1. 在现有游戏中导出本地备份，完成云同步，然后关闭所有旧页面和客户端。
 2. 在部署电脑构建并发布新网页和 Worker：`cloud-windows.cmd build`、`cloud-windows.cmd deploy`。旧版单人 `GAME_AUTH` 仍可使用，先升级代码再迁移密码配置。
-3. 在自己的交互终端运行 `cloud-windows.cmd players init`，输入原来的专用密码（输入隐藏）。工具先向游戏登录接口验证原密码，通过后保留密码和原云存档位，只轮换原玩家的会话签名密钥，所以各设备需要重新登录。验证失败不会更新配置。
+3. 在自己的交互终端运行 `cloud-windows.cmd players init`，输入主玩家原来的专用密码（输入隐藏）。Worker 将当前单人或多人 Secret 中的全部玩家迁到私有 Git，仅保存玩家 ID、名称、存档位、密码校验值和凭证版本。随后工具将 GAME_AUTH 切换为仅含签名主密钥的 version 3 Secret。全部密码、玩家 ID 和存档位保留，各设备需要重新登录。中途失败可重新 init；仓库里已有不同配置时拒绝覆盖，已经启用时不会再次轮换主密钥。
 4. 运行 `cloud-windows.cmd players add`，填写另一人的显示名称。上传成功后会在本机终端显示他的随机专用密码，保存到密码管理器并私下交给本人。不要发到本聊天或提交到代码仓库。
 5. 所有电脑都安装包含本次修改的新版桌面客户端。旧客户端没有玩家本地隔离和新的身份接口支持，不能继续用于多人登录。
 6. 分别用两个密码登录，检查面板显示的玩家。新玩家应看到空的本地选档，可新建存档并上传；原玩家应保留自己的进度。各自进行网页和桌面端往返同步，核对训练家、进度和设置。
@@ -35,12 +35,15 @@ cloud-windows.cmd players add
 
 | 命令 | 用途 |
 | --- | --- |
-| `cloud-windows.cmd players list` | 查看玩家名称、玩家 ID 和存档位，不显示密码 |
+| `cloud-windows.cmd players list` | 输入主玩家密码，读取远端玩家名称、玩家 ID 和存档位，不显示密码 |
 | `cloud-windows.cmd players add` | 新增玩家，生成独立密码和存档文件 |
 | `cloud-windows.cmd players reset` | 输入玩家 ID，只重置该人的密码和登录会话；存档保留 |
-| `cloud-windows.cmd players apply` | 重试上一次中断的配置上传；若新密码未显示，之后对该玩家再执行 reset |
 
-**安全备份 `.local/cloud-players.json`。** 它包含密码校验值和会话签名密钥，不含明文密码，目录已被 Git 忽略。不要删除后重新 init，否则会丢失其他玩家映射。备份丢失时从自己的安全副本恢复。存在 `.local/cloud-players.pending.json` 表示上传或本地确认未完成，先运行 apply，再继续管理。启用多人后，旧命令 `cloud:password` 会阻止覆盖本地已记录的多人配置，改用 reset；不要绕过工具在控制台覆盖 `GAME_AUTH`。最多配置 20 位玩家。
+**管理以远端 `config/players.json` 为准。** 主玩家是管理员，每次管理命令输入主玩家密码，登录会话仅留在该进程内存中。普通玩家没有管理权限。新增和重置带上读取到的文件 SHA，冲突时不会覆盖其他人的修改。若更新连接中断或新密码未显示，先 list 核对是否已经写入，再对对应玩家 reset；不要盲目重复新增。apply 已停用，不再上传旧本地快照。首次远端迁移确认完成后，旧本地玩家文件可以删除，日常管理无需保留它们。最多配置 20 位玩家。
+
+私有仓库保存密码校验值，不保存明文密码、会话签名密钥或 GitHub token。GAME_AUTH version 3 仅保存签名主密钥；Worker 按玩家 ID、存档位和凭证版本派生独立会话密钥。重置某人的密码同时更换其凭证版本，其余人的密码与会话不变。配置缓存最多 15 秒，同一 Worker 的管理更新立即清缓存，其他实例的旧会话最迟在缓存过期后失效。GitHub 故障且缓存过期时，登录及身份检查返回服务不可用，保留本地游戏进度；不会回退旧 Secret 或用错误玩家配置继续运行。远端文件丢失或损坏时，从仓库历史恢复正确的配置，不能重新 init 覆盖。
+
+旧 `cloud:password` 只用于首次单人密码设置；线上远端模式启用后会拒绝覆盖签名主密钥，日常改密使用 players reset。初始化之后普通新增、重置和列表操作不需要 Cloudflare 登录；首次切换主密钥仍需本机已有的 cloud:login 授权。
 
 离线桌面使用最后选中的本地玩家，联网登录其他人的密码后才切换。不同标签页共享网页登录状态，切换后回到旧游戏点击“检查连接”会先保存并加载新玩家；同一浏览器只允许一个游戏页面持有写入锁。独立浏览器配置或不同设备可以分别游玩。仓库拥有者能看到仓库内全部存档。
 
