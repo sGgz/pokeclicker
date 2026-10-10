@@ -3,6 +3,7 @@ import DungeonGuidePlanner, { planGuideMove } from './DungeonGuidePlanner';
 import type { GuidePlanInput, GuidePosition, GuideTile } from './DungeonGuidePlanner';
 import { DungeonTileType as Tile } from '../GameConstants';
 import Notifier from '../notifications/Notifier';
+import PrivateGameplay, { dungeonChestTiers } from './settings';
 
 vi.mock('../notifications/Notifier', () => ({ default: { notify: vi.fn() } }));
 
@@ -30,6 +31,57 @@ afterEach(() => {
 });
 
 describe('dungeon guide next-step policy', () => {
+    it.each(dungeonChestTiers)('prioritizes every chest at or above %s, including hidden tiles', (minimum) => {
+        for (const tier of dungeonChestTiers) {
+            const plan = { ...input(['B.C'], 'Drake', point(1, 0)), chestPriority: minimum };
+            plan.tiles[0][2].chestTier = tier;
+            plan.tiles[0][2].visited = false;
+            expect(planGuideMove(plan)).toMatchObject({
+                type: 'move', target: point(dungeonChestTiers.indexOf(tier) >= dungeonChestTiers.indexOf(minimum) ? 2 : 0, 0),
+            });
+        }
+    });
+
+    it('opens all qualifying chests before returning to the boss and ignores lower tiers', () => {
+        const plan = { ...input(['B.C.C.C'], 'Drake', point(1, 0)), chestPriority: 'epic' as const };
+        plan.tiles[0][2].chestTier = 'common';
+        plan.tiles[0][4].chestTier = 'epic';
+        plan.tiles[0][6].chestTier = 'mythic';
+        expect(planGuideMove(plan)).toMatchObject({ target: point(4, 0) });
+        plan.tiles[0][4].type = Tile.empty;
+        expect(planGuideMove(plan)).toMatchObject({ target: point(6, 0) });
+        plan.tiles[0][6].type = Tile.empty;
+        expect(planGuideMove(plan)).toMatchObject({ target: point(0, 0) });
+    });
+
+    it.each(['B', 'L'])('leaves current exit %s to open qualifying chests first', (kind) => {
+        const plan = { ...input([`${kind}..C`]), chestPriority: 'rare' as const };
+        plan.tiles[0][3].chestTier = 'rare';
+        expect(planGuideMove(plan)).toEqual({ type: 'move', position: point(1, 0), target: point(3, 0) });
+    });
+
+    it('does not defeat the boss when a qualifying chest is temporarily unreachable', () => {
+        const plan = { ...input(['B#C']), chestPriority: 'rare' as const };
+        plan.tiles[0][2].chestTier = 'legendary';
+        expect(planGuideMove(plan)).toEqual({ type: 'no-route' });
+    });
+
+    it('restores boss priority immediately when disabled or raised above the remaining chest tier', () => {
+        const plan = { ...input(['B.C'], 'Drake', point(1, 0)), chestPriority: 'rare' as const, target: point(2, 0) };
+        plan.tiles[0][2].chestTier = 'epic';
+        expect(planGuideMove(plan)).toMatchObject({ target: point(2, 0) });
+        expect(planGuideMove({ ...plan, chestPriority: undefined })).toMatchObject({ target: point(0, 0) });
+        expect(planGuideMove({ ...plan, chestPriority: 'legendary' })).toMatchObject({ target: point(0, 0) });
+    });
+
+    it('does not give Georgia chest priority or treat missing chest metadata as qualifying', () => {
+        const plan = { ...input(['B.C'], 'Georgia', point(1, 0)), chestPriority: 'common' as const };
+        plan.tiles[0][2].chestTier = 'mythic';
+        expect(planGuideMove(plan)).toMatchObject({ target: point(0, 0) });
+        plan.tiles[0][2].chestTier = undefined;
+        expect(planGuideMove({ ...plan, guide: 'Drake' })).toMatchObject({ target: point(0, 0) });
+    });
+
     it('waits during blocked movement and when the current map tile is unavailable', () => {
         expect(planGuideMove({ ...input(['C']), waiting: true })).toEqual({ type: 'wait' });
         expect(planGuideMove(input(['#']))).toEqual({ type: 'wait' });
@@ -178,8 +230,9 @@ describe('dungeon guide next-step policy', () => {
 
 function runtime(plan: GuidePlanInput) {
     let position = { ...plan.position };
-    const tiles = plan.tiles.map((row) => row.map((tile) => tile && ({
+    const tiles: { isVisited: boolean; metadata?: { tier: GuideTile['chestTier'] }; type(): Tile }[][] = plan.tiles.map((row) => row.map((tile) => tile && ({
         type: () => tile.type, isVisited: tile.visited,
+        metadata: { get tier() { return tile.chestTier; } },
     })));
     const floors = Array.from({ length: position.floor + 1 }, () => tiles);
     const map = {
@@ -198,6 +251,54 @@ describe('dungeon guide runtime adapter', () => {
     beforeEach(() => {
         DungeonGuidePlanner.reset();
         vi.clearAllMocks();
+    });
+
+    it.each(['B', 'L'])('crosses exit %s without interacting, opens the chest, then returns to the exit', (kind) => {
+        vi.spyOn(PrivateGameplay, 'drakeChestPriority').mockReturnValue('epic');
+        const plan = input([`.${kind}..C`]);
+        plan.tiles[0][4].chestTier = 'legendary';
+        const game = runtime(plan);
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(false);
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(1, 0));
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(true);
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(2, 0));
+        DungeonGuidePlanner.walk('Drake');
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(true);
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(4, 0));
+        plan.tiles[0][4].type = Tile.empty;
+        DungeonGuidePlanner.walk('Drake');
+        DungeonGuidePlanner.walk('Drake');
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(true);
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(1, 0));
+    });
+
+    it('checks the new floor for qualifying chests after a ladder transition', () => {
+        vi.spyOn(PrivateGameplay, 'drakeChestPriority').mockReturnValue('rare');
+        const game = runtime(input(['.L']));
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(true);
+        const floors = game.map.board();
+        floors.push([
+            [{ type: () => Tile.empty, isVisited: false }, { type: () => Tile.boss, isVisited: false }],
+            [{ type: () => Tile.chest, isVisited: false, metadata: { tier: 'mythic' } }, { type: () => Tile.empty, isVisited: false }],
+        ]);
+        game.reposition(point(0, 0, 1));
+        DungeonGuidePlanner.walk('Drake');
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(0, 1, 1));
+    });
+
+    it('reads the changed threshold on the next action and clears the old chest target', () => {
+        const priority = vi.spyOn(PrivateGameplay, 'drakeChestPriority').mockReturnValue('rare');
+        const plan = input(['B...C'], 'Drake', point(1, 0));
+        plan.tiles[0][4].chestTier = 'epic';
+        const game = runtime(plan);
+        DungeonGuidePlanner.walk('Drake');
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(2, 0));
+        priority.mockReturnValue('mythic');
+        DungeonGuidePlanner.walk('Drake');
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(1, 0));
+        priority.mockReturnValue(undefined);
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(true);
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(0, 0));
     });
 
     it.each(['fighting', 'catching', 'finished'])('does not read paths or move while %s', (state) => {

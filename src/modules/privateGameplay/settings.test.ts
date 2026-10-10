@@ -25,12 +25,13 @@ describe('private gameplay save settings', () => {
     it('preserves official gameplay defaults and uses the requested 1% guide fee', () => {
         expect(PrivateGameplay.fixedItemPrices()).toBe(false);
         expect(PrivateGameplay.optimizedPathfinding()).toBe(false);
+        expect(PrivateGameplay.drakeChestPriority()).toBeUndefined();
         expect(PrivateGameplay.guideFeeRate()).toBe(0.01);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(false);
         PrivateGameplay.registerSettings();
         expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(false);
         expect(PrivateGameplay.hatcherySlotLimit()).toBe(8);
-        expect(Settings.list).toHaveLength(6);
+        expect(Settings.list).toHaveLength(7);
     });
 
     it('reacts immediately to price mode changes and preserves settings through JSON round trips', () => {
@@ -39,6 +40,7 @@ describe('private gameplay save settings', () => {
         const subscription = quoteMode.subscribe(changes);
         Settings.setSettingByName(`${prefix}pricingMode`, 'base-price');
         Settings.setSettingByName(`${prefix}guidePathfinding`, 'optimized');
+        Settings.setSettingByName(`${prefix}drakeChestPriority`, 'epic');
         Settings.setSettingByName(`${prefix}guideFeeRate`, 1);
         Settings.setSettingByName(`${prefix}autoFillEggSlots`, true);
         Settings.setSettingByName(`${prefix}hatcherySlotLimit`, 16);
@@ -50,6 +52,7 @@ describe('private gameplay save settings', () => {
         Settings.fromJSON(saved);
         expect(PrivateGameplay.fixedItemPrices()).toBe(true);
         expect(PrivateGameplay.optimizedPathfinding()).toBe(true);
+        expect(PrivateGameplay.drakeChestPriority()).toBe('epic');
         expect(PrivateGameplay.guideFeeRate()).toBe(1);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(true);
         expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(true);
@@ -61,6 +64,7 @@ describe('private gameplay save settings', () => {
     it('does not inherit settings or purchase history when loading an old slot without these keys', () => {
         const original = new Setting('other.setting', 'Other', [], 'kept');
         Settings.add(original);
+        Settings.setSettingByName(`${prefix}drakeChestPriority`, 'mythic');
         Settings.setSettingByName(`${prefix}pricingMode`, 'base-price');
         Settings.setSettingByName(`${prefix}guidePathfinding`, 'optimized');
         Settings.setSettingByName(`${prefix}guideFeeRate`, 1);
@@ -70,6 +74,7 @@ describe('private gameplay save settings', () => {
         Settings.fromJSON({});
         expect(PrivateGameplay.fixedItemPrices()).toBe(false);
         expect(PrivateGameplay.optimizedPathfinding()).toBe(false);
+        expect(PrivateGameplay.drakeChestPriority()).toBeUndefined();
         expect(PrivateGameplay.guideFeeRate()).toBe(0.01);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(false);
         expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(false);
@@ -79,7 +84,7 @@ describe('private gameplay save settings', () => {
     it('excludes all private preferences from global defaults', () => {
         PrivateGameplay.markFixedVitaminPurchase();
         expect(Object.keys(Settings.toJSON(true))).toEqual([]);
-        expect(Object.keys(Settings.toJSON())).toHaveLength(6);
+        expect(Object.keys(Settings.toJSON())).toHaveLength(7);
     });
 
     it('retains vitamin purchase history when loading global defaults, but resets it for a different save', () => {
@@ -98,6 +103,7 @@ describe('private gameplay save settings', () => {
         Settings.fromJSON({
             [`${prefix}pricingMode`]: null,
             [`${prefix}guidePathfinding`]: { mode: 'optimized' },
+            [`${prefix}drakeChestPriority`]: 'unknown',
             [`${prefix}guideFeeRate`]: '0.01',
             [`${prefix}fixedVitaminPurchased`]: 'false',
             [`${prefix}autoFillEggSlots`]: 'true',
@@ -105,6 +111,7 @@ describe('private gameplay save settings', () => {
         });
         expect(PrivateGameplay.fixedItemPrices()).toBe(false);
         expect(PrivateGameplay.optimizedPathfinding()).toBe(false);
+        expect(PrivateGameplay.drakeChestPriority()).toBeUndefined();
         expect(PrivateGameplay.guideFeeRate()).toBe(0.01);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(true);
         expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(false);
@@ -124,5 +131,17 @@ describe('private gameplay save settings', () => {
         hired(null);
         fee.observableValue(1);
         expect(PrivateGameplay.guideFeeRate()).toBe(1);
+    });
+
+    it('allows changing the chest threshold and disabling priority during a Drake batch', () => {
+        vi.stubGlobal('DungeonGuides', { hired: () => ({ name: 'Drake' }) });
+        const setting = Settings.getSetting(`${prefix}drakeChestPriority`);
+        for (const tier of ['common', 'rare', 'epic', 'legendary', 'mythic']) {
+            setting.observableValue(tier);
+            expect(PrivateGameplay.drakeChestPriority()).toBe(tier);
+        }
+        setting.observableValue('off');
+        expect(PrivateGameplay.drakeChestPriority()).toBeUndefined();
+        expect(Notifier.notify).not.toHaveBeenCalled();
     });
 });

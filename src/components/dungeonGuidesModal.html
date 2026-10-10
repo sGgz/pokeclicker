@@ -17,6 +17,14 @@
                     <div id="dungeonGuidesModalHireTab" class="tab-pane fade active show">
                         <!-- ko if: player.town instanceof DungeonTown -->
                         <p class="m-2 small text-center">助手服务费按原价的 <strong data-bind="text: (PrivateGameplay.guideFeeRate() * 100).toLocaleString()"></strong>% 收取，每项正服务费最低 1，门票原价。费用仍按整批预付，雇用期间不能切换费率。</p>
+                        <div class="m-2">
+                            <label for="drake-chest-priority">Drake 宝箱优先</label>
+                            <select id="drake-chest-priority" class="form-control" data-bind="
+                                options: Settings.getSetting('ggzz.private.drakeChestPriority').options,
+                                optionsText: 'text', optionsValue: 'value',
+                                value: Settings.getSetting('ggzz.private.drakeChestPriority').observableValue"></select>
+                            <p class="small mb-0 mt-1">仅对 Drake 生效：逐层打开所选品质及以上的宝箱，再下楼或挑战 BOSS。可随时在设置的「自用玩法」中调整；关闭后优先通关，路过的宝箱仍会打开。</p>
+                        </div>
                         <div class="row m-0 justify-content-center d-flex p-1" data-bind="foreach: DungeonGuides.available()" style="max-width: 100%;">
                             <div class="card text-left col-lg-6 col-md-12 p-1 border-0 align-items-stretch">
                                 <h5 class="card-header d-flex align-items-center py-2">

@@ -146,6 +146,8 @@
                             </thead>
                             <tbody>
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.guidePathfinding')}"></tr>
+                                <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.drakeChestPriority')}"></tr>
+                                <tr><td colspan="2" class="small">Drake 宝箱优先开启后，会逐层打开所选品质及以上的宝箱，再下楼或挑战 BOSS；官方和优化寻路均生效。关闭后恢复当前寻路模式的通关策略，路过的宝箱仍会打开。</td></tr>
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.pricingMode')}"></tr>
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.autoFillEggSlots')}"></tr>
                                 <tr>

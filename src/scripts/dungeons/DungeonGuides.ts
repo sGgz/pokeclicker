@@ -30,13 +30,17 @@ class DungeonGuide {
         if (this.ticks >= this.interval) {
             this.ticks = 0;
             try {
-                if (PrivateGameplay.optimizedPathfinding()) {
-                    DungeonGuidePlanner.walk(this.name);
+                let interact = true;
+                if (PrivateGameplay.optimizedPathfinding() || (this.name === 'Drake' && PrivateGameplay.drakeChestPriority())) {
+                    interact = DungeonGuidePlanner.walk(this.name);
                 } else {
                     DungeonGuidePlanner.reset();
                     this.walk();
                 }
 
+                if (!interact) {
+                    return;
+                }
                 // Interact with the current tile
                 switch (DungeonRunner.map.currentTile().type()) {
                     case GameConstants.DungeonTileType.chest:

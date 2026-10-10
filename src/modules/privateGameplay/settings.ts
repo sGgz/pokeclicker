@@ -6,10 +6,14 @@ import Notifier from '../notifications/Notifier';
 // The legacy script is loaded after modules and exposes a global lexical binding.
 declare const DungeonGuides: { hired: () => unknown };
 
+export const dungeonChestTiers = ['common', 'rare', 'epic', 'legendary', 'mythic'] as const;
+export type DungeonChestTier = typeof dungeonChestTiers[number];
+
 const names = {
     pricing: 'ggzz.private.pricingMode',
     vitamins: 'ggzz.private.fixedVitaminPurchased',
     pathfinding: 'ggzz.private.guidePathfinding',
+    drakeChestPriority: 'ggzz.private.drakeChestPriority',
     guideFee: 'ggzz.private.guideFeeRate',
     // Retain the released save key so existing enabled/disabled preferences survive.
     autoFillHatcheryQueue: 'ggzz.private.autoFillEggSlots',
@@ -61,6 +65,14 @@ export default class PrivateGameplay {
             new SettingOption('官方寻路', 'official'),
             new SettingOption('优化寻路', 'optimized'),
         ], 'official', undefined, false));
+        Settings.add(new PrivateSetting<DungeonChestTier | 'off'>(names.drakeChestPriority, 'Drake 宝箱优先', [
+            new SettingOption('关闭（优先通关）', 'off'),
+            new SettingOption('普通及以上（common）', 'common'),
+            new SettingOption('稀有及以上（rare）', 'rare'),
+            new SettingOption('史诗及以上（epic）', 'epic'),
+            new SettingOption('传说及以上（legendary）', 'legendary'),
+            new SettingOption('神话（mythic）', 'mythic'),
+        ], 'off', undefined, false));
         Settings.add(new PrivateSetting(names.guideFee, '地牢助手服务费', [
             new SettingOption('原价的 1%（门票原价）', 0.01),
             new SettingOption('官方原价', 1),
@@ -89,6 +101,11 @@ export default class PrivateGameplay {
 
     static guideFeeRate(): number {
         return Settings.getSetting(names.guideFee)?.observableValue() === 1 ? 1 : 0.01;
+    }
+
+    static drakeChestPriority(): DungeonChestTier | undefined {
+        const value = Settings.getSetting(names.drakeChestPriority)?.observableValue();
+        return dungeonChestTiers.find(tier => tier === value);
     }
 
     static guideIsHired(): boolean {

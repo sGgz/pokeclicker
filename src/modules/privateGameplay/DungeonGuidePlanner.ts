@@ -1,6 +1,8 @@
 import { DungeonTileType } from '../GameConstants';
 import Notifier from '../notifications/Notifier';
 import NotificationOption from '../notifications/NotificationOption';
+import PrivateGameplay, { dungeonChestTiers } from './settings';
+import type { DungeonChestTier } from './settings';
 
 export interface GuidePosition {
     x: number;
@@ -11,6 +13,7 @@ export interface GuidePosition {
 export interface GuideTile {
     type: DungeonTileType;
     visited: boolean;
+    chestTier?: DungeonChestTier;
 }
 
 export interface GuidePlanInput {
@@ -21,6 +24,7 @@ export interface GuidePlanInput {
     target?: GuidePosition;
     waiting?: boolean;
     random?: () => number;
+    chestPriority?: DungeonChestTier;
 }
 
 export type GuideAction =
@@ -154,7 +158,21 @@ export function planGuideMove(input: GuidePlanInput): GuideAction {
     if (input.waiting || !current) {
         return { type: 'wait' };
     }
-    if ([DungeonTileType.chest, DungeonTileType.boss, DungeonTileType.ladder].includes(current.type)) {
+    if (current.type === DungeonTileType.chest) {
+        return { type: 'interact' };
+    }
+    if (guide === 'Drake' && input.chestPriority) {
+        const minimumTier = dungeonChestTiers.indexOf(input.chestPriority);
+        const qualifies = (tile: GuideTile) => tile.type === DungeonTileType.chest
+            && dungeonChestTiers.indexOf(tile.chestTier) >= minimumTier;
+        if (tiles.some(row => row.some(tile => tile && qualifies(tile)))) {
+            const search = searchFloor(input);
+            const chest = nearestTarget(input, search, qualifies);
+            // Never finish the floor while a qualifying chest remains unopened.
+            return chest ? moveToward(search, chest) : { type: 'no-route' };
+        }
+    }
+    if ([DungeonTileType.boss, DungeonTileType.ladder].includes(current.type)) {
         return { type: 'interact' };
     }
     if (guide === 'Jimmy') {
@@ -196,6 +214,7 @@ export function planGuideMove(input: GuidePlanInput): GuideAction {
 
 interface RuntimeTile {
     isVisited: boolean;
+    metadata?: { tier: DungeonChestTier } | null;
     type(): DungeonTileType;
 }
 
@@ -215,6 +234,7 @@ declare const DungeonBattle: { catching(): boolean };
 interface PlannerMemory {
     map: RuntimeMap;
     guide: string;
+    chestPriority?: DungeonChestTier;
     expected: GuidePosition;
     previous?: GuidePosition;
     target?: GuidePosition;
@@ -228,9 +248,10 @@ export default class DungeonGuidePlanner {
         this.memory = undefined;
     }
 
-    public static walk(guide: string): void {
+    /** Whether the original tick may interact with the tile reached this step. */
+    public static walk(guide: string): boolean {
         try {
-            this.moveOnce(guide);
+            return this.moveOnce(guide);
         } catch (error) {
             this.reset();
             if (Date.now() - this.lastWarningAt >= 30000) {
@@ -242,43 +263,48 @@ export default class DungeonGuidePlanner {
                     type: NotificationOption.warning,
                 });
             }
+            return false;
         }
     }
 
-    private static moveOnce(guide: string): void {
+    private static moveOnce(guide: string): boolean {
         if (typeof DungeonRunner === 'undefined' || typeof DungeonBattle === 'undefined') {
             this.reset();
-            return;
+            return false;
         }
         const runner = DungeonRunner as unknown as RuntimeRunner;
         const { map } = runner;
         if (!map || runner.dungeonFinished()) {
             this.reset();
-            return;
+            return false;
         }
         if (runner.fighting() || DungeonBattle.catching()) {
-            return;
+            return false;
         }
         const position = map.playerPosition();
         const floor = map.board()?.[position.floor];
         if (!floor?.[position.y]?.[position.x]) {
             this.reset();
-            return;
+            return false;
         }
         const memory = this.memory;
-        if (!memory || memory.map !== map || memory.guide !== guide || !samePosition(memory.expected, position)) {
-            this.memory = { map, guide, expected: { ...position } };
+        const chestPriority = guide === 'Drake' ? PrivateGameplay.drakeChestPriority() : undefined;
+        if (!memory || memory.map !== map || memory.guide !== guide || memory.chestPriority !== chestPriority || !samePosition(memory.expected, position)) {
+            this.memory = { map, guide, chestPriority, expected: { ...position } };
         }
         const action = planGuideMove({
             guide,
             position,
-            tiles: floor.map((row) => row.map((tile) => tile && ({ type: tile.type(), visited: tile.isVisited }))),
+            tiles: floor.map((row) => row.map((tile) => tile && ({
+                type: tile.type(), visited: tile.isVisited, chestTier: chestPriority ? tile.metadata?.tier : undefined,
+            }))),
+            chestPriority,
             previous: this.memory.previous,
             target: this.memory.target,
         });
         if (action.type !== 'move') {
             this.memory.target = undefined;
-            return;
+            return action.type === 'interact';
         }
         const next = action.position;
         // Never use the map's visited-tile shortcut to teleport to a distant target.
@@ -286,7 +312,11 @@ export default class DungeonGuidePlanner {
             throw new Error('Dungeon guide planned a non-adjacent step');
         }
         if (map.moveToTile(next)) {
-            this.memory = { map, guide, expected: { ...next }, previous: { ...position }, target: action.target };
+            this.memory = { map, guide, chestPriority, expected: { ...next }, previous: { ...position }, target: action.target };
+            // Bosses and ladders may be intermediate steps on the way to a chest.
+            const nextType = floor[next.y][next.x].type();
+            return ![DungeonTileType.boss, DungeonTileType.ladder].includes(nextType) || samePosition(next, action.target);
         }
+        return false;
     }
 }
