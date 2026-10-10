@@ -14,7 +14,7 @@ cloud-windows.cmd players init
 cloud-windows.cmd players add
 ```
 
-在 Git Bash 的 mintty 窗口中，原生 Node 的输入输出可能不被识别为交互终端。密码操作使用 `winpty node cloud-save-worker/scripts/windows.cjs players init`、`winpty node cloud-save-worker/scripts/windows.cjs players add`；这是同一自动选择 Node 24 的入口，通过 node.exe 启动，避免 winpty 直接启动批处理文件的兼容问题。也可以改用 Windows CMD。不要重定向密码命令的输出。
+在 Git Bash 的 mintty 窗口中，原生 Node 的输入输出可能不被识别为交互终端。密码操作使用 `winpty node cloud-save-worker/scripts/windows.cjs players init`；这是同一自动选择 Node 24 的入口，通过 node.exe 启动，避免 winpty 直接启动批处理文件的兼容问题。日常管理的完整 Git Bash 命令见下文。也可以改用 Windows CMD。不要重定向密码命令的输出。
 
 其他云命令同样可用：`cloud-windows.cmd setup`、`cloud-windows.cmd login`、`cloud-windows.cmd build`、`cloud-windows.cmd deploy`、`cloud-windows.cmd check`、`cloud-windows.cmd preview`。已有 Node.js 24 环境仍可使用下文原来的 npm 命令。
 
@@ -39,11 +39,53 @@ cloud-windows.cmd players add
 | `cloud-windows.cmd players add` | 新增玩家，生成独立密码和存档文件 |
 | `cloud-windows.cmd players reset` | 输入玩家 ID，只重置该人的密码和登录会话；存档保留 |
 
+在 **Git Bash** 中进入项目根目录，使用以下对应命令：
+
+```bash
+# 查看玩家
+winpty node cloud-save-worker/scripts/windows.cjs players list
+
+# 新增玩家
+winpty node cloud-save-worker/scripts/windows.cjs players add
+
+# 重置某位玩家的密码
+winpty node cloud-save-worker/scripts/windows.cjs players reset
+```
+
 **管理以远端 `config/players.json` 为准。** 主玩家是管理员，每次管理命令输入主玩家密码，登录会话仅留在该进程内存中。普通玩家没有管理权限。新增和重置带上读取到的文件 SHA，冲突时不会覆盖其他人的修改。若更新连接中断或新密码未显示，先 list 核对是否已经写入，再对对应玩家 reset；不要盲目重复新增。apply 已停用，不再上传旧本地快照。首次远端迁移确认完成后，旧本地玩家文件可以删除，日常管理无需保留它们。最多配置 20 位玩家。
 
 私有仓库保存密码校验值，不保存明文密码、会话签名密钥或 GitHub token。GAME_AUTH version 3 仅保存签名主密钥；Worker 按玩家 ID、存档位和凭证版本派生独立会话密钥。重置某人的密码同时更换其凭证版本，其余人的密码与会话不变。配置缓存最多 15 秒，同一 Worker 的管理更新立即清缓存，其他实例的旧会话最迟在缓存过期后失效。GitHub 故障且缓存过期时，登录及身份检查返回服务不可用，保留本地游戏进度；不会回退旧 Secret 或用错误玩家配置继续运行。远端文件丢失或损坏时，从仓库历史恢复正确的配置，不能重新 init 覆盖。
 
 旧 `cloud:password` 只用于首次单人密码设置；线上远端模式启用后会拒绝覆盖签名主密钥，日常改密使用 players reset。初始化之后普通新增、重置和列表操作不需要 Cloudflare 登录；首次切换主密钥仍需本机已有的 cloud:login 授权。
+
+### 玩家密码丢失与恢复
+
+密码不能从 `config/players.json` 找回：其中只有密码校验值，没有明文密码。丢失后需要生成新密码；重置不会删除玩家的本地或云端游戏进度。
+
+**普通玩家丢失密码，主玩家密码仍可用：**
+
+1. 在项目根目录运行上面的 `players list`，输入主玩家密码，核对目标玩家的名称和 ID。
+2. 运行 `players reset`，再次输入主玩家密码。命令会列出玩家，按提示填写目标玩家 ID，输入 `y` 确认。这里需要的是管理员的密码，不是丢失的旧密码。
+3. 等命令确认更新成功，在终端保存新密码到密码管理器，然后私下交给本人。目标玩家在各设备上重新登录；其他玩家的密码和会话不受影响。其他 Worker 实例的旧会话最迟在 15 秒配置缓存过期后失效。
+
+主玩家记得旧密码时，也可以用同一 `players reset` 命令重置自己，目标玩家 ID 填 `player`。成功后后续管理命令使用新密码。
+
+**主玩家密码也丢失：**
+
+当前管理命令每次都要求输入主玩家密码，不能直接使用 `players reset` 恢复。仓库拥有者可以通过私有存档仓库的写入权限恢复管理员访问，步骤如下：
+
+1. 登录 GitHub，打开现有私有存档仓库，选择 `wrangler.local.json` 中 `GITHUB_SAVE_BRANCH` 指定的分支，查看最新的 `config/players.json`。保留恢复前文件的提交记录。
+2. 在自己电脑的 Git Bash 中进入项目根目录，执行以下命令。它只生成恢复所需的随机密码、SHA-256 校验值和新凭证版本，不修改远端，也不写本地文件；不要重定向输出。
+
+   ```bash
+   winpty node -e 'const { randomBytes, createHash, randomUUID } = require("node:crypto"); const password = randomBytes(24).toString("base64url"); console.log("新密码：" + password); console.log("passwordHash：" + createHash("sha256").update(password, "utf8").digest("hex")); console.log("credentialVersion：" + randomUUID());'
+   ```
+
+3. 将新密码保存到密码管理器。在 GitHub 编辑最新的 `config/players.json`，找到 `id` 为 `player` 的记录，只替换其 `passwordHash` 和 `credentialVersion` 为终端生成的对应值。保持 `id`、`name`、`slotId`、其他玩家记录和顶层结构不变；不要将明文密码写进文件。
+4. 确认 JSON 格式正确，将修改作为新提交保存到原分支。若编辑期间远端文件发生变化，重新打开最新文件，只更新上述两个字段；不要强制推送、回退整个玩家文件或覆盖其他人的更新。
+5. 等待最多 15 秒缓存过期，用新密码登录游戏，再运行 `players list` 验证管理员访问。主玩家旧会话失效，其他玩家的密码和会话保持不变，全部存档保留；不需要重新部署、重新打包或修改 Cloudflare Secret。
+
+这条恢复路径要求你仍拥有私有存档仓库的写入权限。若 GitHub 账号权限也丢失，需要先恢复 GitHub 账号或由仍有写入权限的仓库管理员处理。不要用 `players init`、`cloud:password`、新增同名玩家或更换存档位代替密码恢复。
 
 离线桌面使用最后选中的本地玩家，联网登录其他人的密码后才切换。不同标签页共享网页登录状态，切换后回到旧游戏点击“检查连接”会先保存并加载新玩家；同一浏览器只允许一个游戏页面持有写入锁。独立浏览器配置或不同设备可以分别游玩。仓库拥有者能看到仓库内全部存档。
 
@@ -320,7 +362,7 @@ npm run cloud:password
 
 这个命令要在你自己打开的交互式 cmd 窗口运行，不要让远程日志、聊天工具代跑，也不要把输出重定向到文件。命令不会把明文密码写进项目配置。
 
-**每次确认并成功执行，都会换成一个新密码，并使所有设备以前的登录失效。** 正常发布更新不需要重复运行。忘记密码或需要更换时，按第十四节重新运行；存档、GitHub token、云槽位都不会因此删除。
+**未启用远端玩家配置时，每次确认并成功执行，都会换成一个新密码，并使所有设备以前的登录失效。** 正常发布更新不需要重复运行。已经启用私有 Git 玩家配置的站点使用 `players reset`，具体见本文开头“玩家密码丢失与恢复”；旧单人站点按第十四节处理。存档、GitHub token、云槽位都不会因此删除。
 
 如果命令提示找不到 Worker，先处理 cloud:deploy 的失败；不要改用其他 Worker 名称。密码设置成功后继续录入 GitHub token，两项都完成才能验收云存档。
 
@@ -450,7 +492,7 @@ npm run cloud:recover
 | node 版本错误 / EBADDEVENGINES | 使用第六节 Node 24；重开 cmd 后先执行 cd 和 set，再检查 node --version |
 | 域名打不开 / 证书尚未就绪 | 检查 YOUR_ROOT_DOMAIN 是否 Active、NS 是否换对、Workers Custom Domain 是否成功绑定，等待传播和证书 |
 | 仍要求邮箱验证码 | 旧 Access 应用仍保护 YOUR_GAME_HOST，按第五节只移除游戏这一项；不用继续开通 Zero Trust |
-| 忘记游戏密码 / 密码错误 | 确认没有误贴 GitHub token、额外空格或旧密码；忘记时按第十四节重设 |
+| 忘记游戏密码 / 密码错误 | 确认没有误贴 GitHub token、额外空格或旧密码；远端玩家模式按本文开头“玩家密码丢失与恢复”处理，旧单人模式按第十四节重设 |
 | 登录尝试过多 | 按提示等待再试；不要连续点击或反复猜密码 |
 | 进入网站没登录页面 | 当前浏览器可能仍在登录有效期；用无痕窗口确认，核对发布版本与正确域名 |
 | 登录已过期 | 保留当前游戏页，从云面板在新标签页重新登录，再回原页检查连接与同步，不清本地数据 |
@@ -499,7 +541,11 @@ npm run cloud:deploy
 
 ## 十四、更换游戏密码、更新密钥与游戏
 
-**忘记或更换游戏密码：**
+**已启用私有 Git 玩家配置：**
+
+使用 `players reset` 重置指定玩家，普通玩家丢失密码由主玩家处理；主玩家密码也丢失时，通过私有存档仓库写入权限恢复。完整命令与步骤见本文开头“玩家密码丢失与恢复”。旧 `cloud:password` 会拒绝覆盖远端模式的签名主密钥。
+
+**尚未启用远端玩家配置的旧单人站点，忘记或更换游戏密码：**
 
 1. 如果还有正在玩的设备，先同步并等成功；不方便同步时先导出本地备份。
 2. 重新打开项目的 cmd 窗口，按第六节执行 cd 和 set。
@@ -592,7 +638,7 @@ ZIP 版免安装，但本地存档仍在当前 Windows 账户的数据目录里�
 
 你不用填仓库名、分支或服务器地址，它们沿用已上线后台的配置。GitHub token 不装进 EXE，也不需要在新电脑上填写。游戏密码校验仍由现有 Cloudflare 后台完成；程序保存的是有期限的登录会话，并使用 Windows 的加密存储，不保存你的明文游戏密码。
 
-桌面版与 Chrome、Edge 的登录各自独立。网页已经登录，不代表桌面版也登录了；在桌面版退出也不会让浏览器退出。登录最多保持 7 天，更换游戏密码后所有旧会话失效；忘记密码按第十四节重设，不用卸载程序。如果登录窗口提示这台电脑无法安全保存凭据，本次仍可登录使用，但关闭程序后下次需要重新登录，不会改成明文保存密码。
+桌面版与 Chrome、Edge 的登录各自独立。网页已经登录，不代表桌面版也登录了；在桌面版退出也不会让浏览器退出。登录最多保持 7 天；远端玩家模式重置密码后，仅该玩家的旧会话失效。忘记密码按本文开头“玩家密码丢失与恢复”处理，旧单人站点按第十四节重设，不用卸载程序。如果登录窗口提示这台电脑无法安全保存凭据，本次仍可登录使用，但关闭程序后下次需要重新登录，不会改成明文保存密码。
 
 **本地游戏不要求先登录。** 本机已经有存档时，可以直接使用本地进度。游戏专用密码保护云档访问，不会把整个桌面程序锁住，也不会加密本地游戏存档；能使用你当前 Windows 账户的人仍可以打开本地进度。退出云登录也不是给本机游戏上锁。
 
