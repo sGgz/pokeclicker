@@ -244,5 +244,5 @@ async function main() {
     }
 }
 
-module.exports = { NODE_VERSION, NODE_ZIP_SHA256, timestamp, inside, batchQuote, childEnvironment, writeShims, finishRelease, run };
+module.exports = { NODE_VERSION, NODE_ZIP_SHA256, timestamp, inside, batchQuote, childEnvironment, writeShims, finishRelease, run, resolveRuntime };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

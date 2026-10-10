@@ -2,14 +2,30 @@
 
 ## 多玩家共用域名（2026-10-10 源码新增，尚未上线）
 
+### Windows 命令入口与 Node 版本
+
+项目要求 Node.js 24。如果系统是 Node.js 25，直接 `npm run ...` 会在进入脚本前报 `EBADDEVENGINES`。Windows 请使用项目根目录的 `cloud-windows.cmd`：它复用现有打包工具，在 `.desktop-build/runtime/` 自动准备并校验 Node.js 24，使用对应 Node/npm 执行命令，不改系统全局版本。首次准备需要联网；以后复用缓存。
+
+在 Windows CMD 中进入项目目录后运行：
+
+```bat
+cloud-windows.cmd version
+cloud-windows.cmd players init
+cloud-windows.cmd players add
+```
+
+在 Git Bash 的 mintty 窗口中，原生 Node 的输入输出可能不被识别为交互终端。密码操作使用 `winpty ./cloud-windows.cmd players init`、`winpty ./cloud-windows.cmd players add`；也可以改用 Windows CMD。不要重定向密码命令的输出。
+
+其他云命令同样可用：`cloud-windows.cmd setup`、`cloud-windows.cmd login`、`cloud-windows.cmd build`、`cloud-windows.cmd deploy`、`cloud-windows.cmd check`、`cloud-windows.cmd preview`。已有 Node.js 24 环境仍可使用下文原来的 npm 命令。
+
 每个人输入自己的 32 字符专用密码，就会进入自己的存档。共用一个域名、一个 GitHub 私有仓库和分支；每位玩家使用独立的存档文件，无需注册邮箱或填写账号。云存档面板会显示当前玩家。同一浏览器或客户端切换玩家时，先保存旧玩家的本地进度，再重新加载新玩家的本地选档。切换不会代替云同步；换设备仍需先“同步后换设备”。
 
 管理员首次启用的顺序：
 
 1. 在现有游戏中导出本地备份，完成云同步，然后关闭所有旧页面和客户端。
-2. 在部署电脑构建并发布新网页和 Worker：`npm run cloud:build`、`npm run cloud:deploy`。旧版单人 `GAME_AUTH` 仍可使用，先升级代码再迁移密码配置。
-3. 在自己的交互终端运行 `npm run cloud:players -- init`，输入原来的专用密码（输入隐藏）。工具先向游戏登录接口验证原密码，通过后保留密码和原云存档位，只轮换原玩家的会话签名密钥，所以各设备需要重新登录。验证失败不会更新配置。
-4. 运行 `npm run cloud:players -- add`，填写另一人的显示名称。上传成功后会在本机终端显示他的随机专用密码，保存到密码管理器并私下交给本人。不要发到本聊天或提交到代码仓库。
+2. 在部署电脑构建并发布新网页和 Worker：`cloud-windows.cmd build`、`cloud-windows.cmd deploy`。旧版单人 `GAME_AUTH` 仍可使用，先升级代码再迁移密码配置。
+3. 在自己的交互终端运行 `cloud-windows.cmd players init`，输入原来的专用密码（输入隐藏）。工具先向游戏登录接口验证原密码，通过后保留密码和原云存档位，只轮换原玩家的会话签名密钥，所以各设备需要重新登录。验证失败不会更新配置。
+4. 运行 `cloud-windows.cmd players add`，填写另一人的显示名称。上传成功后会在本机终端显示他的随机专用密码，保存到密码管理器并私下交给本人。不要发到本聊天或提交到代码仓库。
 5. 所有电脑都安装包含本次修改的新版桌面客户端。旧客户端没有玩家本地隔离和新的身份接口支持，不能继续用于多人登录。
 6. 分别用两个密码登录，检查面板显示的玩家。新玩家应看到空的本地选档，可新建存档并上传；原玩家应保留自己的进度。各自进行网页和桌面端往返同步，核对训练家、进度和设置。
 
@@ -17,10 +33,10 @@
 
 | 命令 | 用途 |
 | --- | --- |
-| `npm run cloud:players -- list` | 查看玩家名称、玩家 ID 和存档位，不显示密码 |
-| `npm run cloud:players -- add` | 新增玩家，生成独立密码和存档文件 |
-| `npm run cloud:players -- reset` | 输入玩家 ID，只重置该人的密码和登录会话；存档保留 |
-| `npm run cloud:players -- apply` | 重试上一次中断的配置上传；若新密码未显示，之后对该玩家再执行 reset |
+| `cloud-windows.cmd players list` | 查看玩家名称、玩家 ID 和存档位，不显示密码 |
+| `cloud-windows.cmd players add` | 新增玩家，生成独立密码和存档文件 |
+| `cloud-windows.cmd players reset` | 输入玩家 ID，只重置该人的密码和登录会话；存档保留 |
+| `cloud-windows.cmd players apply` | 重试上一次中断的配置上传；若新密码未显示，之后对该玩家再执行 reset |
 
 **安全备份 `.local/cloud-players.json`。** 它包含密码校验值和会话签名密钥，不含明文密码，目录已被 Git 忽略。不要删除后重新 init，否则会丢失其他玩家映射。备份丢失时从自己的安全副本恢复。存在 `.local/cloud-players.pending.json` 表示上传或本地确认未完成，先运行 apply，再继续管理。启用多人后，旧命令 `cloud:password` 会阻止覆盖本地已记录的多人配置，改用 reset；不要绕过工具在控制台覆盖 `GAME_AUTH`。最多配置 20 位玩家。
 

@@ -7,3 +7,4 @@
 *.scss      text eol=lf
 *.less      text eol=lf
 build-windows.cmd text eol=crlf
+cloud-windows.cmd text eol=crlf

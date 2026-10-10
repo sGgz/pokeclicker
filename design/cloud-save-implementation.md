@@ -10,6 +10,12 @@
 
 ## 2026-10-10：同域名多玩家密码登录（源码实现）
 
+### 后续修复：Windows 系统 Node 25 拦截管理命令
+
+用户执行 `npm run cloud:players -- init` 时，npm 的 devEngines 检查在进入迁移脚本前拒绝系统 Node 25.2.1。该失败没有执行密码验证或配置上传。新增项目根目录 `cloud-windows.cmd`，通过现有打包工具的运行环境选择、官方 Node 24 下载、SHA-256 校验和 npm shim 逻辑执行云命令，保留项目要求 Node 24 的约束。密码交互继承用户终端，不写日志或通过参数传递；Git Bash mintty 使用 winpty，或直接在 CMD 中运行。
+
+已实际使用新入口准备 Node 24.21.0 / npm 11.19.0，并通过 `cloud-windows.cmd check` 完成 TypeScript 检查和 Worker 61 项测试；桌面 33 项测试通过，含新增入口、Node/npm 选择、中文路径和交互终端继承回归测试。非交互环境运行 players init 已进入迁移工具的终端保护检查，没有再出现 EBADDEVENGINES，也没有执行真实密码迁移。使用方式见操作手册“Windows 命令入口与 Node 版本”。
+
 不同专用密码映射到固定玩家 ID 和独立存档位。玩家共用一个私有 GitHub 仓库和分支，分别读写 `saves/<slotId>.json`；后端从签名会话选择玩家，跨玩家 GET/PUT 均拒绝。每位玩家有独立签名密钥，重置密码只撤销该人的会话，已有存档路径保持不变。
 
 旧单人 Secret 继续兼容。新增 `cloud:players` 管理工具支持 init、add、list、reset、apply：首次迁移先向现有登录接口验证原密码，再保留密码与原槽位；新增玩家生成独立随机密码。配置上传前保存 pending 文件，上传成功后才显示密码并确认本地管理配置。失败可 apply 重试，若未显示新密码则单独 reset。本地配置在 Git 忽略的 `.local/` 中；旧 cloud:password 会阻止覆盖本地已存在的多人配置。

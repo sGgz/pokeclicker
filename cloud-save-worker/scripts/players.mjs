@@ -101,8 +101,8 @@ async function exists(file) {
 
 export async function runPlayers(command, { input = stdin, output = stdout, upload = uploadAuthSecret } = {}) {
     if (!input.isTTY || !output.isTTY) throw new Error('请在本机交互终端运行 cloud:players；请勿重定向输出或通过聊天运行，以免泄露密码。');
-    if (!['init', 'add', 'reset', 'list', 'apply'].includes(command)) throw new Error('用法：npm run cloud:players -- init|add|reset|list|apply');
-    if (await exists(pendingFile) && command !== 'apply') throw new Error('有尚未确认上传的玩家配置。请先运行 npm run cloud:players -- apply；新增或重置密码若未显示，需要之后重新 reset。');
+    if (!['init', 'add', 'reset', 'list', 'apply'].includes(command)) throw new Error('用法：cloud-windows.cmd players init|add|reset|list|apply（Node 24 环境也可用 npm run cloud:players -- 命令）');
+    if (await exists(pendingFile) && command !== 'apply') throw new Error('有尚未确认上传的玩家配置。请先运行 cloud-windows.cmd players apply；新增或重置密码若未显示，需要之后重新 reset。');
     let auth;
     if (command !== 'init' && command !== 'apply') auth = validateRegistry(JSON.parse(await readFile(registryFile, 'utf8')));
     if (command === 'list') {

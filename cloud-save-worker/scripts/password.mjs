@@ -56,7 +56,7 @@ export async function runPasswordSetup({
             if (error.code === 'ENOENT') continue;
             throw error;
         }
-        throw new Error('已启用多人存档或有待处理玩家配置。请使用 npm run cloud:players -- reset 单独重置玩家密码；不能覆盖为单人配置。');
+        throw new Error('已启用多人存档或有待处理玩家配置。请使用 cloud-windows.cmd players reset 单独重置玩家密码；不能覆盖为单人配置。');
     }
     try { await readFile(config, 'utf8'); } catch {
         throw new Error('没有找到本机配置。请先运行 npm run cloud:setup，再按手册完成 cloud:login 和 cloud:deploy。');
