@@ -32,6 +32,7 @@ type FarmHandBerryTypes = (typeof FarmHandBerryTypes)[keyof typeof FarmHandBerry
 
 class FarmHand {
     static readonly MAX_LEVEL = 50;
+    static readonly WORK_ENERGY_COST = 2;
     public experience: KnockoutObservable<number>;
 
     get level(): number {
@@ -47,15 +48,15 @@ class FarmHand {
     }
 
     get recovery(): number {
-        return 1 + Math.floor((this.level - 1) / 20);
+        return 1 + (this.level - 1) / (FarmHand.MAX_LEVEL - 1);
     }
 
-    get perpetual(): boolean {
+    get isMaxLevel(): boolean {
         return this.level === FarmHand.MAX_LEVEL;
     }
 
     get nextLevelExperience(): number {
-        return this.perpetual ? 0 : 50 * this.level * (this.level + 1) - this.experience();
+        return this.isMaxLevel ? 0 : 50 * this.level * (this.level + 1) - this.experience();
     }
 
     gainExperience(amount: number): void {
@@ -87,7 +88,7 @@ class FarmHand {
     public trainerSprite = 0;
     public focus: KnockoutObservable<FarmHandBerryTypes> = ko.observable(BerryType.None);
     public shouldHarvest: KnockoutObservable<boolean> = ko.observable(false).extend({ boolean: null });
-    public energy: KnockoutObservable<number> = ko.observable(0).extend({ numeric: 0 });
+    public energy: KnockoutObservable<number> = ko.observable(0).extend({ numeric: 6 });
     public hired: KnockoutObservable<boolean> = ko.observable(false).extend({ boolean: null });
     public plots: KnockoutObservableArray<number> = ko.observableArray(new Array(GameConstants.FARM_PLOT_WIDTH * GameConstants.FARM_PLOT_HEIGHT).fill(0).map((v, i) => i));
     public tooltip: KnockoutComputed<string>;
@@ -115,8 +116,8 @@ class FarmHand {
         // Calculate how much to charge the player in farm points
         this.cost = new Amount(+Math.pow(100, 1 + cost * 0.08).toPrecision(2), GameConstants.Currency.farmPoint);
         this.tooltip = ko.pureComputed(() => `<strong>${this.name} · 农田 ${this.farmId + 1} · Lv.${this.level}</strong><br/>
-            ${this.perpetual ? '永动：工作不减少体力' : `每轮恢复 ${this.recovery} 点体力`}<br/>
-            Energy: ${this.energy()}/${this.maxEnergy}<br/>
+            每轮恢复 ${this.recovery.toFixed(2)} 点体力<br/>
+            Energy: ${this.energy().toLocaleString('en-US', { maximumFractionDigits: 2 })}/${this.maxEnergy}<br/>
             Work Cycle: ${GameConstants.formatTimeFullLetters((this.workTick - this.workTicks()) / GameConstants.SECOND)}<br/>
             Next Payment: ${GameConstants.formatTimeFullLetters((this.costTick - this.costTicks()) / GameConstants.SECOND)}`
         );
@@ -308,24 +309,13 @@ class FarmHand {
             }
         }
 
-        if (!worked) {
-            this.addEnergy();
-        } else {
-            this.useEnergy();
-            if (this.perpetual) {
-                this.addEnergy(1);
-            }
-        }
+        // All levels recover every cycle; actual work has a fixed cost.
+        // Apply the net change before clamping so low energy cannot produce extra recovery.
+        this.addEnergy(this.recovery - (worked ? FarmHand.WORK_ENERGY_COST : 0));
     }
 
     addEnergy(amt = this.recovery): void {
-        // Only allow up to maximum value
-        this.energy(Math.min(this.maxEnergy, this.energy() + amt));
-    }
-
-    useEnergy(amt = 1): void {
-        // Only allow to go down to 0
-        this.energy(Math.max(0, this.energy() - amt));
+        this.energy(Math.max(0, Math.min(this.maxEnergy, this.energy() + amt)));
     }
 
     charge(): void {

@@ -202,7 +202,9 @@ async function run() {
             hand.shouldHarvest(true);
             hand.hire();
         });
-        assert.ok((await farmModal.locator('#farmHandsView').textContent()).includes('Alex · Lv.50 · 永动'));
+        assert.ok((await farmModal.locator('#farmHandsView').textContent()).includes('Alex · Lv.50'));
+        assert.ok(!(await farmModal.textContent()).includes('永动'));
+        assert.equal(await pageA.evaluate(() => App.game.farming.farmHands.list[0].tooltip().includes('永动')), false);
         assert.equal(await pageA.evaluate(() => App.game.farming.farms()[0].hands.list[0].level), 50);
         await pageA.waitForFunction(() => getComputedStyle(document.getElementById('farmHandsView')).opacity === '1');
         await pageA.evaluate(() => $('#toaster').hide());
@@ -233,7 +235,7 @@ async function run() {
             $('#farmModal a[href="#berryFarmView"]').tab('show');
             $('#toaster').show();
         });
-        checks.push('Multi-farm purchase, all-farm planting, scoped harvest and plant hotkeys, farm switching, shared level 50 perpetual helpers, and save round-trip work in real Electron.');
+        checks.push('Multi-farm purchase, all-farm planting, scoped harvest and plant hotkeys, farm switching, shared helper levels without a perpetual UI label, and save round-trip work in real Electron.');
         if (process.argv.includes('--farm-only')) {
             assert.deepEqual(errors, []);
             const farmReport = { passed: true, checks, desktopVersion, packaged: !dev, farmsVerified: 16 };

@@ -437,7 +437,7 @@
                     <h4 class="mt-3">多农田与助手等级</h4>
                     <p>首块田的 25 格全部解锁后，可用农田币逐块购买新田，最多 16 块。第 N 块田价格为 10,000 × (N − 1)²，新田直接解锁 25 格。库存和图鉴共用，变异、邻近光环和防枯萎效果仅在同一块田内生效。全局光环按种类取各田最强值。</p>
                     <p>同名助手共享等级经验，最高 Lv.50；各田的体力、配置和工资独立，每田最多雇 3 名。成功种植、收获、发起捕获分别获得 1、2、1 经验。升级增加速度、操作次数和体力上限，不自动补满体力。</p>
-                    <p>Lv.1～20、21～40、41～50 空闲轮次分别恢复 1、2、3 点体力。Lv.50 工作轮次消耗后立即恢复 1 点，实现永动；体力为零时先休息一轮。工资在休息期间照常支付，离线不模拟农田工作。</p>
+                    <p>每轮恢复体力，恢复量随等级提升；有实际工作的轮次消耗 2 点体力。体力为零时先休息一轮。工资在休息期间照常支付，离线不模拟农田工作。</p>
                     <p>批量操作遵循顶部选择的范围，跳过锁定格子。种子不足时按田轮流分配。快捷键仅在农田种植页面生效，输入框内不触发，可在设置中修改。</p>
                     <p>切换农田：<kbd data-bind="text: Settings.getSetting('hotkey.farm.previousFarm').observableValue()"></kbd> / <kbd data-bind="text: Settings.getSetting('hotkey.farm.nextFarm').observableValue()"></kbd>；种植：<kbd data-bind="text: Settings.getSetting('hotkey.farm.plantBatch').observableValue()"></kbd>；收获：<kbd data-bind="text: Settings.getSetting('hotkey.farm.harvestBatch').observableValue()"></kbd>；收获后重种：<kbd data-bind="text: Settings.getSetting('hotkey.farm.replantBatch').observableValue()"></kbd>。</p>
                     <h4><u>Farm</u></h4>
@@ -536,14 +536,14 @@
 
                 <div id="farmHandsView" class="tab-pane fade">
                     <div class="p-2">
-                        <p class="small mb-2">同名助手共享等级经验；每块田的体力、工作配置、工资分别计算。每块田最多 3 名助手。Lv.50 解锁永动，工作轮次不减少体力。</p>
+                        <p class="small mb-2">同名助手共享等级经验；每块田的体力、工作配置、工资分别计算。每块田最多 3 名助手。</p>
                         <button class="btn btn-outline-primary btn-sm" data-bind="click: () => FarmController.copyHands(), enable: FarmController.targetFarms().some(id => id !== App.game.farming.selectedFarm())">复制当前田助手配置到目标农田</button>
                     </div>
                     <!-- ko if: FarmHands.list.some(f => f.isUnlocked()) -->
                     <div class="row m-0 justify-content-center" data-bind="foreach: App.game.farming.farmHands.available()" style="max-width: 100%;">
                         <div class="card text-left col-lg-4 col-md-6 col-xs-12 p-0">
                             <h5 class="card-header d-flex align-items-center py-2">
-                                <knockout class="flex-grow-1" data-bind="text: `${$data.name} · Lv.${$data.level}${$data.perpetual ? ' · 永动' : ''}`">Name</knockout>
+                                <knockout class="flex-grow-1" data-bind="text: `${$data.name} · Lv.${$data.level}`">Name</knockout>
                                 <img class="pixelated" src="" height="24px" data-bind="attr:{ src: `assets/images/profile/trainer-${$data.trainerSprite}.png` }">
                             </h5>
                             <div class="card-body p-0">
@@ -551,11 +551,11 @@
                                     <tbody>
                                         <tr>
                                             <td>等级经验</td>
-                                            <td class="text-right" data-bind="text: $data.perpetual ? '已满级' : `累计 ${$data.experience()} · 升级还需 ${$data.nextLevelExperience}`"></td>
+                                            <td class="text-right" data-bind="text: $data.isMaxLevel ? '已满级' : `累计 ${$data.experience()} · 升级还需 ${$data.nextLevelExperience}`"></td>
                                         </tr>
                                         <tr>
                                             <td>体力恢复</td>
-                                            <td class="text-right" data-bind="text: `${$data.recovery} 点/空闲轮${$data.perpetual ? ' · 工作轮恢复 1 点' : ''}`"></td>
+                                            <td class="text-right" data-bind="text: `${$data.recovery.toFixed(2)} 点/轮`"></td>
                                         </tr>
                                         <tr data-bind="tooltip: {
                                                 title: 'Automatically paid every hour while hired.',
@@ -596,7 +596,7 @@
                                             <td class="text-right tight align-middle">
                                                 <div class="progress">
                                                     <div class="progress-bar bg-primary" role="progressbar" data-bind="style: { width: `${$data.energy()/$data.maxEnergy*100}%` }" aria-valuemin="0" aria-valuemax="100" style="width:0%">
-                                                        <span data-bind="text: `${$data.energy().toLocaleString('en-US')}/${$data.maxEnergy.toLocaleString('en-US')}`">0</span>
+                                                        <span data-bind="text: `${$data.energy().toLocaleString('en-US', { maximumFractionDigits: 2 })}/${$data.maxEnergy.toLocaleString('en-US')}`">0</span>
                                                     </div>
                                                 </div>
                                             </td>
@@ -713,7 +713,7 @@
                                                 <td class="text-right tight align-middle">
                                                     <div class="progress">
                                                         <div class="progress-bar bg-primary" role="progressbar" data-bind="style: { width: `${$data.energy()/$data.maxEnergy*100}%` }" aria-valuemin="0" aria-valuemax="100" style="width:0%">
-                                                            <span data-bind="text: `${$data.energy().toLocaleString('en-US')}/${$data.maxEnergy.toLocaleString('en-US')}`">0</span>
+                                                            <span data-bind="text: `${$data.energy().toLocaleString('en-US', { maximumFractionDigits: 2 })}/${$data.maxEnergy.toLocaleString('en-US')}`">0</span>
                                                         </div>
                                                     </div>
                                                 </td>
