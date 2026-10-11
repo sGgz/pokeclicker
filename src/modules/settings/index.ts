@@ -524,11 +524,11 @@ Settings.add(new HotkeySetting('hotkey.purifyChamber', 'Purify Chamber', 'K', {}
 
 Settings.add(new HotkeySetting('hotkey.farm.toggleShovel', 'Toggle Shovel', 'S'));
 Settings.add(new HotkeySetting('hotkey.farm.togglePlotSafeLock', 'Toggle Plot Lock', 'L', { suffix: ' or Shift + Click' }));
-Settings.add(new HotkeySetting('hotkey.farm.previousFarm', '上一块农田', '['));
-Settings.add(new HotkeySetting('hotkey.farm.nextFarm', '下一块农田', ']'));
-Settings.add(new HotkeySetting('hotkey.farm.plantBatch', '按范围批量种植', 'B'));
-Settings.add(new HotkeySetting('hotkey.farm.harvestBatch', '按范围批量收获', 'H'));
-Settings.add(new HotkeySetting('hotkey.farm.replantBatch', '按范围收获后重种', 'R'));
+Settings.add(new HotkeySetting('hotkey.farm.previousFarm', '上块田', '['));
+Settings.add(new HotkeySetting('hotkey.farm.nextFarm', '下块田', ']'));
+Settings.add(new HotkeySetting('hotkey.farm.plantBatch', '批量种植', 'B'));
+Settings.add(new HotkeySetting('hotkey.farm.harvestBatch', '批量收获', 'H'));
+Settings.add(new HotkeySetting('hotkey.farm.replantBatch', '收获重种', 'R'));
 
 Settings.add(new HotkeySetting('hotkey.underground.hammer', 'Switch to Hammer', 'H'));
 Settings.add(new HotkeySetting('hotkey.underground.chisel', 'Switch to Chisel', 'C'));

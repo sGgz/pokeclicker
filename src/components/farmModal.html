@@ -25,19 +25,21 @@
                         <span class="small text-muted" data-bind="visible: !App.game.farming.getFarmPlots(0).every(plot => plot.isUnlocked)">首块田的 25 格全部解锁后可扩田</span>
                     </div>
                     <div class="d-flex flex-wrap align-items-center mt-2" style="gap: 0.5rem">
-                        <label class="mb-0" for="farmBatchScope">批量操作范围</label>
+                        <label class="mb-0" for="farmBatchScope">范围</label>
                         <select id="farmBatchScope" class="custom-select custom-select-sm w-auto" data-bind="value: FarmController.batchScope">
                             <option value="current">当前田</option>
                             <option value="selected">勾选的田</option>
                             <option value="all">全部田</option>
                         </select>
-                        <span class="small" data-bind="text: `目标 ${FarmController.targetFarms().length} 块田 · 共 ${App.game.farming.farms().length}/16 块田 · 助手工资 ${App.game.farming.totalHourlyWages().toLocaleString('en-US')} 农田币/小时`"></span>
-                        <button class="btn btn-outline-success btn-sm" data-bind="click: () => FarmController.harvestBatch(true), enable: FarmController.targetFarms().length > 0, visible: FarmController.farmingModalTabSelected() === 'berryFarmView'">收获后按原树果重种</button>
-                        <button class="btn btn-outline-danger btn-sm" data-bind="click: () => FarmController.shovelBatch(), enable: FarmController.targetFarms().length > 0, visible: FarmController.farmingModalTabSelected() === 'berryFarmView'">清理目标作物</button>
-                        <button class="btn btn-outline-danger btn-sm" data-bind="click: () => FarmController.shovelBatch(true), enable: FarmController.targetFarms().length > 0, visible: FarmController.farmingModalTabSelected() === 'berryFarmView'">铲除目标肥料</button>
+                        <span class="small" title="助手工资以农田币计，所有批量操作均使用所选范围。" data-bind="text: `目标 ${FarmController.targetFarms().length} · 农田 ${App.game.farming.farms().length}/16 · 工资 ${App.game.farming.totalHourlyWages().toLocaleString('en-US')}/时`"></span>
+                        <div class="farm-batch-actions" data-bind="visible: FarmController.farmingModalTabSelected() === 'berryFarmView'">
+                            <button class="btn btn-outline-success btn-sm text-nowrap" title="收获所选范围的成熟作物，并按原树果重种。" data-bind="click: () => FarmController.harvestBatch(true), enable: FarmController.targetFarms().length > 0">重种</button>
+                            <button class="btn btn-outline-danger btn-sm text-nowrap" title="清理所选范围的作物，跳过锁定格。" data-bind="click: () => FarmController.shovelBatch(), enable: FarmController.targetFarms().length > 0">清作物</button>
+                            <button class="btn btn-outline-danger btn-sm text-nowrap" title="铲除所选范围的肥料，跳过锁定格。" data-bind="click: () => FarmController.shovelBatch(true), enable: FarmController.targetFarms().length > 0">清肥料</button>
+                        </div>
                     </div>
                     <details class="mt-2">
-                        <summary class="clickable">农田总览 / 勾选批量操作目标</summary>
+                        <summary class="clickable" title="展开后勾选批量操作的目标农田">农田总览</summary>
                         <div class="d-flex flex-wrap mt-2" style="gap: 0.5rem" data-bind="foreach: App.game.farming.farms">
                             <div class="border rounded p-2">
                                 <label class="mb-1"><input type="checkbox" data-bind="checked: FarmController.checkedFarms, checkedValue: $data.id" /> <span data-bind="text: `${$data.id + 1}. ${$data.name()}`"></span></label>
@@ -121,13 +123,13 @@
 
                                     <div class="row justify-content-center py-1">
                                         <div class="col-6 pr-0">
-                                            <button class="btn btn-primary btn-block" data-bind="click: () => FarmController.plantBatch()">
-                                                种植到目标农田
+                                            <button class="btn btn-primary btn-block text-nowrap" title="在所选范围种植当前树果，跳过锁定格。" data-bind="click: () => FarmController.plantBatch()">
+                                                种植
                                             </button>
                                         </div>
                                         <div class="col-6 pl-0">
-                                            <button class="btn btn-success btn-block" data-bind="click: () => FarmController.harvestBatch()">
-                                                收获目标农田
+                                            <button class="btn btn-success btn-block text-nowrap" title="收获所选范围的成熟作物，跳过锁定格。" data-bind="click: () => FarmController.harvestBatch()">
+                                                收获
                                             </button>
                                         </div>
                                     </div>
@@ -438,8 +440,13 @@
                     <p>首块田的 25 格全部解锁后，可用农田币逐块购买新田，最多 16 块。第 N 块田价格为 10,000 × (N − 1)²，新田直接解锁 25 格。库存和图鉴共用，变异、邻近光环和防枯萎效果仅在同一块田内生效。全局光环按种类取各田最强值。</p>
                     <p>同名助手共享等级经验，最高 Lv.50；各田的体力、配置和工资独立，每田最多雇 3 名。成功种植、收获、发起捕获分别获得 1、2、1 经验。升级增加速度、操作次数和体力上限，不自动补满体力。</p>
                     <p>每轮恢复体力，恢复量随等级提升；有实际工作的轮次消耗 2 点体力。体力为零时先休息一轮。工资在休息期间照常支付，离线不模拟农田工作。</p>
-                    <p>批量操作遵循顶部选择的范围，跳过锁定格子。种子不足时按田轮流分配。快捷键仅在农田种植页面生效，输入框内不触发，可在设置中修改。</p>
-                    <p>切换农田：<kbd data-bind="text: Settings.getSetting('hotkey.farm.previousFarm').observableValue()"></kbd> / <kbd data-bind="text: Settings.getSetting('hotkey.farm.nextFarm').observableValue()"></kbd>；种植：<kbd data-bind="text: Settings.getSetting('hotkey.farm.plantBatch').observableValue()"></kbd>；收获：<kbd data-bind="text: Settings.getSetting('hotkey.farm.harvestBatch').observableValue()"></kbd>；收获后重种：<kbd data-bind="text: Settings.getSetting('hotkey.farm.replantBatch').observableValue()"></kbd>。</p>
+                    <p>批量操作按所选范围执行，跳过锁定格；种子不足时按田轮流分配。快捷键仅在种植页生效，输入时不触发，可在设置中修改。</p>
+                    <p class="farm-hotkey-help">
+                        <span>切田 <kbd data-bind="text: Settings.getSetting('hotkey.farm.previousFarm').observableValue()"></kbd> / <kbd data-bind="text: Settings.getSetting('hotkey.farm.nextFarm').observableValue()"></kbd></span>
+                        <span>种植 <kbd data-bind="text: Settings.getSetting('hotkey.farm.plantBatch').observableValue()"></kbd></span>
+                        <span>收获 <kbd data-bind="text: Settings.getSetting('hotkey.farm.harvestBatch').observableValue()"></kbd></span>
+                        <span>重种 <kbd data-bind="text: Settings.getSetting('hotkey.farm.replantBatch').observableValue()"></kbd></span>
+                    </p>
                     <h4><u>Farm</u></h4>
                     <p>In the farm you can plant and harvest Berries.</p>
 
@@ -537,7 +544,7 @@
                 <div id="farmHandsView" class="tab-pane fade">
                     <div class="p-2">
                         <p class="small mb-2">同名助手共享等级经验；每块田的体力、工作配置、工资分别计算。每块田最多 3 名助手。</p>
-                        <button class="btn btn-outline-primary btn-sm" data-bind="click: () => FarmController.copyHands(), enable: FarmController.targetFarms().some(id => id !== App.game.farming.selectedFarm())">复制当前田助手配置到目标农田</button>
+                        <button class="btn btn-outline-primary btn-sm text-nowrap" title="将当前田的助手配置复制到所选范围。" data-bind="click: () => FarmController.copyHands(), enable: FarmController.targetFarms().some(id => id !== App.game.farming.selectedFarm())">复制助手配置</button>
                     </div>
                     <!-- ko if: FarmHands.list.some(f => f.isUnlocked()) -->
                     <div class="row m-0 justify-content-center" data-bind="foreach: App.game.farming.farmHands.available()" style="max-width: 100%;">

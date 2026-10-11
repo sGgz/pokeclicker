@@ -248,7 +248,7 @@ async function run() {
         await farmModal.getByRole('button', { name: /购买下一块田/ }).click();
         assert.equal(await pageA.evaluate(() => App.game.farming.farms().length), 3);
         await farmModal.locator('#farmBatchScope').selectOption('all');
-        await farmModal.getByRole('button', { name: '种植到目标农田', exact: true }).click();
+        await farmModal.getByRole('button', { name: '种植', exact: true }).click();
         assert.deepEqual(await pageA.evaluate(() => App.game.farming.farms().map(farm => farm.plots.filter(plot => !plot.isEmpty()).length)), [25, 25, 25]);
         await pageA.evaluate(() => App.game.farming.farms().forEach(farm => farm.plots.forEach(plot => { plot.age = BerryList[plot.berry].growthTime[PlotStage.Bloom]; })));
         await pageA.keyboard.press('h');
