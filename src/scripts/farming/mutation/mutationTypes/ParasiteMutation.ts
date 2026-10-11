@@ -17,7 +17,7 @@ class ParasiteMutation extends EvolveNearBerryMutation {
         const plots = super.getMutationPlots();
 
         return plots.filter((idx) => {
-            return App.game.farming.plotList[idx].berry !== this.mutatedBerry;
+            return this.plotList[idx].berry !== this.mutatedBerry;
         });
     }
 

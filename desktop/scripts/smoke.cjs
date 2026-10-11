@@ -82,10 +82,7 @@ async function run() {
         const env = { ...process.env, TEMP: work, TMP: work }; delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS;
         const app = await electron.launch({ executablePath: executable, args: [...(dev ? [path.join(root, 'desktop')] : []), '--data-dir=' + profile], env, timeout: 60000 });
         running.add(app);
-        app.on('window', page => page.on('pageerror', error => errors.push(error.message)));
-        const page = await app.firstWindow(); lastPage = page;
-        page.on('pageerror', error => errors.push(error.message));
-        await page.locator('#cloud-save-panel').waitFor({ timeout: 60000 });
+        // Redirect before waiting for the renderer: startup session checks also belong to the fixture.
         await app.evaluate((_electron, destination) => {
             const original = globalThis.fetch;
             globalThis.fetch = (input, init) => {
@@ -94,6 +91,10 @@ async function run() {
                 return original(destination + url.pathname + url.search, init);
             };
         }, serverOrigin);
+        app.on('window', page => page.on('pageerror', error => errors.push(error.message)));
+        const page = await app.firstWindow(); lastPage = page;
+        page.on('pageerror', error => errors.push(error.message));
+        await page.locator('#cloud-save-panel').waitFor({ timeout: 60000 });
         assert.equal(await app.evaluate(({ app }) => app.getPath('userData')), profile);
         assert.equal(await app.evaluate(({ app }) => app.getVersion()), desktopVersion);
         return { app, page };
@@ -165,6 +166,81 @@ async function run() {
         assert.equal(await pageA.evaluate(() => PrivateGameplay.guideFeeRate()), 0.01);
         await pageA.screenshot({ path: path.join(output, 'private-gameplay-settings.png') });
         await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        // Multi-farm UI operates only on this disposable desktop profile.
+        await pageA.evaluate(() => {
+            const farming = App.game.farming;
+            window.farmSmoke = { saved: JSON.parse(JSON.stringify(farming.toJSON())), update: farming.update };
+            farming.update = () => {};
+            App.game.keyItems.gainKeyItem(KeyItemType.Wailmer_pail, true);
+            farming.getFarmPlots(0).forEach(plot => { plot.isUnlocked = true; });
+            farming.unlockedBerries.slice(0, 8).forEach(berry => berry(true));
+            farming.berryInventory[BerryType.Cheri](1000);
+            App.game.wallet.currencies[GameConstants.Currency.farmPoint](20_000_000);
+            FarmController.openFarmModal();
+        });
+        const farmModal = pageA.locator('#farmModal');
+        await farmModal.getByRole('button', { name: /购买下一块田/ }).click();
+        await farmModal.getByRole('button', { name: /购买下一块田/ }).click();
+        assert.equal(await pageA.evaluate(() => App.game.farming.farms().length), 3);
+        await farmModal.locator('#farmBatchScope').selectOption('all');
+        await farmModal.getByRole('button', { name: '种植到目标农田', exact: true }).click();
+        assert.deepEqual(await pageA.evaluate(() => App.game.farming.farms().map(farm => farm.plots.filter(plot => !plot.isEmpty()).length)), [25, 25, 25]);
+        await pageA.evaluate(() => App.game.farming.farms().forEach(farm => farm.plots.forEach(plot => { plot.age = BerryList[plot.berry].growthTime[PlotStage.Bloom]; })));
+        await pageA.keyboard.press('h');
+        assert.deepEqual(await pageA.evaluate(() => App.game.farming.farms().map(farm => farm.plots.filter(plot => !plot.isEmpty()).length)), [0, 0, 0]);
+        await pageA.keyboard.press('b');
+        assert.deepEqual(await pageA.evaluate(() => App.game.farming.farms().map(farm => farm.plots.filter(plot => !plot.isEmpty()).length)), [25, 25, 25]);
+        await farmModal.getByLabel('农田名称', { exact: true }).fill('测试生产田');
+        await farmModal.getByLabel('农田名称', { exact: true }).press('Tab');
+        await pageA.keyboard.press('[');
+        assert.equal(await pageA.evaluate(() => App.game.farming.selectedFarm()), 1);
+        await farmModal.getByRole('link', { name: 'Farm Hands', exact: true }).click();
+        await pageA.evaluate(() => {
+            const hand = App.game.farming.farmHands.list[0];
+            hand.gainExperience(122_500);
+            hand.focus(BerryType.Cheri);
+            hand.shouldHarvest(true);
+            hand.hire();
+        });
+        assert.ok((await farmModal.locator('#farmHandsView').textContent()).includes('Alex · Lv.50 · 永动'));
+        assert.equal(await pageA.evaluate(() => App.game.farming.farms()[0].hands.list[0].level), 50);
+        await pageA.waitForFunction(() => getComputedStyle(document.getElementById('farmHandsView')).opacity === '1');
+        await pageA.evaluate(() => $('#toaster').hide());
+        await farmModal.screenshot({ path: path.join(output, 'multi-farm-levels.png') });
+        await pageA.evaluate(() => {
+            const farming = App.game.farming;
+            const saved = JSON.parse(JSON.stringify(farming.toJSON()));
+            farming.fromJSON(saved);
+            if (farming.farms().length !== 3 || farming.farms()[2].name() !== '测试生产田' || farming.farms()[1].hands.list[0].level !== 50) throw new Error('Farm save round trip failed');
+            while (farming.farms().length < 16) {
+                if (!farming.buyFarm()) throw new Error('Unable to unlock all sixteen farms');
+            }
+        });
+        assert.equal(await farmModal.locator('#activeFarm option').count(), 16);
+        await farmModal.getByRole('link', { name: 'Farm', exact: true }).click();
+        await pageA.waitForFunction(() => getComputedStyle(document.getElementById('berryFarmView')).opacity === '1');
+        await farmModal.locator('summary').click();
+        await farmModal.getByRole('button', { name: '查看', exact: true }).first().click();
+        assert.equal(await pageA.evaluate(() => App.game.farming.selectedFarm()), 0);
+        await farmModal.screenshot({ path: path.join(output, 'multi-farm-overview.png') });
+        await pageA.evaluate(() => new Promise(resolve => $('#farmModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        await pageA.evaluate(() => {
+            App.game.farming.fromJSON(window.farmSmoke.saved);
+            App.game.farming.update = window.farmSmoke.update;
+            delete window.farmSmoke;
+            FarmController.batchScope('current');
+            FarmController.farmingModalTabSelected('berryFarmView');
+            $('#farmModal a[href="#berryFarmView"]').tab('show');
+            $('#toaster').show();
+        });
+        checks.push('Multi-farm purchase, all-farm planting, scoped harvest and plant hotkeys, farm switching, shared level 50 perpetual helpers, and save round-trip work in real Electron.');
+        if (process.argv.includes('--farm-only')) {
+            assert.deepEqual(errors, []);
+            const farmReport = { passed: true, checks, desktopVersion, packaged: !dev, farmsVerified: 16 };
+            await fs.writeFile(path.join(output, 'farm-smoke-report.json'), JSON.stringify(farmReport, null, 2));
+            console.log(JSON.stringify(farmReport, null, 2));
+            return;
+        }
         const purchase = await pageA.evaluate(() => {
             const vitamin = ItemList.Protein;
             player.itemMultipliers[vitamin.saveName] = 8;

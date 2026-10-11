@@ -15,7 +15,7 @@ abstract class GrowMutation extends Mutation {
      */
     getMutationPlots(): number[] {
         const plots = [];
-        App.game.farming.plotList.forEach((plot, idx) => {
+        this.plotList.forEach((plot, idx) => {
             if (!plot.isUnlocked) {
                 return;
             }
@@ -32,7 +32,7 @@ abstract class GrowMutation extends Mutation {
      * @param index The plot index to mutate
      */
     handleMutation(index: number): void {
-        const plot = App.game.farming.plotList[index];
+        const plot = this.plotList[index];
         plot.berry = this.mutatedBerry;
         plot.age = 0;
         plot.notifications = [];

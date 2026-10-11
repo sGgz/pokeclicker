@@ -19,7 +19,7 @@ abstract class EvolveMutation extends Mutation {
      */
     getMutationPlots(): number[] {
         const plots = [];
-        App.game.farming.plotList.forEach((plot, idx) => {
+        this.plotList.forEach((plot, idx) => {
             if (!plot.isUnlocked) {
                 return;
             }
@@ -47,7 +47,7 @@ abstract class EvolveMutation extends Mutation {
      * @param index The plot index to mutate
      */
     handleMutation(index: number): void {
-        const plot = App.game.farming.plotList[index];
+        const plot = this.plotList[index];
         const currentStage = plot.stage();
         let newAge = 0;
         if (currentStage !== PlotStage.Seed) {

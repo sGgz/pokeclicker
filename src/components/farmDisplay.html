@@ -25,6 +25,7 @@
     </div>
     <!-- /ko -->
     <div id="plotListCard" class="card-body p-0 px-2 show" data-bind="css: { ShiftPressed: GameController.keyHeld.Shift() }">
+      <select class="custom-select custom-select-sm my-1" aria-label="当前农田" data-bind="options: App.game.farming.farms, optionsText: farm => `${farm.id + 1}. ${farm.name()}`, optionsValue: 'id', value: App.game.farming.selectedFarm, visible: App.game.farming.farms().length > 1"></select>
       <!-- ko if: Settings.getSetting('showFarmModule').observableValue() === 'extended' -->
       <div class="row py-0 mt-1">
         <div class="col-3 px-1">

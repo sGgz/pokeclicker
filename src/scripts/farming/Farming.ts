@@ -1,12 +1,107 @@
 /// <reference path="../../declarations/GameHelper.d.ts" />
 /// <reference path="../../declarations/DataStore/common/Feature.d.ts" />
 
+interface FarmField {
+    id: number;
+    name: KnockoutObservable<string>;
+    plots: Plot[];
+    hands: FarmHands;
+}
+
 class Farming implements Feature {
     name = 'Farming';
     saveKey = 'farming';
 
     mutations: Mutation[] = [];
-    farmHands = new FarmHands();
+    static readonly MAX_FARMS = 16;
+    farms = ko.observableArray<FarmField>([]);
+    selectedFarm = ko.observable(0);
+
+    get plotList(): Plot[] {
+        return this.getFarmPlots(this.selectedFarm());
+    }
+
+    get farmHands(): FarmHands {
+        return this.farms()[this.selectedFarm()].hands;
+    }
+
+    getFarmPlots(farmId: number): Plot[] {
+        return this.farms()[farmId]?.plots ?? [];
+    }
+
+    private createFarm(id: number, plots?: Plot[]): FarmField {
+        return {
+            id,
+            name: ko.observable(`农田 ${id + 1}`),
+            plots: plots ?? Array.from({ length: 25 }, (_, index) => new Plot(true, BerryType.None, 0, MulchType.None, 0, index, id)),
+            hands: new FarmHands(id),
+        };
+    }
+
+    nextFarmCost(): number {
+        return 10_000 * this.farms().length ** 2;
+    }
+
+    canBuyFarm(): boolean {
+        return this.farms().length < Farming.MAX_FARMS
+            && this.getFarmPlots(0).every(plot => plot.isUnlocked)
+            && App.game.wallet.hasAmount(new Amount(this.nextFarmCost(), GameConstants.Currency.farmPoint));
+    }
+
+    buyFarm(): boolean {
+        if (!this.canBuyFarm() || !App.game.wallet.loseAmount(new Amount(this.nextFarmCost(), GameConstants.Currency.farmPoint))) {
+            return false;
+        }
+        this.farms.push(this.createFarm(this.farms().length));
+        this.selectedFarm(this.farms().length - 1);
+        return true;
+    }
+
+    totalHourlyWages(): number {
+        return this.farms().reduce((sum, farm) => sum + farm.hands.hired().reduce((cost, hand) => cost + hand.cost.amount, 0), 0);
+    }
+
+    private batchPlots(farmIds: number[]): Plot[] {
+        const farms = [...new Set(farmIds)].filter(id => Number.isInteger(id) && this.farms()[id]);
+        // Visit the same plot index in each farm before moving on, sharing scarce seeds fairly.
+        return Array.from({ length: 25 }, (_, index) => farms.map(id => this.getFarmPlots(id)[index])).flat();
+    }
+
+    batchPlant(farmIds: number[], berry: BerryType): number {
+        return this.batchPlots(farmIds).filter(plot => this.plant(plot.index, berry, plot.farmId)).length;
+    }
+
+    batchHarvest(farmIds: number[], replant = false): number {
+        let harvested = 0;
+        const planting: Plot[] = [];
+        this.batchPlots(farmIds).forEach(plot => {
+            if (this.harvest(plot.index, plot.farmId)) {
+                harvested++;
+                if (replant) {
+                    planting.push(plot);
+                }
+            }
+        });
+        planting.forEach(plot => this.plant(plot.index, plot.lastPlanted, plot.farmId));
+        return harvested;
+    }
+
+    batchMulch(farmIds: number[], mulch: MulchType, amount: number): number {
+        const plots = this.batchPlots(farmIds).filter(plot => this.canMulch(plot.index, mulch, plot.farmId));
+        if (!plots.length || typeof amount !== 'number' || Number.isNaN(amount) || amount <= 0) {
+            return 0;
+        }
+        const shared = Math.min(Math.floor(amount), Math.floor(this.mulchList[mulch]() / plots.length));
+        if (shared < 1) {
+            return 0;
+        }
+        plots.forEach(plot => this.addMulch(plot.index, mulch, shared, plot.farmId));
+        return plots.length;
+    }
+
+    batchShovel(farmIds: number[], mulch = false): number {
+        return this.batchPlots(farmIds).filter(plot => (mulch ? this.shovelMulch(plot.index, plot.farmId) : this.shovel(plot.index, plot.farmId))).length;
+    }
 
     externalAuras: KnockoutObservable<number>[];
 
@@ -29,7 +124,6 @@ class Farming implements Feature {
     berryInventory: KnockoutObservable<number>[];
     unlockedBerries: KnockoutObservable<boolean>[];
     mulchList: KnockoutObservable<number>[];
-    plotList: Array<Plot>;
     unlockedPlotCount: KnockoutObservable<number>;
     shovelAmt: KnockoutObservable<number>;
     mulchShovelAmt: KnockoutObservable<number>;
@@ -41,7 +135,7 @@ class Farming implements Feature {
         this.berryInventory = this.defaults.berryInventory.map((v) => ko.observable<number>(v));
         this.unlockedBerries = this.defaults.unlockedBerries.map((v) => ko.observable<boolean>(v));
         this.mulchList = this.defaults.mulchList.map((v) => ko.observable<number>(v));
-        this.plotList = this.defaults.plotList;
+        this.farms.push(this.createFarm(0, this.defaults.plotList));
         this.unlockedPlotCount = ko.observable(0);
         this.shovelAmt = ko.observable(this.defaults.shovelAmt);
         this.mulchShovelAmt = ko.observable(this.defaults.mulchShovelAmt);
@@ -642,7 +736,7 @@ class Farming implements Feature {
         let change = false;
 
         // Updating Berries
-        this.plotList.forEach(plot => {
+        this.farms().forEach(farm => farm.plots.forEach(plot => {
             if (plot.update(timeToReduce)) {
                 change = true;
             }
@@ -650,18 +744,18 @@ class Farming implements Feature {
                 plot.notifications.forEach(n => notifications.add(n));
                 plot.notifications = [];
             }
-        });
+        }));
 
         // Running Mutations
         this.mutationCounter += GameConstants.TICK_TIME;
         if (this.mutationCounter >= GameConstants.MUTATION_TICK) {
-            this.mutations.forEach(mutation => {
-                if (mutation.mutate()) {
+            this.farms().forEach(farm => this.mutations.forEach(mutation => {
+                if (mutation.forFarm(farm.id).mutate()) {
                     GameHelper.incrementObservable(App.game.statistics.totalBerriesMutated, 1);
                     notifications.add(FarmNotificationType.Mutated);
                     change = true;
                 }
-            });
+            }));
             this.mutationCounter = 0;
         }
 
@@ -670,8 +764,7 @@ class Farming implements Feature {
         let wanderPokemon: WandererPokemon;
         const wanderList: WandererPokemon[] = [];
         if (this.wanderCounter >= GameConstants.WANDER_TICK) {
-            for (let i = 0; i < App.game.farming.plotList.length; i++) {
-                const plot = App.game.farming.plotList[i];
+            for (const plot of this.farms().flatMap(farm => farm.plots)) {
                 // generate or get rid of a wanderer
                 wanderPokemon = plot.generateWanderPokemon();
                 if (wanderPokemon) {
@@ -687,11 +780,11 @@ class Farming implements Feature {
             notifications.forEach((n) => this.handleNotification(n, wanderList));
         }
 
-        this.farmHands.tick();
+        this.farms().forEach(farm => farm.hands.tick());
 
         this.mulchCounter += GameConstants.TICK_TIME;
         if (this.mulchCounter >= GameConstants.MULCH_OAK_ITEM_TICK) {
-            App.game.oakItems.use(OakItemType.Sprinklotad, this.plotList.filter(value => value.isMulched()).length);
+            App.game.oakItems.use(OakItemType.Sprinklotad, this.farms().reduce((sum, farm) => sum + farm.plots.filter(value => value.isMulched()).length, 0));
             this.mulchCounter = 0;
         }
     }
@@ -762,9 +855,9 @@ class Farming implements Feature {
     }
 
     multiplyPlotAuras(auraType: AuraType): number {
-        return this.plotList
+        return Math.max(1, ...this.farms().map(farm => farm.plots
             .filter(p => p.emittingAura.type() === auraType)
-            .reduce((acc, p) => acc * (p.emittingAura.value() ?? 1), 1);
+            .reduce((acc, p) => acc * (p.emittingAura.value() ?? 1), 1)));
     }
 
     addPlotAuras(auraType: AuraType): number {
@@ -829,14 +922,15 @@ class Farming implements Feature {
         this.plotList[index].isSafeLocked = !this.plotList[index].isSafeLocked;
     }
 
-    plant(index: number, berry: BerryType) {
-        const plot = this.plotList[index];
-        if (!plot.isEmpty() || !plot.isUnlocked || !this.hasBerry(berry) || plot.isSafeLocked) {
-            return;
+    plant(index: number, berry: BerryType, farmId = this.selectedFarm()): boolean {
+        const plot = this.getFarmPlots(farmId)[index];
+        if (!plot || !this.unlockedBerries[berry]?.() || !plot.isEmpty() || !plot.isUnlocked || !this.hasBerry(berry) || plot.isSafeLocked) {
+            return false;
         }
 
         GameHelper.incrementObservable(this.berryInventory[berry], -1);
         plot.plant(berry);
+        return true;
     }
 
     plantAll(berry: BerryType) {
@@ -849,10 +943,10 @@ class Farming implements Feature {
      * Harvest a plot at the given index
      * @param index The index of the plot to harvest
      */
-    harvest(index: number): void {
-        const plot = this.plotList[index];
-        if (plot.berry === BerryType.None || plot.stage() != PlotStage.Berry || plot.isSafeLocked) {
-            return;
+    harvest(index: number, farmId = this.selectedFarm()): boolean {
+        const plot = this.getFarmPlots(farmId)[index];
+        if (!plot || !plot.isUnlocked || plot.berry === BerryType.None || plot.stage() != PlotStage.Berry || plot.isSafeLocked) {
+            return false;
         }
 
         App.game.wallet.gainFarmPoints(BerryList[plot.berry].farmValue);
@@ -867,6 +961,7 @@ class Farming implements Feature {
         player.lowerItemMultipliers(MultiplierDecreaser.Berry, BerryList[plot.berry].exp);
 
         plot.die(true);
+        return true;
     }
 
     /**
@@ -882,46 +977,48 @@ class Farming implements Feature {
      * Handles using the Berry Shovel to remove a Berry plant
      * @param index The plot index
      */
-    public shovel(index: number): void {
-        const plot = this.plotList[index];
-        if (!plot.isUnlocked) {
-            return;
+    public shovel(index: number, farmId = this.selectedFarm()): boolean {
+        const plot = this.getFarmPlots(farmId)[index];
+        if (!plot || !plot.isUnlocked) {
+            return false;
         }
         if (plot.isSafeLocked) {
-            return;
+            return false;
         }
         if (plot.isEmpty()) {
-            return;
+            return false;
         }
         if (plot.stage() == PlotStage.Berry) {
-            this.harvest(index);
-            return;
+            return this.harvest(index, farmId);
         }
         if (this.shovelAmt() <= 0) {
-            return;
+            return false;
         }
         plot.die(true);
         GameHelper.incrementObservable(this.shovelAmt, -1);
         GameHelper.incrementObservable(App.game.statistics.totalShovelsUsed, 1);
+        return true;
     }
 
     /**
      * Handles using the Mulch Shovel to remove mulch from a plot
      * @param index The plot index
      */
-    public shovelMulch(index: number): void {
-        const plot = this.plotList[index];
-        if (!plot.isUnlocked || plot.isSafeLocked) {
-            return;
+    public shovelMulch(index: number, farmId = this.selectedFarm()): boolean {
+        const plot = this.getFarmPlots(farmId)[index];
+        if (!plot || !plot.isUnlocked || plot.isSafeLocked) {
+            return false;
         }
         if (this.mulchShovelAmt() <= 0) {
-            return;
+            return false;
         }
 
         if (plot.clearMulch()) {
             GameHelper.incrementObservable(this.mulchShovelAmt, -1);
             GameHelper.incrementObservable(App.game.statistics.totalShovelsUsed, 1);
+            return true;
         }
+        return false;
     }
 
     /**
@@ -930,13 +1027,13 @@ class Farming implements Feature {
      * @param mulch The MulchType to be added
      * @param amount The amount of mulch to apply. Defaults to 1
      */
-    public addMulch(index: number, mulch: MulchType, amount = 1) {
-        const plot = this.plotList[index];
-        if (!this.canMulch(index, mulch)) {
+    public addMulch(index: number, mulch: MulchType, amount = 1, farmId = this.selectedFarm()) {
+        const plot = this.getFarmPlots(farmId)[index];
+        if (typeof amount !== 'number' || Number.isNaN(amount) || amount < 1 || !this.canMulch(index, mulch, farmId)) {
             return;
         }
 
-        amount = Math.min(this.mulchList[mulch](), amount);
+        amount = Math.min(this.mulchList[mulch](), Math.floor(amount));
 
         GameHelper.incrementObservable(this.mulchList[mulch], -amount);
         GameHelper.incrementObservable(App.game.statistics.totalMulchesUsed, amount);
@@ -966,9 +1063,9 @@ class Farming implements Feature {
         });
     }
 
-    private canMulch(index: number, mulch: MulchType) {
-        const plot = this.plotList[index];
-        if (!plot.isUnlocked || !this.hasMulch(mulch) || plot.isSafeLocked) {
+    private canMulch(index: number, mulch: MulchType, farmId = this.selectedFarm()) {
+        const plot = this.getFarmPlots(farmId)[index];
+        if (!plot || !plot.isUnlocked || !this.hasMulch(mulch) || plot.isSafeLocked) {
             return false;
         }
         if (plot.mulch != MulchType.None && plot.mulch != mulch) {
@@ -1042,8 +1139,8 @@ class Farming implements Feature {
      * @param berry The Berry type
      * @param stage The stage of the Berry plant. Defaults to PlotStage.Berry
      */
-    berryInFarm(berry: BerryType, stage = PlotStage.Berry, ignoreFrozen = false) {
-        return this.plotList.some(plot => plot.berry == berry && plot.stage() >= stage && (!ignoreFrozen || plot.mulch !== MulchType.Freeze_Mulch));
+    berryInFarm(berry: BerryType, stage = PlotStage.Berry, ignoreFrozen = false, farmId = this.selectedFarm()) {
+        return this.getFarmPlots(farmId).some(plot => plot.berry == berry && plot.stage() >= stage && (!ignoreFrozen || plot.mulch !== MulchType.Freeze_Mulch));
     }
 
     toJSON(): Record<string, any> {
@@ -1051,11 +1148,14 @@ class Farming implements Feature {
             berryInventory: this.berryInventory.map(ko.unwrap),
             unlockedBerries: this.unlockedBerries.map(ko.unwrap),
             mulchList: this.mulchList.map(ko.unwrap),
-            plotList: this.plotList.map(plot => plot.toJSON()),
+            plotList: this.getFarmPlots(0).map(plot => plot.toJSON()),
+            farms: this.farms().map(farm => ({ name: farm.name(), plotList: farm.plots.map(plot => plot.toJSON()), farmHands: farm.hands.toJSON() })),
+            selectedFarm: this.selectedFarm(),
+            farmHandExperience: Object.fromEntries(FarmHands.list.map(hand => [hand.name, hand.experience()])),
             shovelAmt: this.shovelAmt(),
             mulchShovelAmt: this.mulchShovelAmt(),
             mutations: this.mutations.map(mutation => mutation.toJSON()),
-            farmHands: this.farmHands.toJSON(),
+            farmHands: this.farms()[0].hands.toJSON(),
         };
     }
 
@@ -1063,6 +1163,10 @@ class Farming implements Feature {
         if (json == null) {
             return;
         }
+        FarmHands.list.forEach(hand => {
+            const experience = Number(json.farmHandExperience?.[hand.name]);
+            hand.experience(Number.isFinite(experience) ? Math.max(0, Math.min(122_500, Math.floor(experience))) : 0);
+        });
 
         const savedBerries = json.berryInventory;
         if (savedBerries == null) {
@@ -1091,17 +1195,30 @@ class Farming implements Feature {
             });
         }
 
-        const savedPlots = json.plotList;
-        if (savedPlots == null) {
-            this.plotList = this.defaults.plotList;
-        } else {
-            (savedPlots as Record<string, any>[]).forEach((value: Record<string, any>, index: number) => {
-                const plot: Plot = new Plot(false, BerryType.None, 0, MulchType.None, 0, index);
-                plot.fromJSON(value);
-                this.plotList[index] = plot;
+        const savedFarms = Array.isArray(json.farms) && json.farms.length ? json.farms.slice(0, Farming.MAX_FARMS) : [{ plotList: json.plotList, farmHands: json.farmHands }];
+        this.selectedFarm(0);
+        this.farms(savedFarms.map((data, farmId) => {
+            const plots = Array.from({ length: 25 }, (_, index) => {
+                const plot = new Plot(farmId > 0 || index === 12, BerryType.None, 0, MulchType.None, 0, index, farmId);
+                if (data?.plotList?.[index]) {
+                    plot.fromJSON(data.plotList[index]);
+                }
+                if (farmId > 0) {
+                    plot.isUnlocked = true;
+                }
+                return plot;
             });
+            const farm = this.createFarm(farmId, plots);
+            if (typeof data?.name === 'string' && data.name.trim()) {
+                farm.name(data.name.slice(0, 30));
+            }
+            farm.hands.fromJSON(data?.farmHands);
+            return farm;
+        }));
+        this.unlockedPlotCount(this.getFarmPlots(0).filter(p => p.isUnlocked).length);
+        if (Number.isInteger(json.selectedFarm) && json.selectedFarm >= 0 && json.selectedFarm < this.farms().length) {
+            this.selectedFarm(json.selectedFarm);
         }
-        this.unlockedPlotCount(this.plotList.filter(p => p.isUnlocked).length);
 
         const shovelAmt = json.shovelAmt;
         if (shovelAmt == null) {
@@ -1122,7 +1239,6 @@ class Farming implements Feature {
             this.mutations.forEach((mutation, i) => mutation.fromJSON(mutations[i]));
         }
 
-        this.farmHands.fromJSON(json.farmHands);
     }
 
     public static genBounds = [8, 20, 36, 54, Infinity];
@@ -1201,7 +1317,7 @@ class Farming implements Feature {
 
             // Check for Starf berry generation
             if (wanderer.shiny) {
-                const emptyPlots = App.game.farming.plotList.filter(plot => plot.isUnlocked && plot.isEmpty());
+                const emptyPlots = this.getFarmPlots(plot.farmId).filter(p => p.isUnlocked && p.isEmpty() && !p.isSafeLocked);
                 // No Starf generation if no empty plots :(
                 if (emptyPlots.length) {
                     const chosenPlot = emptyPlots[Rand.floor(emptyPlots.length)];

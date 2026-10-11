@@ -21,7 +21,7 @@ class FieldFlavorMutation extends GrowMutation {
     getMutationPlots(): number[] {
         const emptyPlots = super.getMutationPlots();
         const nearFlavors = [0, 0, 0, 0, 0];
-        App.game.farming.plotList.forEach((plot, idx) => {
+        this.plotList.forEach((plot, idx) => {
             if (!plot.isUnlocked) {
                 return;
             }

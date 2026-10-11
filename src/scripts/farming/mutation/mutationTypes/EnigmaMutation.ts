@@ -34,7 +34,7 @@ class EnigmaMutation extends GrowMutation {
                 return false;
             }
             return nearPlots.every((idx, n) => {
-                const plot = App.game.farming.plotList[idx];
+                const plot = this.plotList[idx];
                 if (!plot.isUnlocked) {
                     return false;
                 }

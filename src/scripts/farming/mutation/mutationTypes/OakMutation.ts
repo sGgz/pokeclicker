@@ -19,7 +19,7 @@ class OakMutation extends EvolveMutation {
     getMutationPlots(): number[] {
         const plots = super.getMutationPlots();
         return plots.filter((idx) => {
-            const plot = App.game.farming.plotList[idx];
+            const plot = this.plotList[idx];
             return this.plotFitRequirements(plot, idx);
         });
     }

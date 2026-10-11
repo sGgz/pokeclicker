@@ -51,7 +51,7 @@ class Plot implements Saveable {
         value: KnockoutComputed<number | null>,
     }
 
-    constructor(isUnlocked: boolean, berry: BerryType, age: number, mulch: MulchType, mulchTimeLeft: number, public index) {
+    constructor(isUnlocked: boolean, berry: BerryType, age: number, mulch: MulchType, mulchTimeLeft: number, public index, public farmId = 0) {
         this._isUnlocked = ko.observable(isUnlocked);
         this._isSafeLocked = ko.observable(false);
         this._berry = ko.observable(berry).extend({ numeric: 0 });
@@ -324,7 +324,7 @@ class Plot implements Saveable {
             this.age += growthTime;
 
             // Checking for Petaya Berries
-            if (App.game.farming.berryInFarm(BerryType.Petaya, PlotStage.Berry, true) && this.berry !== BerryType.Petaya) {
+            if (App.game.farming.berryInFarm(BerryType.Petaya, PlotStage.Berry, true, this.farmId) && this.berry !== BerryType.Petaya) {
                 this.age = Math.min(this.age, this.berryData.growthTime[3]);
             }
 
@@ -426,7 +426,7 @@ class Plot implements Saveable {
 
             // Check for Kasib berry mutation/replant chance
             if (App.game.farming.highestUnlockedBerry() >= BerryType.Occa) {
-                if (!App.game.farming.berryInFarm(BerryType.Colbur)) {
+                if (!App.game.farming.berryInFarm(BerryType.Colbur, PlotStage.Berry, false, this.farmId)) {
                     if (Rand.chance(0.05)) {
                         this.notifications.push(FarmNotificationType.Mutated);
                         this.berry = BerryType.Kasib;
@@ -576,7 +576,7 @@ class Plot implements Saveable {
     }
 
     private isAffectedByPetaya(): boolean {
-        return App.game.farming.berryInFarm(BerryType.Petaya, PlotStage.Berry, true) && this.berry !== BerryType.Petaya;
+        return App.game.farming.berryInFarm(BerryType.Petaya, PlotStage.Berry, true, this.farmId) && this.berry !== BerryType.Petaya;
     }
 
     fromJSON(json: Record<string, any>): void {
@@ -634,7 +634,7 @@ class Plot implements Saveable {
     }
 
     public neighbours(): Plot[] {
-        return Plot.findNearPlots(this.index).map(i => App.game.farming.plotList[i]);
+        return Plot.findNearPlots(this.index).map(i => App.game.farming.getFarmPlots(this.farmId)[i]);
     }
 
     public canCatchWanderer(): boolean {

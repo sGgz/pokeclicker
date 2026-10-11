@@ -20,7 +20,7 @@ class FieldMutation extends GrowMutation {
     getMutationPlots(): number[] {
         const emptyPlots = super.getMutationPlots();
         const fieldPlots = Array<number>(this.fieldBerries.length).fill(0);
-        App.game.farming.plotList.forEach((plot, idx) => {
+        this.plotList.forEach((plot, idx) => {
             if (!plot.isUnlocked) {
                 return;
             }

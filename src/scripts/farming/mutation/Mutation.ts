@@ -7,6 +7,22 @@ interface MutationOptions {
 }
 
 abstract class Mutation {
+    private farmId?: number;
+    private farmViews = new Map<number, Mutation>();
+
+    protected get plotList(): Plot[] {
+        return App.game.farming.getFarmPlots(this.farmId ?? App.game.farming.selectedFarm());
+    }
+
+    // Share mutation definitions and discovered hints, but bind plot operations to one farm.
+    forFarm(farmId: number): Mutation {
+        if (!this.farmViews.has(farmId)) {
+            const view: Mutation = Object.create(this);
+            view.farmId = farmId;
+            this.farmViews.set(farmId, view);
+        }
+        return this.farmViews.get(farmId);
+    }
 
     saveKey: string;
 
@@ -114,7 +130,7 @@ abstract class Mutation {
     getTotalMutationChance(plotIndex: number): number {
         return this.mutationChance(plotIndex)
             * App.game.farming.getMutationMultiplier()
-            * App.game.farming.plotList[plotIndex].getMutationMultiplier();
+            * this.plotList[plotIndex].getMutationMultiplier();
     }
 
     get hintSeen() {

@@ -1,6 +1,101 @@
 /// <reference path="../../declarations/enums/MulchType.d.ts"/>
 
 class FarmController {
+    public static batchScope = ko.observable('current');
+    public static checkedFarms = ko.observableArray<number>([]);
+
+    public static targetFarms(): number[] {
+        const farming = App.game.farming;
+        if (this.batchScope() === 'all') {
+            return farming.farms().map(farm => farm.id);
+        }
+        if (this.batchScope() === 'selected') {
+            return this.checkedFarms().filter(id => !!farming.farms()[id]);
+        }
+        return [farming.selectedFarm()];
+    }
+
+    public static navigateFarm(direction: number) {
+        const farming = App.game.farming;
+        farming.selectedFarm((farming.selectedFarm() + direction + farming.farms().length) % farming.farms().length);
+    }
+
+    private static reportBatch(action: string, count: number, targets: number[]) {
+        Notifier.notify({
+            title: '农田批量操作',
+            message: `${action}：${targets.length} 块田，共处理 ${count} 格。锁定或不符合条件的格子已跳过。`,
+            type: NotificationConstants.NotificationOption.info,
+        });
+    }
+
+    public static plantBatch() {
+        const targets = this.targetFarms();
+        this.reportBatch('种植', App.game.farming.batchPlant(targets, this.selectedBerry()), targets);
+    }
+
+    public static harvestBatch(replant = false) {
+        const targets = this.targetFarms();
+        this.reportBatch(replant ? '收获后重种' : '收获', App.game.farming.batchHarvest(targets, replant), targets);
+    }
+
+    public static async shovelBatch(mulch = false) {
+        const targets = this.targetFarms();
+        if (!targets.length || !await Notifier.confirm({
+            title: mulch ? '批量铲除肥料' : '批量清理作物',
+            message: `将清理 ${targets.length} 块田：${targets.map(id => App.game.farming.farms()[id].name()).join('、')}。锁定格子会跳过。${mulch ? '肥料会丢失并消耗肥料铲。' : '成熟作物正常收获；未成熟作物会被移除并消耗树果铲。'}`,
+            type: NotificationConstants.NotificationOption.warning,
+            confirm: '清理',
+        })) {
+            return;
+        }
+        this.reportBatch(mulch ? '铲除肥料' : '清理作物', App.game.farming.batchShovel(targets, mulch), targets);
+    }
+
+    public static async copyHands() {
+        const farming = App.game.farming;
+        const source = farming.farmHands.list;
+        const targets = this.targetFarms().filter(id => id !== farming.selectedFarm());
+        const configurations = source.map(hand => ({ name: hand.name, hired: hand.hired(), focus: hand.focus(), shouldHarvest: hand.shouldHarvest(), shouldCatch: hand.shouldCatch(), plots: [...hand.plots()] }));
+        const extraWages = targets.reduce((sum, id) => sum + configurations.reduce((cost, config) => {
+            const hand = farming.farms()[id].hands.list.find(candidate => candidate.name === config.name);
+            return cost + (config.hired && !hand.hired() ? hand.cost.amount : 0);
+        }, 0), 0);
+        if (!targets.length || !await Notifier.confirm({
+            title: '复制助手配置',
+            message: `将当前田的助手配置和雇用名单应用到 ${targets.length} 块田。新增雇用立即支付 ${extraWages.toLocaleString('en-US')} 农田币，后续每小时分别计费。体力和工作进度保持独立。`,
+            type: NotificationConstants.NotificationOption.info,
+            confirm: '应用',
+        })) {
+            return;
+        }
+        const currentFee = targets.reduce((sum, id) => sum + configurations.reduce((cost, config) => {
+            const hand = farming.farms()[id].hands.list.find(candidate => candidate.name === config.name);
+            return cost + (config.hired && !hand.hired() ? hand.cost.amount : 0);
+        }, 0), 0);
+        if (!App.game.wallet.hasAmount(new Amount(currentFee, GameConstants.Currency.farmPoint))) {
+            Notifier.notify({ message: `农田币不足，应用配置需要立即支付 ${currentFee.toLocaleString('en-US')} 农田币。`, type: NotificationConstants.NotificationOption.warning });
+            return;
+        }
+        let hired = 0;
+        targets.forEach(id => {
+            const hands = farming.farms()[id].hands;
+            hands.hired().filter(hand => !configurations.find(config => config.name === hand.name).hired).forEach(hand => hand.fire());
+            configurations.forEach(config => {
+                const hand = hands.list.find(candidate => candidate.name === config.name);
+                hand.focus(config.focus);
+                hand.shouldHarvest(config.shouldHarvest);
+                hand.shouldCatch(config.shouldCatch);
+                hand.plots([...config.plots]);
+                if (config.hired && !hand.hired()) {
+                    hand.hire();
+                    if (hand.hired()) {
+                        hired++;
+                    }
+                }
+            });
+        });
+        this.reportBatch(`助手配置已应用，新增雇用 ${hired} 份`, 0, targets);
+    }
 
     public static navigateIndex: KnockoutObservable<number> = ko.observable(0);
     public static berryListFiltered: KnockoutObservableArray<BerryType> = ko.observableArray([]);
@@ -177,21 +272,24 @@ class FarmController {
         return this.calculateCssClassFromTool(plot, this.selectedFarmModuleTool());
     }
 
-    public static mulchAll() {
+    public static async mulchAll() {
+        const targets = this.targetFarms();
+        const mulch = this.selectedMulch();
+        const amount = this.getAmount();
         if (!Settings.getSetting('confirmBeformeMulchingAllPlots').observableValue()) {
-            return App.game.farming.mulchAll(FarmController.selectedMulch(), this.getAmount());
+            this.reportBatch('施肥', App.game.farming.batchMulch(targets, mulch, amount), targets);
+            return;
         }
 
-        Notifier.confirm({
+        const confirmed = await Notifier.confirm({
             title: 'Mulch All',
-            message: `Are you sure you want to use ${this.getAmount()} ${MulchType[FarmController.selectedMulch()].replace('_', ' ')} on all plots?`,
+            message: `将 ${MulchType[mulch].replace('_', ' ')} 应用到 ${targets.length} 块田，每格最多 ${amount} 份，库存不足时均分。`,
             type: NotificationConstants.NotificationOption.info,
             confirm: 'Mulch',
-        }).then(confirmed => {
-            if (confirmed) {
-                App.game.farming.mulchAll(FarmController.selectedMulch(), this.getAmount());
-            }
         });
+        if (confirmed) {
+            this.reportBatch('施肥', App.game.farming.batchMulch(targets, mulch, amount), targets);
+        }
     }
 
     public static navigateRight() {

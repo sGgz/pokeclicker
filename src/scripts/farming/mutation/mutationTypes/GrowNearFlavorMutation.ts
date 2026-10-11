@@ -29,7 +29,7 @@ class GrowNearFlavorMutation extends GrowNearMutation {
     nearPlotsFitRequirements(plots: number[]) {
         const nearFlavors = [0, 0, 0, 0, 0];
         plots.forEach(idx => {
-            const plot = App.game.farming.plotList[idx];
+            const plot = this.plotList[idx];
             if (!plot.isUnlocked) {
                 return;
             }
@@ -55,7 +55,7 @@ class GrowNearFlavorMutation extends GrowNearMutation {
      */
     mutationChance(idx: number): number {
         const sameBerries = Plot.findNearPlots(idx).filter(plotIndex => {
-            return App.game.farming.plotList[plotIndex].berry === this.mutatedBerry;
+            return this.plotList[plotIndex].berry === this.mutatedBerry;
         }).length;
         return super.mutationChance(idx) * Math.pow(4, -sameBerries);
     }

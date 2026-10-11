@@ -16,6 +16,37 @@
             </div>
 
             <div class="modal-body tab-content p-0" style="overflow-x: hidden;">
+                <div class="p-2 border-bottom">
+                    <div class="d-flex flex-wrap align-items-center" style="gap: 0.5rem">
+                        <label class="mb-0" for="activeFarm">当前农田</label>
+                        <select id="activeFarm" class="custom-select custom-select-sm w-auto" data-bind="options: App.game.farming.farms, optionsText: farm => `${farm.id + 1}. ${farm.name()}`, optionsValue: 'id', value: App.game.farming.selectedFarm"></select>
+                        <input class="form-control form-control-sm w-auto" aria-label="农田名称" maxlength="30" data-bind="value: App.game.farming.farms()[App.game.farming.selectedFarm()].name" />
+                        <button class="btn btn-outline-primary btn-sm" data-bind="click: () => App.game.farming.buyFarm(), enable: App.game.farming.canBuyFarm(), visible: App.game.farming.farms().length < Farming.MAX_FARMS, text: `购买下一块田 · ${App.game.farming.nextFarmCost().toLocaleString('en-US')} 农田币`"></button>
+                        <span class="small text-muted" data-bind="visible: !App.game.farming.getFarmPlots(0).every(plot => plot.isUnlocked)">首块田的 25 格全部解锁后可扩田</span>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center mt-2" style="gap: 0.5rem">
+                        <label class="mb-0" for="farmBatchScope">批量操作范围</label>
+                        <select id="farmBatchScope" class="custom-select custom-select-sm w-auto" data-bind="value: FarmController.batchScope">
+                            <option value="current">当前田</option>
+                            <option value="selected">勾选的田</option>
+                            <option value="all">全部田</option>
+                        </select>
+                        <span class="small" data-bind="text: `目标 ${FarmController.targetFarms().length} 块田 · 共 ${App.game.farming.farms().length}/16 块田 · 助手工资 ${App.game.farming.totalHourlyWages().toLocaleString('en-US')} 农田币/小时`"></span>
+                        <button class="btn btn-outline-success btn-sm" data-bind="click: () => FarmController.harvestBatch(true), enable: FarmController.targetFarms().length > 0, visible: FarmController.farmingModalTabSelected() === 'berryFarmView'">收获后按原树果重种</button>
+                        <button class="btn btn-outline-danger btn-sm" data-bind="click: () => FarmController.shovelBatch(), enable: FarmController.targetFarms().length > 0, visible: FarmController.farmingModalTabSelected() === 'berryFarmView'">清理目标作物</button>
+                        <button class="btn btn-outline-danger btn-sm" data-bind="click: () => FarmController.shovelBatch(true), enable: FarmController.targetFarms().length > 0, visible: FarmController.farmingModalTabSelected() === 'berryFarmView'">铲除目标肥料</button>
+                    </div>
+                    <details class="mt-2">
+                        <summary class="clickable">农田总览 / 勾选批量操作目标</summary>
+                        <div class="d-flex flex-wrap mt-2" style="gap: 0.5rem" data-bind="foreach: App.game.farming.farms">
+                            <div class="border rounded p-2">
+                                <label class="mb-1"><input type="checkbox" data-bind="checked: FarmController.checkedFarms, checkedValue: $data.id" /> <span data-bind="text: `${$data.id + 1}. ${$data.name()}`"></span></label>
+                                <div class="small" data-bind="text: `成熟 ${$data.plots.filter(plot => plot.berry !== BerryType.None && plot.stage() === PlotStage.Berry).length} · 空格 ${$data.plots.filter(plot => plot.isUnlocked && plot.isEmpty()).length} · 助手 ${$data.hands.hired().length}/3`"></div>
+                                <button class="btn btn-secondary btn-sm mt-1" data-bind="click: () => App.game.farming.selectedFarm($data.id)">查看</button>
+                            </div>
+                        </div>
+                    </details>
+                </div>
 
                 <div id="berryFarmView" class="tab-pane fade in active show">
                     <div id="farmView" class="justify-content-center no-select row">
@@ -90,13 +121,13 @@
 
                                     <div class="row justify-content-center py-1">
                                         <div class="col-6 pr-0">
-                                            <button class="btn btn-primary btn-block" data-bind="click: function(){App.game.farming.plantAll(FarmController.selectedBerry())}">
-                                                Plant All
+                                            <button class="btn btn-primary btn-block" data-bind="click: () => FarmController.plantBatch()">
+                                                种植到目标农田
                                             </button>
                                         </div>
                                         <div class="col-6 pl-0">
-                                            <button class="btn btn-success btn-block" data-bind="click: function(){App.game.farming.harvestAll()}">
-                                                Harvest All
+                                            <button class="btn btn-success btn-block" data-bind="click: () => FarmController.harvestBatch()">
+                                                收获目标农田
                                             </button>
                                         </div>
                                     </div>
@@ -403,6 +434,12 @@
                 </div>
 
                 <div id="helpView" class="tab-pane fade col-10 offset-1">
+                    <h4 class="mt-3">多农田与助手等级</h4>
+                    <p>首块田的 25 格全部解锁后，可用农田币逐块购买新田，最多 16 块。第 N 块田价格为 10,000 × (N − 1)²，新田直接解锁 25 格。库存和图鉴共用，变异、邻近光环和防枯萎效果仅在同一块田内生效。全局光环按种类取各田最强值。</p>
+                    <p>同名助手共享等级经验，最高 Lv.50；各田的体力、配置和工资独立，每田最多雇 3 名。成功种植、收获、发起捕获分别获得 1、2、1 经验。升级增加速度、操作次数和体力上限，不自动补满体力。</p>
+                    <p>Lv.1～20、21～40、41～50 空闲轮次分别恢复 1、2、3 点体力。Lv.50 工作轮次消耗后立即恢复 1 点，实现永动；体力为零时先休息一轮。工资在休息期间照常支付，离线不模拟农田工作。</p>
+                    <p>批量操作遵循顶部选择的范围，跳过锁定格子。种子不足时按田轮流分配。快捷键仅在农田种植页面生效，输入框内不触发，可在设置中修改。</p>
+                    <p>切换农田：<kbd data-bind="text: Settings.getSetting('hotkey.farm.previousFarm').observableValue()"></kbd> / <kbd data-bind="text: Settings.getSetting('hotkey.farm.nextFarm').observableValue()"></kbd>；种植：<kbd data-bind="text: Settings.getSetting('hotkey.farm.plantBatch').observableValue()"></kbd>；收获：<kbd data-bind="text: Settings.getSetting('hotkey.farm.harvestBatch').observableValue()"></kbd>；收获后重种：<kbd data-bind="text: Settings.getSetting('hotkey.farm.replantBatch').observableValue()"></kbd>。</p>
                     <h4><u>Farm</u></h4>
                     <p>In the farm you can plant and harvest Berries.</p>
 
@@ -498,16 +535,28 @@
                 </div>
 
                 <div id="farmHandsView" class="tab-pane fade">
+                    <div class="p-2">
+                        <p class="small mb-2">同名助手共享等级经验；每块田的体力、工作配置、工资分别计算。每块田最多 3 名助手。Lv.50 解锁永动，工作轮次不减少体力。</p>
+                        <button class="btn btn-outline-primary btn-sm" data-bind="click: () => FarmController.copyHands(), enable: FarmController.targetFarms().some(id => id !== App.game.farming.selectedFarm())">复制当前田助手配置到目标农田</button>
+                    </div>
                     <!-- ko if: FarmHands.list.some(f => f.isUnlocked()) -->
                     <div class="row m-0 justify-content-center" data-bind="foreach: App.game.farming.farmHands.available()" style="max-width: 100%;">
                         <div class="card text-left col-lg-4 col-md-6 col-xs-12 p-0">
                             <h5 class="card-header d-flex align-items-center py-2">
-                                <knockout class="flex-grow-1" data-bind="text: $data.name">Name</knockout>
+                                <knockout class="flex-grow-1" data-bind="text: `${$data.name} · Lv.${$data.level}${$data.perpetual ? ' · 永动' : ''}`">Name</knockout>
                                 <img class="pixelated" src="" height="24px" data-bind="attr:{ src: `assets/images/profile/trainer-${$data.trainerSprite}.png` }">
                             </h5>
                             <div class="card-body p-0">
                                 <table class="table table-striped table-bordered table-sm m-0">
                                     <tbody>
+                                        <tr>
+                                            <td>等级经验</td>
+                                            <td class="text-right" data-bind="text: $data.perpetual ? '已满级' : `累计 ${$data.experience()} · 升级还需 ${$data.nextLevelExperience}`"></td>
+                                        </tr>
+                                        <tr>
+                                            <td>体力恢复</td>
+                                            <td class="text-right" data-bind="text: `${$data.recovery} 点/空闲轮${$data.perpetual ? ' · 工作轮恢复 1 点' : ''}`"></td>
+                                        </tr>
                                         <tr data-bind="tooltip: {
                                                 title: 'Automatically paid every hour while hired.',
                                                 trigger: 'hover',

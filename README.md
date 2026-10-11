@@ -23,7 +23,7 @@ You can reach out on discord to discuss your ideas and how to implement them: ht
 - [项目架构与云存档设计](design/cloud-save-design.md)
 - [实现和验收记录](design/cloud-save-implementation.md)
 - [Windows 客户端与开发说明](desktop/README.md)
-- [自用玩法实现与兼容说明：优化寻路、固定道具价格、助手服务费 1%](design/private-gameplay-design.md)（2026-09-28 已部署到 YOUR_GAME_HOST；使用方法见 Windows 手册）
+- [自用玩法实现与兼容说明](design/private-gameplay-design.md)（寻路、道具价格、助手服务费、多农田与助手等级；各功能发布状态见文档）
 
 GitHub token 只录入 Worker Secret。先完成手册中的账号配置与验收，再开启自动同步。
 

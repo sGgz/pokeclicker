@@ -19,12 +19,6 @@ enum FarmHandSpeeds {
     Lazy,
 }
 
-/*
-TODO:
-Work in levels/experience somehow
-Use accuracy to decide if they plant the right berry or plant a berry at all (still use up energy?)
-Use accuracy to decide if they harvest a berry by accident? (still use up energy?)
-*/
 enum FarmHandBerryType {
     'Random' = -3,
     'Replant' = -2,
@@ -37,6 +31,36 @@ const FarmHandBerryTypes = {
 type FarmHandBerryTypes = (typeof FarmHandBerryTypes)[keyof typeof FarmHandBerryTypes];
 
 class FarmHand {
+    static readonly MAX_LEVEL = 50;
+    public experience: KnockoutObservable<number>;
+
+    get level(): number {
+        return Math.min(FarmHand.MAX_LEVEL, Math.floor((1 + Math.sqrt(1 + this.experience() / 12.5)) / 2));
+    }
+
+    get maxEnergy(): number {
+        return this.baseEnergy + 5 * (this.level - 1);
+    }
+
+    get efficiency(): number {
+        return Math.min(this.maxEfficiency, this.baseEfficiency + Math.floor((this.level - 1) / 5));
+    }
+
+    get recovery(): number {
+        return 1 + Math.floor((this.level - 1) / 20);
+    }
+
+    get perpetual(): boolean {
+        return this.level === FarmHand.MAX_LEVEL;
+    }
+
+    get nextLevelExperience(): number {
+        return this.perpetual ? 0 : 50 * this.level * (this.level + 1) - this.experience();
+    }
+
+    gainExperience(amount: number): void {
+        this.experience(Math.min(50 * FarmHand.MAX_LEVEL * (FarmHand.MAX_LEVEL - 1), this.experience() + amount));
+    }
     public defaults = {
         focus: BerryType.None,
         shouldHarvest: false,
@@ -50,11 +74,13 @@ class FarmHand {
     };
     // Maximum Efficiency value
     public maxEfficiency = 50;
-    // Negative value so they are charged on the first tick and work on the first tick
+    // Idle work timer; hiring schedules an immediate first work cycle.
     public workTicks = ko.observable(-GameConstants.TICK_TIME).extend({ numeric: 0 });
     public costTicks = ko.observable(-GameConstants.TICK_TIME).extend({ numeric: 0 });
     // When to charge the player whatever the cost is, when to work
-    public workTick;
+    get workTick(): number {
+        return Math.max(GameConstants.TICK_TIME, this.calcWorkTick(this.speed) / (1 + 0.04 * (this.level - 1)));
+    }
     public costTick = GameConstants.HOUR;
 
     public cost = new Amount(+0, GameConstants.Currency.farmPoint);
@@ -66,31 +92,30 @@ class FarmHand {
     public plots: KnockoutObservableArray<number> = ko.observableArray(new Array(GameConstants.FARM_PLOT_WIDTH * GameConstants.FARM_PLOT_HEIGHT).fill(0).map((v, i) => i));
     public tooltip: KnockoutComputed<string>;
     public shouldCatch: KnockoutObservable<boolean> = ko.observable(false);
-    // public level: number;
-    // public experience: number;
 
     constructor(
         public name: string,
-        public maxEnergy: number, // 10 - 100
-        public efficiency: number, // 1 - 50?
+        public baseEnergy: number, // Level 1 capacity
+        public baseEfficiency: number, // Level 1 action limit
         public speed: FarmHandSpeeds,
         public accuracy: number, // 0 - 10 (80% - 100%)
         cost: number, // 0 - 10? (can go higher if needed)
-        public unlockRequirement?: Requirement | MultiRequirement | OneFromManyRequirement
+        public unlockRequirement?: Requirement | MultiRequirement | OneFromManyRequirement,
+        public farmId = 0,
+        experience?: KnockoutObservable<number>
     ) {
+        this.experience = experience ?? ko.observable(0);
         SeededRand.seed(parseInt(this.name, 36));
         this.trainerSprite = SeededRand.intBetween(0, 118);
-        // Negative value so they are charged on the first tick and work on the first tick
+        // New, unassigned assistants start with an idle timer.
         this.workTicks(-GameConstants.TICK_TIME);
         this.costTicks(-GameConstants.TICK_TIME);
         // Set initial energy to maximum energy
         this.energy(this.maxEnergy);
         // Calculate how much to charge the player in farm points
         this.cost = new Amount(+Math.pow(100, 1 + cost * 0.08).toPrecision(2), GameConstants.Currency.farmPoint);
-        // Calculate how often they work
-        this.workTick = this.calcWorkTick(this.speed);
-
-        this.tooltip = ko.pureComputed(() => `<strong>${this.name}</strong><br/>
+        this.tooltip = ko.pureComputed(() => `<strong>${this.name} · 农田 ${this.farmId + 1} · Lv.${this.level}</strong><br/>
+            ${this.perpetual ? '永动：工作不减少体力' : `每轮恢复 ${this.recovery} 点体力`}<br/>
             Energy: ${this.energy()}/${this.maxEnergy}<br/>
             Work Cycle: ${GameConstants.formatTimeFullLetters((this.workTick - this.workTicks()) / GameConstants.SECOND)}<br/>
             Next Payment: ${GameConstants.formatTimeFullLetters((this.costTick - this.costTicks()) / GameConstants.SECOND)}`
@@ -119,12 +144,16 @@ class FarmHand {
     }
 
     hire(): void {
-        // Negative value so they are charged on the first tick and work on the first tick
-        this.workTicks(-GameConstants.TICK_TIME);
-        this.costTicks(-GameConstants.TICK_TIME);
+        const hands = App.game.farming.farms()[this.farmId]?.hands;
+        if (this.hired() || !this.isUnlocked() || !hands?.canHire()) {
+            return;
+        }
+        // Hiring pays immediately and schedules work for the next tick.
+        this.workTicks(this.workTick);
+        this.costTicks(0);
 
         // Check the player has enough Farm Points to hire this Farm Hand
-        if (!App.game.wallet.hasAmount(this.cost)) {
+        if (!App.game.wallet.loseAmount(this.cost)) {
             Notifier.notify({
                 title: `[FARM HAND] <img src="assets/images/profile/trainer-${this.trainerSprite}.png" height="24px" class="pixelated"/> ${this.name}`,
                 message: `You don't have enough Farm Points to hire me...\nCost: <img src="./assets/images/currency/farmPoint.svg" height="24px"/> ${this.cost.amount.toLocaleString('en-US')}`,
@@ -162,15 +191,17 @@ class FarmHand {
             return;
         }
         // Charge player when cost tick reached
-        GameHelper.incrementObservable(this.costTicks, GameConstants.TICK_TIME);
-        if (this.costTicks() % this.costTick < GameConstants.TICK_TIME && this.hired()) {
-            this.costTicks(0);
-            this.charge();
+        if (this.hired()) {
+            GameHelper.incrementObservable(this.costTicks, GameConstants.TICK_TIME);
+            if (this.costTicks() >= this.costTick) {
+                this.costTicks(0);
+                this.charge();
+            }
         }
 
         // Work/Restore energy when work ticks reached
         GameHelper.incrementObservable(this.workTicks, GameConstants.TICK_TIME);
-        if (this.workTicks() % this.workTick < GameConstants.TICK_TIME) {
+        if (this.workTicks() >= this.workTick) {
             this.workTicks(0);
             if (this.hired()) {
                 this.work();
@@ -191,20 +222,23 @@ class FarmHand {
         // flip this if they worked, otherwise restore energy points
         let worked = false;
         let workTimes = this.efficiency;
+        const farming = App.game.farming;
+        const plots = farming.getFarmPlots(this.farmId);
 
         // Harvesting berries
         if (this.shouldHarvest()) {
             let readyPlotIndex;
             do {
-                readyPlotIndex = App.game.farming.plotList.findIndex((p, i) => p.isUnlocked && p.berry !== BerryType.None && p.stage() >= PlotStage.Berry && this.plots().includes(i) && !p.isSafeLocked);
+                readyPlotIndex = plots.findIndex((p, i) => p.isUnlocked && p.berry !== BerryType.None && p.stage() === PlotStage.Berry && this.plots().includes(i) && !p.isSafeLocked);
                 if (readyPlotIndex >= 0 && workTimes > 0) {
-                    const berry = App.game.farming.plotList[readyPlotIndex].berry;
-                    App.game.farming.harvest(readyPlotIndex);
+                    const berry = plots[readyPlotIndex].berry;
+                    farming.harvest(readyPlotIndex, this.farmId);
                     workTimes--;
+                    this.gainExperience(2);
                     worked = true;
-                    if (this.focus() == FarmHandBerryTypes.Replant) {
-                        App.game.farming.plant(readyPlotIndex, berry);
+                    if (this.focus() == FarmHandBerryTypes.Replant && workTimes > 0 && farming.plant(readyPlotIndex, berry, this.farmId)) {
                         workTimes--;
+                        this.gainExperience(1);
                     }
                 }
             } while (readyPlotIndex >= 0 && workTimes > 0);
@@ -216,13 +250,13 @@ class FarmHand {
             let berry;
             do {
                 // Find empty plots
-                emptyPlotIndex = App.game.farming.plotList.findIndex((p, i) => p.isUnlocked && p.berry == BerryType.None && this.plots().includes(i) && !p.isSafeLocked);
+                emptyPlotIndex = plots.findIndex((p, i) => p.isUnlocked && p.berry == BerryType.None && this.plots().includes(i) && !p.isSafeLocked);
                 // Plant the berry
                 if (emptyPlotIndex >= 0 && workTimes > 0) {
                     // Plant the expected berry
                     switch (this.focus()) {
                         case FarmHandBerryTypes.Replant: // Re-plant last berry used
-                            berry = App.game.farming.plotList[emptyPlotIndex].lastPlanted;
+                            berry = plots[emptyPlotIndex].lastPlanted;
                             break;
                         case FarmHandBerryTypes.Random: // Plant a random berry
                             berry = Rand.fromArray(App.game.farming.farmHands.availableBerries().filter(b => b >= 0));
@@ -233,10 +267,13 @@ class FarmHand {
                     // If we somehow didn't find a berry to use, just plant a Cheri..
                     berry = berry < 0 ? BerryType.Cheri : berry;
                     // Only plant and work if the player has a berry to plant
-                    if (App.game.farming.hasBerry(berry)) {
-                        App.game.farming.plant(emptyPlotIndex, berry as BerryType);
+                    if (farming.plant(emptyPlotIndex, berry as BerryType, this.farmId)) {
                         workTimes--;
+                        this.gainExperience(1);
                         worked = true;
+                    } else {
+                        // An unavailable or invalid seed must not leave the same empty plot in an endless loop.
+                        break;
                     }
                 }
             } while (emptyPlotIndex >= 0 && workTimes > 0 && App.game.farming.hasBerry(berry));
@@ -244,22 +281,28 @@ class FarmHand {
 
         if (this.shouldCatch()) {
             // First handle plots whose wanderer might flee soon
-            const prioPlots = App.game.farming.plotList.filter(p => p.wanderer && p.wanderer.distractTime() > 0 && !p.wanderer.catching());
+            const prioPlots = plots.filter(p => p.wanderer && p.wanderer.distractTime() > 0 && p.canCatchWanderer() && !p.isSafeLocked);
             while (prioPlots.length > 0 && workTimes > 0) {
                 const plot = prioPlots.shift();
                 if (this.plots().includes(plot.index)) {
-                    App.game.farming.handleWanderer(plot);
+                    farming.handleWanderer(plot);
                     workTimes--;
+                    if (plot.wanderer?.catching()) {
+                        this.gainExperience(1);
+                    }
                     worked = true;
                 }
             }
             // Then handle any plot
-            const plots = App.game.farming.plotList.filter(p => p.wanderer && !p.wanderer.catching());
-            while (plots.length > 0 && workTimes > 0) {
-                const plot = plots.shift();
+            const wandererPlots = plots.filter(p => p.canCatchWanderer() && !p.isSafeLocked);
+            while (wandererPlots.length > 0 && workTimes > 0) {
+                const plot = wandererPlots.shift();
                 if (this.plots().includes(plot.index)) {
-                    App.game.farming.handleWanderer(plot);
+                    farming.handleWanderer(plot);
                     workTimes--;
+                    if (plot.wanderer?.catching()) {
+                        this.gainExperience(1);
+                    }
                     worked = true;
                 }
             }
@@ -269,10 +312,13 @@ class FarmHand {
             this.addEnergy();
         } else {
             this.useEnergy();
+            if (this.perpetual) {
+                this.addEnergy(1);
+            }
         }
     }
 
-    addEnergy(amt = 1): void {
+    addEnergy(amt = this.recovery): void {
         // Only allow up to maximum value
         this.energy(Math.min(this.maxEnergy, this.energy() + amt));
     }
@@ -339,9 +385,9 @@ class FarmHand {
         this.shouldHarvest(json.shouldHarvest ?? this.defaults.shouldHarvest);
         this.workTicks(json.workTicks ?? this.defaults.workTicks);
         this.costTicks(json.costTicks ?? this.defaults.costTicks);
-        this.energy(json.energy ?? this.defaults.energy);
+        this.energy(Math.max(0, Math.min(this.maxEnergy, Number(json.energy) || 0)));
         this.hired(json.hired ?? this.defaults.hired);
-        this.plots(json.plots ?? this.defaults.plots);
+        this.plots(Array.isArray(json.plots) ? [...new Set<number>(json.plots.filter(i => Number.isInteger(i) && i >= 0 && i < 25))] : Array.from({ length: 25 }, (_, i) => i));
         this.shouldCatch(json.shouldCatch ?? this.defaults.shouldCatch);
     }
 }
@@ -360,9 +406,16 @@ class FarmHands {
     public canHire: KnockoutComputed<boolean>;
     public requirement = new TotalBerriesUnlockedRequirement(8);
 
-    constructor() {
-        this.available = ko.pureComputed(() => FarmHands.list.filter(f => f.isUnlocked()));
-        this.hired = ko.pureComputed(() => FarmHands.list.filter(f => f.hired()));
+    public list: FarmHand[];
+
+    constructor(public farmId = 0) {
+        this.list = FarmHands.list.map(template => {
+            const hand = new FarmHand(template.name, template.baseEnergy, template.baseEfficiency, template.speed, template.accuracy, 0, template.unlockRequirement, farmId, template.experience);
+            hand.cost.amount = template.cost.amount;
+            return hand;
+        });
+        this.available = ko.pureComputed(() => this.list.filter(f => f.isUnlocked()));
+        this.hired = ko.pureComputed(() => this.list.filter(f => f.hired()));
         this.availableBerries = ko.pureComputed(() => GameHelper.enumNumbers(FarmHandBerryTypes).filter(b => App.game.farming.unlockedBerries[b]?.() || b < 0).sort((a, b) => a - b));
         this.canHire =  ko.pureComputed(() => this.hired().length < this.MAX_HIRES);
     }
@@ -373,11 +426,11 @@ class FarmHands {
 
     public tick() {
         // run game tick for all farmhands
-        FarmHands.list.forEach(f => f.tick());
+        this.list.forEach(f => f.tick());
     }
 
     public toJSON(): Record<string, any>[] {
-        return this.available().map(f => f.toJSON());
+        return this.list.map(f => f.toJSON());
     }
 
     public fromJSON(json: Array<any>): void {
@@ -385,12 +438,13 @@ class FarmHands {
             return;
         }
 
-        FarmHands.list.forEach(f => {
+        this.list.forEach(f => {
             const data = json?.find(_f => _f.name == f.name);
             if (data) {
                 f.fromJSON(data);
             }
         });
+        this.hired().slice(this.MAX_HIRES).forEach(f => f.hired(false));
     }
 }
 
