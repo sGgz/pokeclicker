@@ -316,6 +316,7 @@ describe('background game clock for automatic quests', () => {
             addEventListener: (_event: string, callback: () => void) => { visibilityChange = callback; } };
         const Game = runInNewContext(`${gameCode}\nGame`, {
             GameConstants, document, console: { log: vi.fn(), error: vi.fn() },
+            AutoClicker: { start: vi.fn(), stop: vi.fn() },
             performance: { now: () => now },
             player: { regionStarters: [() => GameConstants.Starter.Grass] },
             requestAnimationFrame: (callback: () => void) => { frame = callback; return 1; },

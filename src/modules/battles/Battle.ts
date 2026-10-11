@@ -17,6 +17,7 @@ import type { Observable as KnockoutObservable, PureComputed } from 'knockout';
  * Handles all logic related to battling
  */
 export default class Battle {
+    static readonly CLICK_ATTACK_INTERVAL = 50;
     static enemyPokemon: KnockoutObservable<BattlePokemon | null> = ko.observable(null);
 
     static counter = 0;
@@ -59,7 +60,7 @@ export default class Battle {
         // TODO: figure out a better way of handling this
         // Limit click attack speed, Only allow 1 attack per 50ms (20 per second)
         const now = Date.now();
-        if (this.lastClickAttack > now - 50) {
+        if (this.lastClickAttack > now - this.CLICK_ATTACK_INTERVAL) {
             return;
         }
         this.lastClickAttack = now;

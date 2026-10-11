@@ -146,6 +146,25 @@
                             </thead>
                             <tbody>
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.guidePathfinding')}"></tr>
+                                <tr>
+                                    <td class="p-2"><label class="m-0" for="private-auto-click-attack">自动点击攻击</label></td>
+                                    <td class="p-2">
+                                        <select id="private-auto-click-attack" name="ggzz.private.autoClickAttack" class="form-control" data-bind="
+                                            options: Settings.getSetting('ggzz.private.autoClickAttack').options,
+                                            optionsText: 'text', optionsValue: 'value',
+                                            value: Settings.getSetting('ggzz.private.autoClickAttack').observableValue"></select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="p-2"><label class="m-0" for="private-auto-click-rate">自动点击频率</label></td>
+                                    <td class="p-2">
+                                        <select id="private-auto-click-rate" name="ggzz.private.autoClickRate" class="form-control" data-bind="
+                                            options: Settings.getSetting('ggzz.private.autoClickRate').options,
+                                            optionsText: 'text', optionsValue: 'value',
+                                            value: Settings.getSetting('ggzz.private.autoClickRate').observableValue"></select>
+                                    </td>
+                                </tr>
+                                <tr><td colspan="2" class="small">自动点击支持道路、道馆、地牢和临时战斗，最高 20 次/秒，与手动点击共用冷却。战斗开拓区不适用；捕获和战斗等待期间暂停，关闭游戏后停止。</td></tr>
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.drakeChestPriority')}"></tr>
                                 <tr><td colspan="2" class="small">Drake 宝箱优先开启后，会逐层打开所选品质及以上的宝箱，再下楼或挑战 BOSS；官方和优化寻路均生效。关闭后恢复当前寻路模式的通关策略，路过的宝箱仍会打开。</td></tr>
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.pricingMode')}"></tr>

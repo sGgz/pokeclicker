@@ -18,6 +18,8 @@ const names = {
     // Retain the released save key so existing enabled/disabled preferences survive.
     autoFillHatcheryQueue: 'ggzz.private.autoFillEggSlots',
     hatcherySlotLimit: 'ggzz.private.hatcherySlotLimit',
+    autoClickAttack: 'ggzz.private.autoClickAttack',
+    autoClickRate: 'ggzz.private.autoClickRate',
 };
 
 function guideIsHired(): boolean {
@@ -51,6 +53,12 @@ class PrivateSetting<T> extends Setting<T> {
 
 export default class PrivateGameplay {
     static registerSettings(): void {
+        Settings.add(new PrivateSetting(names.autoClickAttack, '自动点击攻击', [
+            new SettingOption('关闭', false),
+            new SettingOption('开启', true),
+        ], true, undefined, false));
+        Settings.add(new PrivateSetting(names.autoClickRate, '自动点击频率',
+            [1, 5, 10, 20].map(value => new SettingOption(`${value} 次/秒${value === 20 ? '（最大）' : ''}`, value)), 20, undefined, false));
         Settings.add(new PrivateSetting(names.hatcherySlotLimit, '同时孵化槽位上限',
             [4, 8, 12, 16].map(value => new SettingOption(`${value} 个`, value)), 8, undefined, false));
         Settings.add(new PrivateSetting(names.autoFillHatcheryQueue, '自动补满孵化队列', [
@@ -85,6 +93,18 @@ export default class PrivateGameplay {
 
     static fixedItemPrices(): boolean {
         return Settings.getSetting(names.pricing)?.observableValue() === 'base-price';
+    }
+
+    static autoClickEnabled(): boolean {
+        return Settings.getSetting(names.autoClickAttack)?.observableValue() === true;
+    }
+
+    static autoClickRate(): number {
+        return Settings.getSetting(names.autoClickRate)?.observableValue() ?? 20;
+    }
+
+    static toggleAutoClick(): void {
+        Settings.getSetting(names.autoClickAttack)?.set(!this.autoClickEnabled());
     }
 
     static autoFillHatcheryQueue(): boolean {

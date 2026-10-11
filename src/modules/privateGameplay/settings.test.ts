@@ -31,7 +31,9 @@ describe('private gameplay save settings', () => {
         PrivateGameplay.registerSettings();
         expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(false);
         expect(PrivateGameplay.hatcherySlotLimit()).toBe(8);
-        expect(Settings.list).toHaveLength(7);
+        expect(PrivateGameplay.autoClickEnabled()).toBe(true);
+        expect(PrivateGameplay.autoClickRate()).toBe(20);
+        expect(Settings.list).toHaveLength(9);
     });
 
     it('reacts immediately to price mode changes and preserves settings through JSON round trips', () => {
@@ -44,6 +46,8 @@ describe('private gameplay save settings', () => {
         Settings.setSettingByName(`${prefix}guideFeeRate`, 1);
         Settings.setSettingByName(`${prefix}autoFillEggSlots`, true);
         Settings.setSettingByName(`${prefix}hatcherySlotLimit`, 16);
+        Settings.setSettingByName(`${prefix}autoClickAttack`, false);
+        Settings.setSettingByName(`${prefix}autoClickRate`, 5);
         PrivateGameplay.markFixedVitaminPurchase();
         expect(quoteMode()).toBe(true);
         expect(changes).toHaveBeenCalledWith(true);
@@ -57,6 +61,8 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(true);
         expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(true);
         expect(PrivateGameplay.hatcherySlotLimit()).toBe(16);
+        expect(PrivateGameplay.autoClickEnabled()).toBe(false);
+        expect(PrivateGameplay.autoClickRate()).toBe(5);
         subscription.dispose();
         quoteMode.dispose();
     });
@@ -69,6 +75,8 @@ describe('private gameplay save settings', () => {
         Settings.setSettingByName(`${prefix}guidePathfinding`, 'optimized');
         Settings.setSettingByName(`${prefix}guideFeeRate`, 1);
         Settings.setSettingByName(`${prefix}autoFillEggSlots`, true);
+        Settings.setSettingByName(`${prefix}autoClickAttack`, false);
+        Settings.setSettingByName(`${prefix}autoClickRate`, 1);
         PrivateGameplay.markFixedVitaminPurchase();
         PrivateGameplay.resetSettingsForLoad();
         Settings.fromJSON({});
@@ -78,13 +86,15 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.guideFeeRate()).toBe(0.01);
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(false);
         expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(false);
+        expect(PrivateGameplay.autoClickEnabled()).toBe(true);
+        expect(PrivateGameplay.autoClickRate()).toBe(20);
         expect(original.value).toBe('kept');
     });
 
     it('excludes all private preferences from global defaults', () => {
         PrivateGameplay.markFixedVitaminPurchase();
         expect(Object.keys(Settings.toJSON(true))).toEqual([]);
-        expect(Object.keys(Settings.toJSON())).toHaveLength(7);
+        expect(Object.keys(Settings.toJSON())).toHaveLength(9);
     });
 
     it('retains vitamin purchase history when loading global defaults, but resets it for a different save', () => {
@@ -108,6 +118,8 @@ describe('private gameplay save settings', () => {
             [`${prefix}fixedVitaminPurchased`]: 'false',
             [`${prefix}autoFillEggSlots`]: 'true',
             [`${prefix}hatcherySlotLimit`]: 99,
+            [`${prefix}autoClickAttack`]: 'false',
+            [`${prefix}autoClickRate`]: 1000,
         });
         expect(PrivateGameplay.fixedItemPrices()).toBe(false);
         expect(PrivateGameplay.optimizedPathfinding()).toBe(false);
@@ -116,6 +128,8 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.fixedVitaminsPurchased()).toBe(true);
         expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(false);
         expect(PrivateGameplay.hatcherySlotLimit()).toBe(8);
+        expect(PrivateGameplay.autoClickEnabled()).toBe(true);
+        expect(PrivateGameplay.autoClickRate()).toBe(20);
         warning.mockRestore();
     });
 
@@ -143,5 +157,15 @@ describe('private gameplay save settings', () => {
         setting.observableValue('off');
         expect(PrivateGameplay.drakeChestPriority()).toBeUndefined();
         expect(Notifier.notify).not.toHaveBeenCalled();
+    });
+
+    it('keeps the selected click rate when using the quick toggle', () => {
+        Settings.setSettingByName(`${prefix}autoClickRate`, 10);
+        PrivateGameplay.toggleAutoClick();
+        expect(PrivateGameplay.autoClickEnabled()).toBe(false);
+        expect(PrivateGameplay.autoClickRate()).toBe(10);
+        PrivateGameplay.toggleAutoClick();
+        expect(PrivateGameplay.autoClickEnabled()).toBe(true);
+        expect(PrivateGameplay.autoClickRate()).toBe(10);
     });
 });

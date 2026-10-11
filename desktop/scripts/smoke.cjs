@@ -131,6 +131,9 @@ async function run() {
         assert.ok(await pageA.locator('#theme-link').evaluate(el => el.href.startsWith('pokeclicker://game/vendor/themes/')));
         await pageA.getByText('New Save', { exact: true }).click();
         await pageA.waitForFunction(() => typeof App !== 'undefined' && App.game?.statistics?.secondsPlayed && CloudSave.running);
+        assert.deepEqual(await pageA.evaluate(() => ({ enabled: PrivateGameplay.autoClickEnabled(), rate: PrivateGameplay.autoClickRate() })), { enabled: true, rate: 20 });
+        // Keep the tutorial and unrelated fixtures deterministic; verify automation separately below.
+        await pageA.evaluate(() => Settings.setSettingByName('ggzz.private.autoClickAttack', false));
         await pageA.locator('#startSequenceModal').getByRole('button', { name: 'Next', exact: true }).click();
         await pageA.locator('#pickStarterTutorialModal input.image-starter').first().click();
         // Hide the tutorial tooltip only in this disposable test profile.
@@ -145,8 +148,22 @@ async function run() {
             App.game.keyItems.gainKeyItem(KeyItemType.Town_map, true);
         });
         // Exercise the actual Knockout controls and game objects in this isolated save.
+        await pageA.waitForFunction(() => !Battle.catching() && Battle.enemyPokemon()?.isAlive());
+        await pageA.evaluate(() => {
+            const enemy = Battle.enemyPokemon();
+            // Exercise real attacks without capturing extra Pokemon in unrelated party fixtures.
+            window.autoClickEnemyFixture = { enemy, health: enemy.health(), maxHealth: enemy.maxHealth(), percentage: enemy.healthPercentage() };
+            enemy.maxHealth(1_000_000);
+            enemy.health(1_000_000);
+            enemy.healthPercentage(100);
+        });
         await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('shown.bs.modal', () => resolve()).modal('show')));
         await pageA.locator('#settingsModal a[href="#settings-game"]').click();
+        await pageA.getByLabel('自动点击攻击', { exact: true }).selectOption({ label: '开启' });
+        await pageA.getByLabel('自动点击频率', { exact: true }).selectOption({ label: '5 次/秒' });
+        assert.deepEqual(await pageA.evaluate(() => ({ enabled: PrivateGameplay.autoClickEnabled(), rate: PrivateGameplay.autoClickRate() })), { enabled: true, rate: 5 });
+        await pageA.getByLabel('自动点击频率', { exact: true }).selectOption({ label: '20 次/秒（最大）' });
+        await pageA.getByLabel('自动点击攻击', { exact: true }).selectOption({ label: '关闭' });
         await pageA.locator('select[name="ggzz.private.guidePathfinding"]').selectOption('optimized');
         const chestPriority = pageA.locator('select[name="ggzz.private.drakeChestPriority"]');
         assert.equal(await chestPriority.inputValue(), 'off');
@@ -166,6 +183,54 @@ async function run() {
         assert.equal(await pageA.evaluate(() => PrivateGameplay.guideFeeRate()), 0.01);
         await pageA.screenshot({ path: path.join(output, 'private-gameplay-settings.png') });
         await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        const autoClickBefore = await pageA.evaluate(() => ({ clicks: App.game.statistics.clickAttacks(), time: performance.now() }));
+        await pageA.locator('#auto-click-toggle').click();
+        await pageA.waitForFunction(before => App.game.statistics.clickAttacks() >= before + 4, autoClickBefore.clicks, { timeout: 3000 });
+        const autoClickAfter = await pageA.evaluate(() => ({ clicks: App.game.statistics.clickAttacks(), time: performance.now() }));
+        assert.ok(autoClickAfter.clicks - autoClickBefore.clicks <= Math.ceil((autoClickAfter.time - autoClickBefore.time) / 50) + 1);
+        const backgroundClicks = await pageA.evaluate(() => App.game.statistics.clickAttacks());
+        await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === 'pokeclicker://game/').minimize());
+        try {
+            await pageA.waitForFunction(before => App.game.statistics.clickAttacks() >= before + 4, backgroundClicks, { polling: 50, timeout: 5000 });
+        } finally {
+            await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === 'pokeclicker://game/').restore());
+        }
+        await pageA.locator('#auto-click-toggle').click();
+        assert.equal(await pageA.locator('#auto-click-toggle').getAttribute('aria-pressed'), 'false');
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.autoClickRate()), 20);
+        const stoppedClickCount = await pageA.evaluate(() => {
+            window.autoClickStoppedAt = performance.now();
+            return App.game.statistics.clickAttacks();
+        });
+        await pageA.waitForFunction(() => performance.now() - window.autoClickStoppedAt >= 200);
+        assert.equal(await pageA.evaluate(() => App.game.statistics.clickAttacks()), stoppedClickCount);
+        await pageA.evaluate(() => {
+            const saved = window.autoClickEnemyFixture;
+            if (Battle.enemyPokemon() !== saved.enemy) throw new Error('Auto click fixture unexpectedly defeated its enemy');
+            saved.enemy.maxHealth(saved.maxHealth);
+            saved.enemy.health(saved.health);
+            saved.enemy.healthPercentage(saved.percentage);
+            delete window.autoClickEnemyFixture;
+        });
+        await pageA.screenshot({ path: path.join(output, 'auto-click-controls.png') });
+        checks.push('Auto click defaults to 20/s, typed settings and the battle toggle stay in sync, attacks respect the cooldown, minimized desktop attacks continue, and disabling stops attacks.');
+        if (process.argv.includes('--auto-click-only')) {
+            await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('shown.bs.modal', () => resolve()).modal('show')));
+            await pageA.locator('#settingsModal a[href="#settings-game"]').click();
+            await pageA.getByLabel('自动点击频率', { exact: true }).selectOption({ label: '5 次/秒' });
+            await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+            await quit(a);
+            ({ app: a, page: pageA } = await launch(profiles[0]));
+            await pageA.getByText('Desktop fixture A', { exact: true }).click();
+            await pageA.waitForFunction(() => typeof App !== 'undefined' && !!App.game);
+            assert.deepEqual(await pageA.evaluate(() => ({ enabled: PrivateGameplay.autoClickEnabled(), rate: PrivateGameplay.autoClickRate() })), { enabled: false, rate: 5 });
+            checks.push('Opening the saved game after a desktop restart restores the disabled state and non-default 5/s frequency.');
+            assert.deepEqual(errors, []);
+            const report = { passed: true, checks, desktopVersion, packaged: !dev };
+            await fs.writeFile(path.join(output, 'auto-click-smoke-report.json'), JSON.stringify(report, null, 2));
+            console.log(JSON.stringify(report, null, 2));
+            return;
+        }
         // Multi-farm UI operates only on this disposable desktop profile.
         await pageA.evaluate(() => {
             const farming = App.game.farming;
@@ -506,6 +571,16 @@ async function run() {
         });
         const frontierPanel = pageA.locator('#battleFrontierInformation');
         await frontierPanel.getByRole('button', { name: 'Quick Challenge (Stage 1,901)', exact: true }).click();
+        assert.equal(await pageA.locator('#auto-click-toggle').isVisible(), false);
+        const frontierClickCount = await pageA.evaluate(() => {
+            Settings.setSettingByName('ggzz.private.autoClickAttack', true);
+            window.frontierClickStartedAt = performance.now();
+            return App.game.statistics.clickAttacks();
+        });
+        await pageA.waitForFunction(() => performance.now() - window.frontierClickStartedAt >= 250);
+        assert.equal(await pageA.evaluate(() => App.game.statistics.clickAttacks()), frontierClickCount);
+        await pageA.evaluate(() => Settings.setSettingByName('ggzz.private.autoClickAttack', false));
+        checks.push('Battle Frontier never receives auto click attacks, and its battle view hides the auto click toggle.');
         assert.deepEqual(await pageA.evaluate(() => ({ stage: BattleFrontierRunner.stage(), total: App.game.statistics.battleFrontierTotalStagesCompleted(), rewards: BattleFrontierRunner.pendingRewards() })),
             { stage: 1901, total: 0, rewards: { stages: 0, battlePoints: 0, money: 0 } });
         await pageA.evaluate(() => { for (let i = 0; i < 6; i++) BattleFrontierBattle.defeatPokemon(); });
@@ -609,6 +684,11 @@ async function run() {
         await quit(a);
         assert.equal(writes, beforeQuitWrites);
         ({ app: a, page: pageA } = await launch(profiles[0]));
+        assert.deepEqual(await pageA.evaluate(key => {
+            const settings = JSON.parse(localStorage.getItem('settings' + key));
+            return { enabled: settings['ggzz.private.autoClickAttack'], rate: settings['ggzz.private.autoClickRate'] };
+        }, keyA), { enabled: false, rate: 20 });
+        checks.push('Auto click enabled state and chosen frequency remain in the saved profile after a desktop restart.');
         assert.equal(await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key)).profile.name, keyA), 'Desktop fixture A');
         const restoredOrbs = await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key))['dream-orbs'], keyA);
         assert.equal(restoredOrbs.orbs.find(orb => orb.color === 'Pink').amount, 9);

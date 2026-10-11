@@ -49,6 +49,7 @@ class Save {
     }
 
     public static load(): Player {
+        AutoClicker.stop();
         const saved = localStorage.getItem(`player${Save.key}`);
 
         // Load our settings, or the saved default settings, or no settings

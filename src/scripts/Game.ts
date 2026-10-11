@@ -4,6 +4,7 @@
 /// <reference path="../declarations/party/Category.d.ts"/>
 /// <reference path="../declarations/effectEngine/effectEngineRunner.d.ts"/>
 /// <reference path="../declarations/items/ItemHandler.d.ts"/>
+/// <reference path="AutoClicker.ts" />
 
 /**
  * Main game class.
@@ -292,6 +293,8 @@ class Game implements TmpGameType {
             StartSequenceRunner.start();
         }
 
+        AutoClicker.start();
+
         let pageHidden = document.hidden;
 
         // Both sources share a clock: Electron can stop animation frames while still
@@ -361,6 +364,7 @@ class Game implements TmpGameType {
     }
 
     stop() {
+        AutoClicker.stop();
         cancelAnimationFrame(this.frameRequest);
         this.worker?.terminate();
         window.onbeforeunload = () => {};
