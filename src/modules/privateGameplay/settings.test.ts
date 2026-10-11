@@ -33,7 +33,8 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.hatcherySlotLimit()).toBe(8);
         expect(PrivateGameplay.autoClickEnabled()).toBe(true);
         expect(PrivateGameplay.autoClickRate()).toBe(20);
-        expect(Settings.list).toHaveLength(9);
+        expect(PrivateGameplay.autoMineEnabled()).toBe(true);
+        expect(Settings.list).toHaveLength(10);
     });
 
     it('reacts immediately to price mode changes and preserves settings through JSON round trips', () => {
@@ -48,6 +49,7 @@ describe('private gameplay save settings', () => {
         Settings.setSettingByName(`${prefix}hatcherySlotLimit`, 16);
         Settings.setSettingByName(`${prefix}autoClickAttack`, false);
         Settings.setSettingByName(`${prefix}autoClickRate`, 5);
+        PrivateGameplay.toggleAutoMine();
         PrivateGameplay.markFixedVitaminPurchase();
         expect(quoteMode()).toBe(true);
         expect(changes).toHaveBeenCalledWith(true);
@@ -63,6 +65,7 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.hatcherySlotLimit()).toBe(16);
         expect(PrivateGameplay.autoClickEnabled()).toBe(false);
         expect(PrivateGameplay.autoClickRate()).toBe(5);
+        expect(PrivateGameplay.autoMineEnabled()).toBe(false);
         subscription.dispose();
         quoteMode.dispose();
     });
@@ -77,6 +80,7 @@ describe('private gameplay save settings', () => {
         Settings.setSettingByName(`${prefix}autoFillEggSlots`, true);
         Settings.setSettingByName(`${prefix}autoClickAttack`, false);
         Settings.setSettingByName(`${prefix}autoClickRate`, 1);
+        PrivateGameplay.toggleAutoMine();
         PrivateGameplay.markFixedVitaminPurchase();
         PrivateGameplay.resetSettingsForLoad();
         Settings.fromJSON({});
@@ -88,13 +92,14 @@ describe('private gameplay save settings', () => {
         expect(PrivateGameplay.autoFillHatcheryQueue()).toBe(false);
         expect(PrivateGameplay.autoClickEnabled()).toBe(true);
         expect(PrivateGameplay.autoClickRate()).toBe(20);
+        expect(PrivateGameplay.autoMineEnabled()).toBe(true);
         expect(original.value).toBe('kept');
     });
 
     it('excludes all private preferences from global defaults', () => {
         PrivateGameplay.markFixedVitaminPurchase();
         expect(Object.keys(Settings.toJSON(true))).toEqual([]);
-        expect(Object.keys(Settings.toJSON())).toHaveLength(9);
+        expect(Object.keys(Settings.toJSON())).toHaveLength(10);
     });
 
     it('retains vitamin purchase history when loading global defaults, but resets it for a different save', () => {
@@ -120,6 +125,7 @@ describe('private gameplay save settings', () => {
             [`${prefix}hatcherySlotLimit`]: 99,
             [`${prefix}autoClickAttack`]: 'false',
             [`${prefix}autoClickRate`]: 1000,
+            [`${prefix}autoMine`]: 'false',
         });
         expect(PrivateGameplay.fixedItemPrices()).toBe(false);
         expect(PrivateGameplay.optimizedPathfinding()).toBe(false);

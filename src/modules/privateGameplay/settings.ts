@@ -20,6 +20,7 @@ const names = {
     hatcherySlotLimit: 'ggzz.private.hatcherySlotLimit',
     autoClickAttack: 'ggzz.private.autoClickAttack',
     autoClickRate: 'ggzz.private.autoClickRate',
+    autoMine: 'ggzz.private.autoMine',
 };
 
 function guideIsHired(): boolean {
@@ -53,6 +54,10 @@ class PrivateSetting<T> extends Setting<T> {
 
 export default class PrivateGameplay {
     static registerSettings(): void {
+        Settings.add(new PrivateSetting(names.autoMine, '矿场自动点击', [
+            new SettingOption('关闭', false),
+            new SettingOption('开启', true),
+        ], true, undefined, false));
         Settings.add(new PrivateSetting(names.autoClickAttack, '自动点击攻击', [
             new SettingOption('关闭', false),
             new SettingOption('开启', true),
@@ -105,6 +110,14 @@ export default class PrivateGameplay {
 
     static toggleAutoClick(): void {
         Settings.getSetting(names.autoClickAttack)?.set(!this.autoClickEnabled());
+    }
+
+    static autoMineEnabled(): boolean {
+        return Settings.getSetting(names.autoMine)?.observableValue() === true;
+    }
+
+    static toggleAutoMine(): void {
+        Settings.getSetting(names.autoMine)?.set(!this.autoMineEnabled());
     }
 
     static autoFillHatcheryQueue(): boolean {

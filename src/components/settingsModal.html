@@ -165,6 +165,8 @@
                                     </td>
                                 </tr>
                                 <tr><td colspan="2" class="small">自动点击支持道路、道馆、地牢和临时战斗，最高 20 次/秒，与手动点击共用冷却。战斗开拓区不适用；捕获和战斗等待期间暂停，关闭游戏后停止。</td></tr>
+                                <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.autoMine')}"></tr>
+                                <tr><td colspan="2" class="small">矿场自动点击使用当前挖掘工具和上方频率；耐久不足、搜索矿层或选择勘测时等待。挖完后沿用自动搜索下一层设置，关闭游戏后停止。</td></tr>
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.drakeChestPriority')}"></tr>
                                 <tr><td colspan="2" class="small">Drake 宝箱优先开启后，会逐层打开所选品质及以上的宝箱，再下楼或挑战 BOSS；官方和优化寻路均生效。关闭后恢复当前寻路模式的通关策略，路过的宝箱仍会打开。</td></tr>
                                 <tr data-bind="template: { name: 'MultipleChoiceSettingTemplate', data: Settings.getSetting('ggzz.private.pricingMode')}"></tr>
@@ -329,6 +331,8 @@
                                 <tr data-bind="template: { name: 'KeyChoiceSettingTemplate', data: Settings.getSetting('hotkey.farm.plantBatch')}"></tr>
                                 <tr data-bind="template: { name: 'KeyChoiceSettingTemplate', data: Settings.getSetting('hotkey.farm.harvestBatch')}"></tr>
                                 <tr data-bind="template: { name: 'KeyChoiceSettingTemplate', data: Settings.getSetting('hotkey.farm.replantBatch')}"></tr>
+                                <tr data-bind="template: { name: 'KeyChoiceSettingTemplate', data: Settings.getSetting('hotkey.farm.mulchBatch')}"></tr>
+                                <tr data-bind="template: { name: 'KeyChoiceSettingTemplate', data: Settings.getSetting('hotkey.farm.clearBatch')}"></tr>
                             </tbody>
                             <thead>
                                 <tr><th colspan="2">Underground</th></tr>

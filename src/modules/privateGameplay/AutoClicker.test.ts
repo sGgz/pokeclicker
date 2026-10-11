@@ -6,6 +6,8 @@ import Battle from '../battles/Battle';
 import * as GameConstants from '../GameConstants';
 import Settings from '../settings/Settings';
 import PrivateGameplay from './settings';
+import { UndergroundController } from '../underground/UndergroundController';
+import UndergroundToolType from '../underground/tools/UndergroundToolType';
 
 const code = transpileModule(readFileSync('src/scripts/AutoClicker.ts', 'utf8'), {
     compilerOptions: { target: ScriptTarget.ES2020 },
@@ -55,6 +57,7 @@ function setup(state = GameConstants.GameState.fighting) {
         GameConstants, PrivateGameplay, App: { game }, performance, Date, setTimeout, clearTimeout,
         Battle: battles[0].target, GymBattle: battles[1].target, DungeonBattle: battles[2].target,
         TemporaryBattleBattle: battles[3].target, GymRunner: runner, DungeonRunner: runner, TemporaryBattleRunner: runner,
+        UndergroundController,
     });
     return { controller, game, battles, running, attacks, disabled };
 }
@@ -187,5 +190,97 @@ describe('built-in online click attacks', () => {
         vi.setSystemTime(time);
         vi.advanceTimersByTime(50);
         expect(h.attacks()).toBe(2);
+    });
+});
+
+describe('built-in online mining clicks', () => {
+    function mining() {
+        const h = setup(GameConstants.GameState.town);
+        const grid = [{ layerDepth: 0 }, { layerDepth: 1000 }, { layerDepth: 3 }];
+        const mine = { grid, completed: false, timeUntilDiscovery: 0, getCoordinateForGridIndex: (index: number) => ({ x: index, y: 0 }) };
+        const ready = ko.observable(true);
+        const useTool = vi.fn((_tool: UndergroundToolType, x: number) => { grid[x].layerDepth--; });
+        const underground = { canAccess: vi.fn(() => true), mine, tools: {
+            selectedToolType: UndergroundToolType.Chisel,
+            getTool: () => ({ canUseTool: ready }), useTool,
+        } };
+        Object.assign(h.game, { underground });
+        Object.assign(UndergroundController, { lastMineClick: -50 });
+        Settings.setSettingByName('ggzz.private.autoClickAttack', false);
+        return { ...h, underground, mine, ready, useTool };
+    }
+
+    it('defaults on and uses the real manual entry at 20/s without inspecting hidden rewards', () => {
+        const h = mining();
+        Object.defineProperty(h.mine.grid[1], 'reward', { get() { throw new Error('Hidden reward inspected'); } });
+        h.controller.start();
+        vi.advanceTimersByTime(999);
+        expect(h.useTool).toHaveBeenCalledTimes(20);
+        expect(h.useTool).toHaveBeenLastCalledWith(UndergroundToolType.Chisel, 1, 0);
+        expect(h.attacks()).toBe(0);
+    });
+
+    it.each([1, 5, 10])('uses the shared %i/s rate with its independent toggle', rate => {
+        const h = mining();
+        Settings.setSettingByName('ggzz.private.autoClickRate', rate);
+        h.controller.start();
+        vi.advanceTimersByTime(999);
+        expect(h.useTool).toHaveBeenCalledTimes(rate);
+        PrivateGameplay.toggleAutoMine();
+        vi.advanceTimersByTime(1000);
+        expect(h.useTool).toHaveBeenCalledTimes(rate);
+        expect(PrivateGameplay.autoClickRate()).toBe(rate);
+        PrivateGameplay.toggleAutoMine();
+        vi.advanceTimersByTime(50);
+        expect(h.useTool).toHaveBeenCalledTimes(rate + 1);
+    });
+
+    it('waits for access, discovery, durability, survey selection and completed mines', () => {
+        const h = mining();
+        h.underground.canAccess.mockReturnValue(false);
+        h.controller.start();
+        vi.advanceTimersByTime(100);
+        h.underground.canAccess.mockReturnValue(true);
+        h.mine.timeUntilDiscovery = 1;
+        vi.advanceTimersByTime(100);
+        h.mine.timeUntilDiscovery = 0;
+        h.ready(false);
+        vi.advanceTimersByTime(100);
+        h.ready(true);
+        h.underground.tools.selectedToolType = UndergroundToolType.Survey;
+        vi.advanceTimersByTime(100);
+        h.underground.tools.selectedToolType = UndergroundToolType.Hammer;
+        h.mine.completed = true;
+        vi.advanceTimersByTime(100);
+        expect(h.useTool).not.toHaveBeenCalled();
+        h.mine.completed = false;
+        vi.advanceTimersByTime(50);
+        expect(h.useTool).toHaveBeenCalledWith(UndergroundToolType.Hammer, 1, 0);
+    });
+
+    it('shares the manual mining cooldown and pauses without stacking or catching up', () => {
+        const h = mining();
+        UndergroundController.clickModalMineSquare(1);
+        h.controller.start();
+        expect(h.useTool).toHaveBeenCalledTimes(1);
+        vi.advanceTimersByTime(50);
+        expect(h.useTool).toHaveBeenCalledTimes(2);
+        h.game.gameState = GameConstants.GameState.paused;
+        vi.advanceTimersByTime(1000);
+        expect(h.useTool).toHaveBeenCalledTimes(2);
+        h.game.gameState = GameConstants.GameState.town;
+        h.controller.start();
+        h.controller.start();
+        expect(vi.getTimerCount()).toBe(1);
+        let now = 10_000;
+        vi.spyOn(performance, 'now').mockImplementation(() => now);
+        vi.setSystemTime(now);
+        const before = h.useTool.mock.calls.length;
+        vi.advanceTimersByTime(50);
+        expect(h.useTool).toHaveBeenCalledTimes(before + 1);
+        h.controller.stop();
+        now += 1000;
+        vi.advanceTimersByTime(1000);
+        expect(h.useTool).toHaveBeenCalledTimes(before + 1);
     });
 });

@@ -133,7 +133,10 @@ async function run() {
         await pageA.waitForFunction(() => typeof App !== 'undefined' && App.game?.statistics?.secondsPlayed && CloudSave.running);
         assert.deepEqual(await pageA.evaluate(() => ({ enabled: PrivateGameplay.autoClickEnabled(), rate: PrivateGameplay.autoClickRate() })), { enabled: true, rate: 20 });
         // Keep the tutorial and unrelated fixtures deterministic; verify automation separately below.
-        await pageA.evaluate(() => Settings.setSettingByName('ggzz.private.autoClickAttack', false));
+        await pageA.evaluate(() => {
+            Settings.setSettingByName('ggzz.private.autoClickAttack', false);
+            Settings.setSettingByName('ggzz.private.autoMine', false);
+        });
         await pageA.locator('#startSequenceModal').getByRole('button', { name: 'Next', exact: true }).click();
         await pageA.locator('#pickStarterTutorialModal input.image-starter').first().click();
         // Hide the tutorial tooltip only in this disposable test profile.
@@ -255,6 +258,38 @@ async function run() {
         assert.deepEqual(await pageA.evaluate(() => App.game.farming.farms().map(farm => farm.plots.filter(plot => !plot.isEmpty()).length)), [0, 0, 0]);
         await pageA.keyboard.press('b');
         assert.deepEqual(await pageA.evaluate(() => App.game.farming.farms().map(farm => farm.plots.filter(plot => !plot.isEmpty()).length)), [25, 25, 25]);
+        await pageA.evaluate(() => {
+            window.farmSmoke.confirmMulch = Settings.getSetting('confirmBeformeMulchingAllPlots').value;
+            Settings.setSettingByName('confirmBeformeMulchingAllPlots', false);
+            App.game.farming.mulchList[MulchType.Boost_Mulch](1000);
+            FarmController.selectedMulch(MulchType.Boost_Mulch);
+            FarmController.multIndex(0);
+        });
+        await farmModal.getByRole('link', { name: 'Mulch', exact: true }).click();
+        assert.equal(await farmModal.locator('.farm-batch-actions').getByRole('button', { name: '重种', exact: true }).isVisible(), false);
+        assert.equal(await farmModal.locator('.farm-batch-actions').getByRole('button', { name: '清作物', exact: true }).isVisible(), false);
+        assert.equal(await farmModal.locator('.farm-batch-actions').getByRole('button', { name: '施肥', exact: true }).isVisible(), true);
+        assert.equal(await farmModal.locator('.farm-batch-actions').getByRole('button', { name: '清肥料', exact: true }).isVisible(), true);
+        const mulchBefore = await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]());
+        await pageA.keyboard.press('m');
+        assert.equal(await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]()), mulchBefore - 75);
+        await pageA.evaluate(() => { App.game.farming.mulchShovelAmt(100); });
+        await pageA.keyboard.press('c');
+        const mulchConfirm = pageA.locator('.modal.show').filter({ hasText: '批量铲除肥料' });
+        await mulchConfirm.getByRole('button', { name: '清理', exact: true }).click();
+        await pageA.waitForFunction(() => !document.querySelector('.modal[id^="modal"]'));
+        assert.equal(await pageA.evaluate(() => App.game.farming.farms().flatMap(farm => farm.plots).filter(plot => plot.mulch !== MulchType.None).length), 0);
+        assert.equal(await pageA.evaluate(() => App.game.farming.mulchShovelAmt()), 25);
+        const berriesBefore = await pageA.evaluate(() => App.game.farming.berryInventory[BerryType.Cheri]());
+        await pageA.keyboard.press('h');
+        assert.equal(await pageA.evaluate(() => App.game.farming.berryInventory[BerryType.Cheri]()), berriesBefore);
+        await pageA.evaluate(() => $('#toaster').hide());
+        await farmModal.locator('.modal-content').screenshot({ path: path.join(output, 'farm-mulch-controls.png') });
+        await farmModal.getByRole('link', { name: 'Berries', exact: true }).click();
+        assert.equal(await farmModal.locator('.farm-batch-actions').getByRole('button', { name: '清肥料', exact: true }).isVisible(), false);
+        const afterMulch = await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]());
+        await pageA.keyboard.press('m');
+        assert.equal(await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]()), afterMulch);
         await farmModal.getByLabel('农田名称', { exact: true }).fill('测试生产田');
         await farmModal.getByLabel('农田名称', { exact: true }).press('Tab');
         await pageA.keyboard.press('[');
@@ -294,6 +329,7 @@ async function run() {
         await pageA.evaluate(() => {
             App.game.farming.fromJSON(window.farmSmoke.saved);
             App.game.farming.update = window.farmSmoke.update;
+            Settings.setSettingByName('confirmBeformeMulchingAllPlots', window.farmSmoke.confirmMulch);
             delete window.farmSmoke;
             FarmController.batchScope('current');
             FarmController.farmingModalTabSelected('berryFarmView');
@@ -301,6 +337,39 @@ async function run() {
             $('#toaster').show();
         });
         checks.push('Multi-farm purchase, all-farm planting, scoped harvest and plant hotkeys, farm switching, shared helper levels without a perpetual UI label, and save round-trip work in real Electron.');
+        checks.push('Mulch hotkey applies to the selected farm scope; berry and mulch buttons and hotkeys follow the visible tab.');
+        await pageA.evaluate(() => {
+            window.mineSmoke = JSON.parse(JSON.stringify(App.game.underground.toJSON()));
+            App.game.keyItems.gainKeyItem(KeyItemType.Explorer_kit, true);
+            App.game.underground.tools.selectedToolType = UndergroundToolType.Chisel;
+            App.game.underground.mine.tick(100_000);
+            UndergroundController.openUndergroundModal();
+        });
+        const mineModal = pageA.locator('#mineModal');
+        const mineBefore = await pageA.evaluate(() => App.game.statistics.undergroundToolsUsed[UndergroundToolType.Chisel]());
+        await mineModal.locator('#auto-mine-toggle').click();
+        await pageA.waitForFunction(before => App.game.statistics.undergroundToolsUsed[UndergroundToolType.Chisel]() >= before + 3, mineBefore, { timeout: 3000 });
+        assert.equal(await pageA.locator('#auto-mine-quick-toggle').getAttribute('aria-pressed'), 'true');
+        const mineBackgroundBefore = await pageA.evaluate(() => App.game.statistics.undergroundToolsUsed[UndergroundToolType.Chisel]());
+        await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === 'pokeclicker://game/').minimize());
+        try {
+            await pageA.waitForFunction(before => App.game.statistics.undergroundToolsUsed[UndergroundToolType.Chisel]() >= before + 3, mineBackgroundBefore, { timeout: 3000 });
+        } finally {
+            await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === 'pokeclicker://game/').restore());
+        }
+        await mineModal.locator('#auto-mine-toggle').click();
+        const mineStopped = await pageA.evaluate(() => {
+            window.mineStoppedAt = performance.now();
+            return App.game.statistics.undergroundToolsUsed[UndergroundToolType.Chisel]();
+        });
+        await pageA.waitForFunction(() => performance.now() - window.mineStoppedAt >= 200);
+        assert.equal(await pageA.evaluate(() => App.game.statistics.undergroundToolsUsed[UndergroundToolType.Chisel]()), mineStopped);
+        assert.equal(await pageA.locator('#auto-mine-quick-toggle').getAttribute('aria-pressed'), 'false');
+        await pageA.evaluate(() => $('#toaster').hide());
+        await mineModal.locator('.modal-content').screenshot({ path: path.join(output, 'auto-mine-controls.png') });
+        await pageA.evaluate(() => new Promise(resolve => $('#mineModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        await pageA.evaluate(() => { App.game.underground.fromJSON(window.mineSmoke); delete window.mineSmoke; $('#toaster').show(); });
+        checks.push('Mining toggle operates the real Chisel and durability, stays synchronized with the sidebar, continues minimized and stops when disabled.');
         if (process.argv.includes('--farm-only')) {
             assert.deepEqual(errors, []);
             const farmReport = { passed: true, checks, desktopVersion, packaged: !dev, farmsVerified: 16 };

@@ -190,9 +190,14 @@ class GameController {
                 const farmKeys = {
                     [Settings.getSetting('hotkey.farm.previousFarm').value]: () => FarmController.navigateFarm(-1),
                     [Settings.getSetting('hotkey.farm.nextFarm').value]: () => FarmController.navigateFarm(1),
-                    [Settings.getSetting('hotkey.farm.plantBatch').value]: () => FarmController.plantBatch(),
-                    [Settings.getSetting('hotkey.farm.harvestBatch').value]: () => FarmController.harvestBatch(),
-                    [Settings.getSetting('hotkey.farm.replantBatch').value]: () => FarmController.harvestBatch(true),
+                    ...(FarmController.berryListVisible() ? {
+                        [Settings.getSetting('hotkey.farm.plantBatch').value]: () => FarmController.plantBatch(),
+                        [Settings.getSetting('hotkey.farm.harvestBatch').value]: () => FarmController.harvestBatch(),
+                        [Settings.getSetting('hotkey.farm.replantBatch').value]: () => FarmController.harvestBatch(true),
+                    } : {
+                        [Settings.getSetting('hotkey.farm.mulchBatch').value]: () => FarmController.mulchAll(),
+                    }),
+                    [Settings.getSetting('hotkey.farm.clearBatch').value]: () => FarmController.shovelBatch(!FarmController.berryListVisible()),
                 };
                 if (key && FarmController.farmingModalTabSelected() === 'berryFarmView' && farmKeys[key]) {
                     if (!(e.originalEvent as KeyboardEvent)?.repeat) {

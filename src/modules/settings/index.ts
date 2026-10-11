@@ -529,6 +529,8 @@ Settings.add(new HotkeySetting('hotkey.farm.nextFarm', '下块田', ']'));
 Settings.add(new HotkeySetting('hotkey.farm.plantBatch', '批量种植', 'B'));
 Settings.add(new HotkeySetting('hotkey.farm.harvestBatch', '批量收获', 'H'));
 Settings.add(new HotkeySetting('hotkey.farm.replantBatch', '收获重种', 'R'));
+Settings.add(new HotkeySetting('hotkey.farm.mulchBatch', '批量施肥', 'M'));
+Settings.add(new HotkeySetting('hotkey.farm.clearBatch', '批量清理', 'C'));
 
 Settings.add(new HotkeySetting('hotkey.underground.hammer', 'Switch to Hammer', 'H'));
 Settings.add(new HotkeySetting('hotkey.underground.chisel', 'Switch to Chisel', 'C'));

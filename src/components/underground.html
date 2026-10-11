@@ -15,8 +15,9 @@
                 <div id="dig" class="tab-pane fade in active show" data-bind="">
                     <div class="container">
                         <div class="row p-2">
-                            <div class="col-6 p-0 d-flex">
+                            <div class="col-6 p-0 d-flex flex-wrap">
                                 <button class="btn btn-primary" data-bind="click: () => $('#findNewMineModal').modal('show');">Find mine</button>
+                                <button id="auto-mine-toggle" class="btn text-nowrap" title="按当前工具自动挖掘，共用自动点击频率；耐久不足时等待，勘测工具不自动使用。" data-bind="click: () => PrivateGameplay.toggleAutoMine(), text: `自动：${PrivateGameplay.autoMineEnabled() ? '开' : '关'}`, css: { 'btn-success': PrivateGameplay.autoMineEnabled(), 'btn-secondary': !PrivateGameplay.autoMineEnabled() }, attr: { 'aria-pressed': String(PrivateGameplay.autoMineEnabled()) }"></button>
 
                                 <!-- ko let: { autoRestartUndergroundMine: Settings.getSetting('autoRestartUndergroundMine') } -->
                                 <button class="btn btn-danger p-2" style="min-width: 36px;" data-bind="
@@ -467,6 +468,8 @@
                 </div>
 
                 <div id="help" class="tab-pane fade p-2 text-left">
+                    <h4>自动挖掘</h4>
+                    <p>“自动：开 / 关”使用当前工具挖掘，共用自用玩法中的自动点击频率，默认 20 次/秒。耐久不足、矿层搜索中或选中勘测时等待；炸弹沿用原有损毁概率。挖完后是否继续找矿由 ↻ 开关控制。最小化继续，关闭游戏不结算离线挖掘。</p>
                     <div class="card mb-2">
                         <div class="card-header d-flex align-items-center p-0">
                             <span class="flex-grow-1 text-center font-weight-bold">Mines</span>

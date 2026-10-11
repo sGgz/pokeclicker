@@ -33,9 +33,10 @@
                         </select>
                         <span class="small" title="助手工资以农田币计，所有批量操作均使用所选范围。" data-bind="text: `目标 ${FarmController.targetFarms().length} · 农田 ${App.game.farming.farms().length}/16 · 工资 ${App.game.farming.totalHourlyWages().toLocaleString('en-US')}/时`"></span>
                         <div class="farm-batch-actions" data-bind="visible: FarmController.farmingModalTabSelected() === 'berryFarmView'">
-                            <button class="btn btn-outline-success btn-sm text-nowrap" title="收获所选范围的成熟作物，并按原树果重种。" data-bind="click: () => FarmController.harvestBatch(true), enable: FarmController.targetFarms().length > 0">重种</button>
-                            <button class="btn btn-outline-danger btn-sm text-nowrap" title="清理所选范围的作物，跳过锁定格。" data-bind="click: () => FarmController.shovelBatch(), enable: FarmController.targetFarms().length > 0">清作物</button>
-                            <button class="btn btn-outline-danger btn-sm text-nowrap" title="铲除所选范围的肥料，跳过锁定格。" data-bind="click: () => FarmController.shovelBatch(true), enable: FarmController.targetFarms().length > 0">清肥料</button>
+                            <button class="btn btn-outline-success btn-sm text-nowrap" title="收获所选范围的成熟作物，并按原树果重种。" data-bind="click: () => FarmController.harvestBatch(true), enable: FarmController.targetFarms().length > 0, visible: FarmController.berryListVisible()">重种</button>
+                            <button class="btn btn-outline-primary btn-sm text-nowrap" title="在所选范围施加当前肥料和用量。" data-bind="click: () => FarmController.mulchAll(), enable: FarmController.targetFarms().length > 0, visible: !FarmController.berryListVisible()">施肥</button>
+                            <button class="btn btn-outline-danger btn-sm text-nowrap" title="清理所选范围的作物，跳过锁定格。" data-bind="click: () => FarmController.shovelBatch(), enable: FarmController.targetFarms().length > 0, visible: FarmController.berryListVisible()">清作物</button>
+                            <button class="btn btn-outline-danger btn-sm text-nowrap" title="铲除所选范围的肥料，跳过锁定格。" data-bind="click: () => FarmController.shovelBatch(true), enable: FarmController.targetFarms().length > 0, visible: !FarmController.berryListVisible()">清肥料</button>
                         </div>
                     </div>
                     <details class="mt-2">
@@ -165,8 +166,8 @@
                                             data-placement="right"
                                             data-trigger="hover">
                                             </button>
-                                            <button class="btn btn-primary btn-block" data-bind="click: function(){ FarmController.mulchAll(); }">
-                                                Mulch All
+                                            <button class="btn btn-primary btn-block text-nowrap" title="按所选范围批量施肥，使用左侧用量。" data-bind="click: function(){ FarmController.mulchAll(); }">
+                                                施肥
                                             </button>
                                         </div>
                                     </div>
@@ -446,7 +447,10 @@
                         <span>种植 <kbd data-bind="text: Settings.getSetting('hotkey.farm.plantBatch').observableValue()"></kbd></span>
                         <span>收获 <kbd data-bind="text: Settings.getSetting('hotkey.farm.harvestBatch').observableValue()"></kbd></span>
                         <span>重种 <kbd data-bind="text: Settings.getSetting('hotkey.farm.replantBatch').observableValue()"></kbd></span>
+                        <span>施肥 <kbd data-bind="text: Settings.getSetting('hotkey.farm.mulchBatch').observableValue()"></kbd></span>
+                        <span>清理 <kbd data-bind="text: Settings.getSetting('hotkey.farm.clearBatch').observableValue()"></kbd></span>
                     </p>
+                    <p class="small">树果页使用种植、收获、重种；肥料页使用施肥。清理随页签切换作物或肥料，执行前确认范围。</p>
                     <h4><u>Farm</u></h4>
                     <p>In the farm you can plant and harvest Berries.</p>
 

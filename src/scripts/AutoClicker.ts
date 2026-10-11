@@ -1,10 +1,11 @@
 /// <reference path="../declarations/battles/Battle.d.ts" />
 
-/** Online click attacks only; movement and encounter transitions belong to the runners. */
+/** Online attacks and mining; movement and encounter transitions belong to the runners. */
 class AutoClicker {
     private static timer: ReturnType<typeof setTimeout>;
     private static running = false;
     private static nextAttackAt = 0;
+    private static nextMineAt = 0;
     private static rate = 0;
 
     static isSupportedState(state: GameConstants.GameState): boolean {
@@ -24,6 +25,7 @@ class AutoClicker {
         clearTimeout(this.timer);
         this.running = false;
         this.nextAttackAt = 0;
+        this.nextMineAt = 0;
         this.rate = 0;
     }
 
@@ -48,12 +50,19 @@ class AutoClicker {
         }
         const enabled = PrivateGameplay.autoClickEnabled();
         const rate = PrivateGameplay.autoClickRate();
+        if (rate !== this.rate || !PrivateGameplay.autoMineEnabled()) {
+            this.nextMineAt = 0;
+        }
         if (!enabled || rate !== this.rate) {
             this.nextAttackAt = 0;
             this.rate = rate;
         }
         let delay = Battle.CLICK_ATTACK_INTERVAL;
         const now = performance.now();
+        if (PrivateGameplay.autoMineEnabled() && App.game.gameState !== GameConstants.GameState.paused && now >= this.nextMineAt) {
+            UndergroundController.autoMine();
+            this.nextMineAt = now + GameConstants.SECOND / rate;
+        }
         if (enabled && now >= this.nextAttackAt) {
             const battle = this.currentBattle();
             if (battle && !battle.catching() && battle.enemyPokemon()?.isAlive()) {

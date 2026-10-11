@@ -224,6 +224,23 @@ export class UndergroundController {
         App.game.underground.tools.useTool(App.game.underground.tools.selectedToolType, coordinates.x, coordinates.y);
     }
 
+    public static autoMine(): void {
+        const underground = App.game.underground;
+        const mine = underground?.mine;
+        if (!underground?.canAccess() || !mine || mine.timeUntilDiscovery > 0 || mine.completed) {
+            return;
+        }
+        const toolType = underground.tools.selectedToolType;
+        if (toolType === UndergroundToolType.Survey || !underground.tools.getTool(toolType)?.canUseTool()) {
+            return;
+        }
+        // Sweep visible rock depths. Do not inspect buried rewards to choose a target.
+        const index = mine.grid.findIndex(tile => tile.layerDepth > 0);
+        if (index >= 0) {
+            this.clickModalMineSquare(index);
+        }
+    }
+
     public static handleCoordinatesMined(coordinates: Coordinate[], toolType: UndergroundToolType | null, helper: UndergroundHelper = undefined) {
         if (coordinates.length === 0) {
             return;
