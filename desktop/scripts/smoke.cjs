@@ -320,6 +320,46 @@ async function run() {
             FarmController.openFarmModal();
         });
         const farmModal = pageA.locator('#farmModal');
+        // 在隔离存档中核对实际预览绑定，结束后恢复田地与道具倍率。
+        await pageA.evaluate(() => {
+            const farming = App.game.farming;
+            window.previewSmoke = {
+                saved: JSON.parse(JSON.stringify(farming.toJSON())),
+                calculateBonus: App.game.oakItems.calculateBonus,
+                selectedBerry: App.game.statistics.selectedBerryID(),
+            };
+            App.game.oakItems.calculateBonus = function (type) {
+                return type === OakItemType.Sprayduck ? 2 : window.previewSmoke.calculateBonus.call(this, type);
+            };
+            farming.plotList.forEach(plot => { plot.isSafeLocked = true; plot.mulch = MulchType.None; });
+            const plot = farming.plotList[0];
+            plot.isSafeLocked = false;
+            plot.plant(BerryType.Cheri);
+            App.game.statistics.selectedBerryID(BerryType.Cheri);
+        });
+        await farmModal.getByRole('link', { name: 'Berrydex', exact: true }).click();
+        const growthRow = farmModal.locator('#berryDexPreviewTable tr').filter({ hasText: '预计收获时间' });
+        await pageA.waitForFunction(() => document.querySelector('#berryDexPreviewTable code[data-bind*="getBerryGrowthTimePreview"]')?.textContent === '15 secs');
+        assert.equal(await growthRow.locator('code').textContent(), '15 secs');
+        assert.equal(await pageA.evaluate(() => App.game.farming.plotList[0].calcTimeLeft(true)), 15);
+        await pageA.evaluate(() => {
+            App.game.farming.plotList[0].mulch = MulchType.Boost_Mulch;
+            App.game.farming.plotList[1].isSafeLocked = false;
+        });
+        await pageA.waitForFunction(() => document.querySelector('#berryDexPreviewTable code[data-bind*="getBerryGrowthTimePreview"]')?.textContent === '10 secs ～ 15 secs');
+        await farmModal.screenshot({ path: path.join(output, 'farm-growth-preview.png') });
+        await pageA.evaluate(() => { App.game.farming.plotList[0].mulch = MulchType.Freeze_Mulch; });
+        await pageA.waitForFunction(() => document.querySelector('#berryDexPreviewTable code[data-bind*="getBerryGrowthTimePreview"]')?.textContent === '15 secs 起（部分格子暂停生长）');
+        await pageA.evaluate(() => { App.game.farming.plotList[1].isSafeLocked = true; });
+        await pageA.waitForFunction(() => document.querySelector('#berryDexPreviewTable code[data-bind*="getBerryGrowthTimePreview"]')?.textContent === '暂停生长');
+        await pageA.evaluate(() => {
+            App.game.farming.fromJSON(window.previewSmoke.saved);
+            App.game.oakItems.calculateBonus = window.previewSmoke.calculateBonus;
+            App.game.statistics.selectedBerryID(window.previewSmoke.selectedBerry);
+            delete window.previewSmoke;
+        });
+        await farmModal.getByRole('link', { name: 'Farm', exact: true }).click();
+        checks.push('实际客户端的树果预览计入全局和肥料加成，与新种倒计时一致，显示格子时间范围和冻结暂停。');
         await farmModal.getByRole('button', { name: /购买下一块田/ }).click();
         await farmModal.getByRole('button', { name: /购买下一块田/ }).click();
         assert.equal(await pageA.evaluate(() => App.game.farming.farms().length), 3);
