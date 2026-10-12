@@ -117,6 +117,19 @@ async function run() {
     async function panel(page) {
         await page.locator('#cloud-save-panel').evaluate(el => { el.open = true; });
     }
+    async function captureWindow(app, page, name) {
+        if (!backgroundTest) {
+            await page.screenshot({ path: path.join(output, name) });
+            return;
+        }
+        const png = await app.evaluate(async ({ BrowserWindow }, url) => {
+            const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL() === url);
+            const snapshot = await window.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true });
+            if (snapshot.isEmpty()) throw new Error('Empty hidden window capture');
+            return snapshot.toPNG().toString('base64');
+        }, page.url());
+        await fs.writeFile(path.join(output, name), Buffer.from(png, 'base64'));
+    }
     async function login(app, page, useMenu = false) {
         const pending = app.waitForEvent('window');
         if (useMenu) await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items[0].submenu.items[0].click());
@@ -125,7 +138,7 @@ async function run() {
         await loginPage.getByLabel('游戏专用密码').fill(password);
         await loginPage.getByRole('button', { name: '登录云存档', exact: true }).click();
         await loginPage.getByRole('button', { name: '返回游戏', exact: true }).waitFor();
-        await loginPage.screenshot({ path: path.join(output, 'login-success.png') });
+        await captureWindow(app, loginPage, 'login-success.png');
         await loginPage.getByRole('button', { name: '返回游戏', exact: true }).click();
         await status(page, '登录成功');
     }
@@ -1016,13 +1029,14 @@ async function run() {
         await b.evaluate(({ Menu }) => Menu.getApplicationMenu().items.find(item => item.label === '帮助').submenu.items[0].click());
         const help = await helpPending;
         await help.locator('h1').waitFor();
-        await help.screenshot({ path: path.join(output, 'offline-manual.png') });
+        await captureWindow(a, help, 'offline-manual.png');
         assert.ok((await help.locator('body').innerText()).includes('同步后换设备'));
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('原价的 1%'));
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('Battle Frontier 快速挑战与主动结算'));
         assert.ok((await help.locator('.meta').innerText()).includes('桌面程序 ' + desktopVersion));
         await help.locator('#private-gameplay').scrollIntoViewIfNeeded();
-        await help.locator('#private-gameplay').screenshot({ path: path.join(output, 'private-gameplay-manual.png') });
+        await help.locator('#private-gameplay').evaluate(element => element.scrollIntoView());
+        await captureWindow(a, help, 'private-gameplay-manual.png');
         checks.push('The Chinese operation manual, including private gameplay instructions, opens locally while offline.');
         await quit(b); await quit(a);
         assert.deepEqual(errors, []);
