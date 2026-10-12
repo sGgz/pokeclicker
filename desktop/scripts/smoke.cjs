@@ -11,6 +11,7 @@ const { once } = require('node:events');
 
 async function run() {
     const root = path.resolve(__dirname, '../..');
+    const gameVersion = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8')).version;
     const output = path.join(root, 'output/playwright/desktop');
     await fs.mkdir(output, { recursive: true });
     await fs.mkdir(path.join(root, 'output/desktop-tests'), { recursive: true });
@@ -25,6 +26,7 @@ async function run() {
     let remote = null;
     let online = true;
     let writes = 0;
+    let uploadGate = null;
     const requests = [];
     const fixture = {
         ALLOWED_ORIGIN: origin,
@@ -44,6 +46,7 @@ async function run() {
     const handler = createHandler({ now: () => clock, store: () => ({
         assertAvailable: async () => {}, read: async () => structuredClone(remote),
         write: async (envelope, base) => {
+            if (uploadGate) await uploadGate;
             assert.equal(base, remote?.blobSha ?? null);
             const blobSha = createHash('sha1').update(JSON.stringify(envelope)).digest('hex');
             const commitSha = createHash('sha1').update(blobSha).digest('hex');
@@ -163,8 +166,30 @@ async function run() {
         assert.deepEqual(await pageA.evaluate(() => ({ secure: isSecureContext, locks: !!navigator.locks, idb: !!indexedDB, bridge: window.pokeclickerDesktop?.version, node: typeof require })),
             { secure: true, locks: true, idb: true, bridge: 1, node: 'undefined' });
         assert.ok(await pageA.locator('#theme-link').evaluate(el => el.href.startsWith('pokeclicker://game/vendor/themes/')));
+        assert.equal(await pageA.evaluate(() => new Update().version), gameVersion);
+        checks.push('The actual renderer game version agrees with package.json rather than trusting only desktop-build.json.');
         await pageA.getByText('New Save', { exact: true }).click();
         await pageA.waitForFunction(() => typeof App !== 'undefined' && App.game?.statistics?.secondsPlayed && CloudSave.running);
+        assert.equal(await pageA.evaluate(() => CloudSave.gameVersion), gameVersion);
+        if (process.argv.includes('--version-only')) {
+            const key = await pageA.evaluate(version => {
+                App.game.profile.name('Version fixture ' + version);
+                Save.store(player);
+                return Save.key;
+            }, gameVersion);
+            assert.equal(await pageA.evaluate(saveKey => JSON.parse(localStorage.getItem('save' + saveKey)).update.version, key), gameVersion);
+            await quit(a);
+            ({ app: a, page: pageA } = await launch(profiles[0]));
+            await pageA.getByText('Version fixture ' + gameVersion, { exact: true }).click();
+            await pageA.waitForFunction(() => typeof App !== 'undefined' && CloudSave.running && !!App.game);
+            assert.deepEqual(await pageA.evaluate(() => ({ version: App.game.update.version, blocked: CloudSave.blocked })), { version: gameVersion, blocked: '' });
+            if (backgroundTest) assert.deepEqual(await a.evaluate(() => globalThis.visibleTestWindows), []);
+            checks.push('An existing save with the current game version loads after an isolated desktop restart without blocking cloud sync.');
+            const report = { passed: true, executable, packaged: !dev, desktopVersion, gameVersion, backgroundTest, checks };
+            await fs.writeFile(path.join(output, 'version-smoke-report.json'), JSON.stringify(report, null, 2));
+            console.log(JSON.stringify(report, null, 2));
+            return;
+        }
         assert.deepEqual(await pageA.evaluate(() => ({ enabled: PrivateGameplay.autoClickEnabled(), rate: PrivateGameplay.autoClickRate() })), { enabled: true, rate: 20 });
         // Keep the tutorial and unrelated fixtures deterministic; verify automation separately below.
         await pageA.evaluate(() => {
@@ -882,9 +907,19 @@ async function run() {
         checks.push('Password login uses the real Worker verifier; credentials are encrypted and unavailable to renderer JavaScript, and arbitrary IPC routes are rejected.');
         await panel(pageA);
         await pageA.locator('#cloud-save-local').selectOption(keyA);
+        const probesBeforeUpload = requests.filter(request => request.path === '/api/cloud-save/status').length;
+        let finishUpload;
+        uploadGate = new Promise(resolve => { finishUpload = resolve; });
         await pageA.getByRole('button', { name: '上传 / 立即同步', exact: true }).click();
         await pageA.getByRole('button', { name: '关联此存档', exact: true }).click();
+        await pageA.waitForFunction(() => document.getElementById('cloud-save-status').textContent.includes('正在上传存档') && document.getElementById('cloud-save-status').textContent.includes('已等待 2 秒'), undefined, { timeout: 5000 });
+        assert.equal(await pageA.getByRole('button', { name: '上传 / 立即同步', exact: true }).isDisabled(), true);
+        assert.equal(requests.filter(request => request.path === '/api/cloud-save/status').length, probesBeforeUpload);
+        uploadGate = null;
+        finishUpload();
         await status(pageA, '云端已确认保存');
+        assert.equal(await pageA.getByRole('button', { name: '上传 / 立即同步', exact: true }).isDisabled(), false);
+        checks.push('A delayed real Worker upload shows its current phase and elapsed time, blocks duplicate clicks, restores controls on completion and avoids a redundant status probe.');
         assert.equal(remote.envelope.payload.save.profile.name, 'Desktop fixture A');
         assert.equal(remote.envelope.revision, 1);
         assert.equal(remote.envelope.payload.settings['ggzz.private.pricingMode'], 'base-price');

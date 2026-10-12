@@ -123,6 +123,19 @@ export default class CloudSave {
         }
     }
 
+    private static async waiting<T>(message: string, operation: () => Promise<T>): Promise<T> {
+        const startedAt = Date.now();
+        this.message(message);
+        const timer = window.setInterval(() => {
+            this.message(message + '（已等待 ' + Math.floor((Date.now() - startedAt) / 1000) + ' 秒）');
+        }, 1000);
+        try {
+            return await operation();
+        } finally {
+            window.clearInterval(timer);
+        }
+    }
+
     private static showPlayer(name: string): void {
         const element = document.getElementById('cloud-save-player');
         if (element) {
@@ -140,6 +153,10 @@ export default class CloudSave {
 
     private static render(): void {
         const state = this.engine?.state;
+        document.getElementById('cloud-save-panel')?.setAttribute('aria-busy', String(this.busy));
+        document.querySelectorAll<HTMLButtonElement>('[data-cloud-action]').forEach((button) => {
+            button.disabled = this.busy;
+        });
         const summary = document.getElementById('cloud-save-summary');
         if (summary) {
             summary.textContent = this.blocked ? '需要处理' : state?.hasConflict ? '进度冲突' : state?.localKey !== null && state?.localKey !== undefined ? '已关联' : '本地模式';
@@ -158,7 +175,7 @@ export default class CloudSave {
         const checkbox = document.getElementById('cloud-save-auto') as HTMLInputElement;
         if (checkbox) {
             checkbox.checked = state?.autoSync ?? false;
-            checkbox.disabled = !state?.base || !!this.blocked || !!state?.hasConflict || this.loginRequired;
+            checkbox.disabled = this.busy || !state?.base || !!this.blocked || !!state?.hasConflict || this.loginRequired;
         }
         const logout = document.querySelector<HTMLButtonElement>('[data-cloud-action="logout"]');
         if (logout) {
@@ -428,7 +445,7 @@ export default class CloudSave {
         }
     }
 
-    private static async connection(): Promise<string> {
+    private static async connection(checkRepository = true): Promise<string> {
         const identity = await this.api.identity();
         const slot = identity.slotId;
         if (this.profileId && identity.playerId !== this.profileId) {
@@ -453,7 +470,7 @@ export default class CloudSave {
         if (this.engine.state.slotId && this.engine.state.slotId !== slot) {
             throw new Error('服务器云槽位与本机已关联槽位不同，请检查配置，不要覆盖存档。');
         }
-        if (await this.api.status() !== slot) {
+        if (checkRepository && await this.api.status() !== slot) {
             throw new Error('登录身份在连接过程中发生变化，请重新检查连接。');
         }
         this.serverSlot = slot;
@@ -498,8 +515,8 @@ export default class CloudSave {
         if (Date.now() < this.retryAt) {
             throw new Error('服务要求稍后重试，请等待 ' + Math.ceil((this.retryAt - Date.now()) / 1000) + ' 秒。');
         }
-        await this.connection();
-        const payload = await this.current(key);
+        await this.waiting('正在确认登录身份，请稍候。', () => this.connection(false));
+        const payload = await this.waiting('正在保存本地进度与备份，请稍候。', () => this.current(key));
         if (this.engine.state.localKey !== key) {
             const accepted = await Notifier.confirm({
                 title: '关联云存档', message: '将选中的本地存档关联到你的云槽位。已有云档时会先显示冲突，不会直接覆盖。',
@@ -508,15 +525,15 @@ export default class CloudSave {
             if (!accepted) {
                 return;
             }
-            const remote = await this.api.read(this.serverSlot);
+            const remote = await this.waiting('正在检查云端存档，确认关联状态。', () => this.api.read(this.serverSlot));
             await this.engine.bind(key, this.serverSlot, null);
-            await this.engine.capture(payload);
+            await this.waiting('正在准备上传快照，请稍候。', () => this.engine.capture(payload));
             if (remote) {
                 await this.engine.conflict(remote);
                 return;
             }
         } else {
-            await this.engine.capture(payload);
+            await this.waiting('正在准备上传快照，请稍候。', () => this.engine.capture(payload));
         }
         if (switchDevice && this.running && !this.stopped) {
             player._lastSeen = Date.now();
@@ -526,8 +543,7 @@ export default class CloudSave {
             await this.captureQueue;
         }
         this.lastAttempt = Date.now();
-        this.message('正在同步，请等待云端确认。');
-        await this.engine.sync(this.gameVersion + '-cloud-save-1');
+        await this.waiting('正在上传存档，请等待云端确认。', () => this.engine.sync(this.gameVersion + '-cloud-save-1'));
         // A previous uncertain request may have been acknowledged; flush the newest snapshot separately.
         const remaining = await this.engine.dirty();
         this.failures = 0;
@@ -646,6 +662,10 @@ export default class CloudSave {
             return;
         }
         this.busy = true;
+        this.render();
+        if (action === 'upload' || action === 'switch' || action === 'sync') {
+            this.message('正在准备云同步，请稍候。');
+        }
         try {
             await this.initialize();
             if (action === 'export') {
@@ -670,7 +690,7 @@ export default class CloudSave {
                 await this.connection();
                 this.message('登录成功，已连接云存档。上传或恢复前请确认要使用的进度。');
             } else if (action === 'check') {
-                await this.connection();
+                await this.waiting('正在检查云端连接，请稍候。', () => this.connection());
                 this.message('连接成功，可以上传本地进度或下载云档。');
             } else if (action === 'backups') {
                 this.downloadJson(await this.storage.allBackups(), 'pokeclicker-recovery-backups.json');

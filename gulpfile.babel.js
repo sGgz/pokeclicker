@@ -19,7 +19,7 @@ const del = require('del');
 const fs = require('fs');
 const path = require('path');
 const { Transform } = require('node:stream');
-const version = process.env.npm_package_version || '0.0.0';
+const version = require('./package.json').version;
 
 const webpackConfig = require('./webpack.config');
 

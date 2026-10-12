@@ -6,6 +6,8 @@ import { SyncEngine } from './SyncEngine';
 import { CloudStorage, emptyState, type StateStorage } from './storage';
 import Notifier from '../notifications/Notifier';
 import type { DesktopBridge } from './desktop';
+import { hashPayload } from './protocol';
+import type { RemoteSave } from './protocol';
 
 vi.mock('../notifications/Notifier', () => ({ default: { confirm: vi.fn() } }));
 vi.mock('../SaveSelector', () => ({ default: { MAX_SAVES: 9 } }));
@@ -25,6 +27,7 @@ function installDesktop(): DesktopBridge {
 }
 
 afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
 });
@@ -124,7 +127,7 @@ describe('desktop cloud transport', () => {
     });
 });
 
-describe('logout preserves local progress', () => {
+describe('cloud actions preserve local progress', () => {
     let saveLocal: ReturnType<typeof vi.fn>;
     let stopGame: ReturnType<typeof vi.fn>;
     let navigate: ReturnType<typeof vi.fn>;
@@ -165,6 +168,82 @@ describe('logout preserves local progress', () => {
         vi.stubGlobal('App', { game: { stop: stopGame } });
         vi.stubGlobal('location', { assign: navigate });
         vi.mocked(Notifier.confirm).mockResolvedValue(true);
+    });
+
+    it('reports connection progress immediately while a manual upload waits', async () => {
+        document.body.innerHTML = '<details id="cloud-save-panel"><p id="cloud-save-status">原来的状态</p><button data-cloud-action="upload">上传 / 立即同步</button></details>';
+        let failIdentity: (error: Error) => void;
+        const identity = vi.spyOn(CloudApi.prototype, 'identity').mockImplementation(() => new Promise((_resolve, reject) => { failIdentity = reject; }));
+        const job = CloudSave['action']('upload');
+        await vi.waitFor(() => expect(identity).toHaveBeenCalledOnce());
+        try {
+            expect(document.getElementById('cloud-save-status').textContent).toMatch(/正在.*(连接|身份)/);
+            expect(document.querySelector<HTMLButtonElement>('[data-cloud-action="upload"]').disabled).toBe(true);
+        } finally {
+            failIdentity(new CloudApiError(0, 'NETWORK', '连接超时'));
+            await job;
+        }
+        expect(document.querySelector<HTMLButtonElement>('[data-cloud-action="upload"]').disabled).toBe(false);
+        expect(document.getElementById('cloud-save-status').textContent).toContain('连接超时');
+    });
+
+    it('shows local and remote wait times while uploading without a redundant repository probe', async () => {
+        vi.useFakeTimers();
+        document.body.innerHTML = '<details id="cloud-save-panel"><p id="cloud-save-status"></p><button data-cloud-action="upload">上传 / 立即同步</button></details>';
+        engine.state.localKey = '';
+        engine.state.slotId = slot;
+        vi.spyOn(CloudApi.prototype, 'identity').mockResolvedValue({ playerId: 'player', primaryPlayerId: 'player', playerName: '测试玩家', slotId: slot });
+        const probe = vi.spyOn(CloudApi.prototype, 'status').mockRejectedValue(new Error('Unexpected repository probe'));
+        let finishLocal: () => void;
+        let finishUpload: (remote: RemoteSave) => void;
+        CloudSave['captureQueue'] = new Promise(resolve => { finishLocal = resolve; });
+        const upload = vi.spyOn(CloudApi.prototype, 'upload').mockImplementation(() => new Promise(resolve => { finishUpload = resolve; }));
+        const job = CloudSave['action']('upload');
+        await vi.waitFor(() => expect(saveLocal).toHaveBeenCalledOnce());
+        expect(document.getElementById('cloud-save-status').textContent).toContain('正在保存本地进度');
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(document.getElementById('cloud-save-status').textContent).toContain('已等待 2 秒');
+        expect(upload).not.toHaveBeenCalled();
+        finishLocal();
+        await vi.waitFor(() => expect(upload).toHaveBeenCalledOnce());
+        expect(probe).not.toHaveBeenCalled();
+        expect(document.getElementById('cloud-save-status').textContent).toContain('正在上传存档');
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(document.getElementById('cloud-save-status').textContent).toContain('已等待 2 秒');
+        expect(document.querySelector<HTMLButtonElement>('[data-cloud-action="upload"]').disabled).toBe(true);
+        const [, request] = upload.mock.calls[0];
+        finishUpload({ blobSha: 'a'.repeat(40), envelope: {
+            schemaVersion: 1, slotId: slot, revision: 1, snapshotId: request.snapshotId, parentSnapshotId: null,
+            serverSavedAt: new Date().toISOString(), clientSavedAt: request.clientSavedAt, deviceId: request.deviceId,
+            gameVersion: '0.10.26', clientBuild: request.clientBuild, payloadHash: await hashPayload(request.payload), payload: request.payload,
+        } });
+        await job;
+        expect(document.getElementById('cloud-save-status').textContent).toBe('云端已确认保存。');
+        expect(document.querySelector<HTMLButtonElement>('[data-cloud-action="upload"]').disabled).toBe(false);
+        expect(document.getElementById('cloud-save-panel').getAttribute('aria-busy')).toBe('false');
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('still verifies repository availability for an explicit connection check', async () => {
+        vi.spyOn(CloudApi.prototype, 'identity').mockResolvedValue({ playerId: 'player', primaryPlayerId: 'player', playerName: '测试玩家', slotId: slot });
+        const probe = vi.spyOn(CloudApi.prototype, 'status').mockResolvedValue(slot);
+        await CloudSave['action']('check');
+        expect(probe).toHaveBeenCalledOnce();
+        expect(document.getElementById('cloud-save-status').textContent).toContain('连接成功');
+    });
+
+    it('rejects a different authenticated slot before saving or uploading without relying on the repository probe', async () => {
+        engine.state.localKey = '';
+        engine.state.slotId = slot;
+        vi.spyOn(CloudApi.prototype, 'identity').mockResolvedValue({ playerId: 'player', primaryPlayerId: 'player', playerName: '测试玩家', slotId: '5d36d399-4684-4821-a217-d528f17754f9' });
+        const probe = vi.spyOn(CloudApi.prototype, 'status');
+        const upload = vi.spyOn(CloudApi.prototype, 'upload');
+        await CloudSave['action']('upload');
+        expect(probe).not.toHaveBeenCalled();
+        expect(upload).not.toHaveBeenCalled();
+        expect(saveLocal).not.toHaveBeenCalled();
+        expect(document.getElementById('cloud-save-status').textContent).toContain('槽位不同');
+        expect(CloudSave.canSave()).toBe(true);
     });
 
     it('waits for confirmation, saves locally, pauses and only then leaves after server success', async () => {
