@@ -8,8 +8,10 @@ const assert = require('node:assert/strict');
 const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const { createServer } = require('node:http');
 const { once } = require('node:events');
+const { spawnSync } = require('node:child_process');
 
 async function run() {
+    const startedAt = Date.now();
     const root = path.resolve(__dirname, '../..');
     const gameVersion = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8')).version;
     const output = path.join(root, 'output/playwright/desktop');
@@ -72,12 +74,13 @@ async function run() {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     serverOrigin = 'http://localhost:' + server.address().port;
     const dev = process.argv.includes('--dev');
-    const backgroundTest = !process.argv.includes('--show-windows');
+    const backgroundTest = process.argv.includes('--background-test') && !process.argv.includes('--show-windows');
     const executableArgument = process.argv.find(value => value.startsWith('--exe='));
     const executable = executableArgument ? executableArgument.slice(6) : path.join(root, dev ? 'desktop/node_modules/electron/dist/electron.exe' : 'output/desktop/win-unpacked/PokeclickerCloud.exe');
     const profiles = [path.join(work, 'device-a'), path.join(work, 'device-b')];
     const running = new Set();
     const checks = [];
+    const progressTimer = setInterval(() => console.log(`验收进度：已完成 ${checks.length} 项，已用时 ${Math.floor((Date.now() - startedAt) / 1000)} 秒。`), 15000);
     const desktopVersion = JSON.parse(await fs.readFile(path.join(root, 'desktop/package.json'), 'utf8')).version;
     const errors = [];
     let browser;
@@ -185,7 +188,7 @@ async function run() {
             assert.deepEqual(await pageA.evaluate(() => ({ version: App.game.update.version, blocked: CloudSave.blocked })), { version: gameVersion, blocked: '' });
             if (backgroundTest) assert.deepEqual(await a.evaluate(() => globalThis.visibleTestWindows), []);
             checks.push('An existing save with the current game version loads after an isolated desktop restart without blocking cloud sync.');
-            const report = { passed: true, executable, packaged: !dev, desktopVersion, gameVersion, backgroundTest, checks };
+            const report = { passed: true, executable, packaged: !dev, desktopVersion, gameVersion, backgroundTest, checks, elapsedSeconds: (Date.now() - startedAt) / 1000 };
             await fs.writeFile(path.join(output, 'version-smoke-report.json'), JSON.stringify(report, null, 2));
             console.log(JSON.stringify(report, null, 2));
             return;
@@ -289,7 +292,7 @@ async function run() {
             checks.push('Opening the saved game after a desktop restart restores the disabled state and non-default 5/s frequency.');
             assert.deepEqual(errors, []);
             if (backgroundTest) assert.deepEqual(await a.evaluate(() => globalThis.visibleTestWindows), []);
-            const report = { passed: true, checks, desktopVersion, packaged: !dev, backgroundTest };
+            const report = { passed: true, executable, checks, desktopVersion, packaged: !dev, backgroundTest, elapsedSeconds: (Date.now() - startedAt) / 1000 };
             await fs.writeFile(path.join(output, 'auto-click-smoke-report.json'), JSON.stringify(report, null, 2));
             console.log(JSON.stringify(report, null, 2));
             return;
@@ -497,7 +500,7 @@ async function run() {
         if (process.argv.includes('--farm-only')) {
             assert.deepEqual(errors, []);
             if (backgroundTest) assert.deepEqual(await a.evaluate(() => globalThis.visibleTestWindows), []);
-            const farmReport = { passed: true, checks, desktopVersion, packaged: !dev, farmsVerified: 16, backgroundTest };
+            const farmReport = { passed: true, executable, checks, desktopVersion, packaged: !dev, farmsVerified: 16, backgroundTest, elapsedSeconds: (Date.now() - startedAt) / 1000 };
             await fs.writeFile(path.join(output, 'farm-smoke-report.json'), JSON.stringify(farmReport, null, 2));
             console.log(JSON.stringify(farmReport, null, 2));
             return;
@@ -1079,15 +1082,47 @@ async function run() {
         await quit(b); await quit(a);
         assert.deepEqual(errors, []);
         checks.push('No uncaught renderer errors during the desktop acceptance flow.');
-        await fs.writeFile(path.join(output, 'smoke-report.json'), JSON.stringify({ passed: true, executable, desktopVersion, packaged: !dev, backgroundTest, checks, requests: requests.filter(item => item.path.startsWith('/api/') || item.path.startsWith('/auth/')), note: 'Isolated fixtures only; this does not replace the user’s real two-device acceptance.' }, null, 2));
+        await fs.writeFile(path.join(output, 'smoke-report.json'), JSON.stringify({ passed: true, executable, desktopVersion, packaged: !dev, backgroundTest, checks, elapsedSeconds: (Date.now() - startedAt) / 1000, requests: requests.filter(item => item.path.startsWith('/api/') || item.path.startsWith('/auth/')), note: 'Isolated fixtures only; this does not replace the user’s real two-device acceptance.' }, null, 2));
         console.log(JSON.stringify({ passed: true, checks }, null, 2));
     } catch (error) {
         console.error('SMOKE FAILED:', error.message);
-        if (lastPage && !lastPage.isClosed()) { console.error((await lastPage.locator('body').innerText()).slice(0, 7000)); await lastPage.screenshot({ path: path.join(output, 'failure.png'), timeout: 3000 }).catch(() => {}); }
+        if (lastPage && !lastPage.isClosed()) {
+            let diagnosticTimeout;
+            const state = lastPage.evaluate(() => ({
+                ready: document.readyState,
+                app: typeof App === 'undefined' ? null : { starting: App.starting, loaded: !!App.game },
+                cloud: typeof CloudSave === 'undefined' ? null : {
+                    running: CloudSave.running, busy: CloudSave.busy, blocked: CloudSave.blocked,
+                    writer: CloudSave.writer, profile: CloudSave.profileId, engine: !!CloudSave.engine,
+                },
+            })).catch(() => null);
+            try {
+                console.error('Renderer state:', await Promise.race([state, new Promise(resolve => {
+                    diagnosticTimeout = setTimeout(() => resolve(null), 3000);
+                })]));
+            } finally {
+                clearTimeout(diagnosticTimeout);
+            }
+        }
+        if (lastPage && !lastPage.isClosed()) { console.error((await lastPage.locator('body').innerText({ timeout: 3000 }).catch(() => '')).slice(0, 7000)); await lastPage.screenshot({ path: path.join(output, 'failure.png'), timeout: 3000 }).catch(() => {}); }
         console.error('Renderer errors:', errors);
         throw error;
     } finally {
-        for (const app of running) { await app.evaluate(({ app }) => app.exit(0)).catch(() => {}); await app.close().catch(() => {}); }
+        clearInterval(progressTimer);
+        for (const app of running) {
+            const process = app.process();
+            const timeout = setTimeout(() => {
+                if (process.exitCode !== null) return;
+                // 仅终止本脚本启动且使用隔离数据目录的进程树，避免退出等待一直占用资源。
+                spawnSync('taskkill.exe', ['/PID', String(process.pid), '/T', '/F'], { windowsHide: true, timeout: 5000 });
+            }, 5000);
+            try {
+                await app.evaluate(({ app }) => app.exit(0)).catch(() => {});
+                await app.close().catch(() => {});
+            } finally {
+                clearTimeout(timeout);
+            }
+        }
         await browser?.close();
         server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
     }
