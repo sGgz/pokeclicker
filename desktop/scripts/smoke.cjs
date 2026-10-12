@@ -327,6 +327,7 @@ async function run() {
                 saved: JSON.parse(JSON.stringify(farming.toJSON())),
                 calculateBonus: App.game.oakItems.calculateBonus,
                 selectedBerry: App.game.statistics.selectedBerryID(),
+                berryDexMode: Settings.getSetting('berryDexMode').value,
             };
             App.game.oakItems.calculateBonus = function (type) {
                 return type === OakItemType.Sprayduck ? 2 : window.previewSmoke.calculateBonus.call(this, type);
@@ -336,6 +337,7 @@ async function run() {
             plot.isSafeLocked = false;
             plot.plant(BerryType.Cheri);
             App.game.statistics.selectedBerryID(BerryType.Cheri);
+            Settings.setSettingByName('berryDexMode', 'preview');
         });
         await farmModal.getByRole('link', { name: 'Berrydex', exact: true }).click();
         const growthRow = farmModal.locator('#berryDexPreviewTable tr').filter({ hasText: '预计收获时间' });
@@ -356,6 +358,7 @@ async function run() {
             App.game.farming.fromJSON(window.previewSmoke.saved);
             App.game.oakItems.calculateBonus = window.previewSmoke.calculateBonus;
             App.game.statistics.selectedBerryID(window.previewSmoke.selectedBerry);
+            Settings.setSettingByName('berryDexMode', window.previewSmoke.berryDexMode);
             delete window.previewSmoke;
         });
         await farmModal.getByRole('link', { name: 'Farm', exact: true }).click();
