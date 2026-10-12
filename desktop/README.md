@@ -121,7 +121,7 @@ npm --prefix desktop run smoke
 
 第二条会运行已打包的 `output/desktop/win-unpacked/PokeclickerCloud.exe`，需要已安装 Microsoft Edge。设置 `PC_BROWSER_CHANNEL=chrome` 可使用 Chrome。`npm --prefix desktop run smoke -- --dev` 可测试开发包；`--exe=绝对路径` 可验证安装后的同一 EXE。
 
-桌面冒烟测试默认显示游戏、登录和帮助窗口，恢复原可见验收方式；浏览器测试仍采用无界面模式。显式传入 `--background-test` 才隐藏窗口并审计显示事件，`--show-windows` 可强制显示。隐藏模式必须配合隔离的 `--data-dir`；普通客户端启动仍按原方式显示窗口。
+桌面冒烟测试默认隐藏游戏、登录和帮助窗口并审计显示事件，浏览器测试采用无界面模式；`--show-windows` 可切换为可见验收。隐藏模式由脚本传入 `--background-test`，必须配合隔离的 `--data-dir`；普通客户端启动仍按原方式显示窗口。
 
 隐藏窗口不会减少游戏计算量，游戏在两种模式下都禁用后台节流；隐藏截图和窗口管理还可能增加等待。测试每 15 秒输出已完成项数和用时，报告记录实际耗时；失败收尾时，隔离游戏进程若 5 秒仍未退出，就终止该进程树。构建、压缩和客户端验收应串行进行；只有源码或失败原因发生变化时才重跑相关检查，避免重复全量回归和文件复制。
 

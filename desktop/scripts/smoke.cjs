@@ -74,7 +74,7 @@ async function run() {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     serverOrigin = 'http://localhost:' + server.address().port;
     const dev = process.argv.includes('--dev');
-    const backgroundTest = process.argv.includes('--background-test') && !process.argv.includes('--show-windows');
+    const backgroundTest = !process.argv.includes('--show-windows');
     const executableArgument = process.argv.find(value => value.startsWith('--exe='));
     const executable = executableArgument ? executableArgument.slice(6) : path.join(root, dev ? 'desktop/node_modules/electron/dist/electron.exe' : 'output/desktop/win-unpacked/PokeclickerCloud.exe');
     const profiles = [path.join(work, 'device-a'), path.join(work, 'device-b')];
