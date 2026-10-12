@@ -230,6 +230,10 @@ export class UndergroundController {
         if (!underground?.canAccess() || !mine || mine.timeUntilDiscovery > 0 || mine.completed) {
             return;
         }
+        if (underground.battery?.canDischarge()) {
+            underground.battery.discharge();
+            return;
+        }
         const toolType = underground.tools.selectedToolType;
         if (toolType === UndergroundToolType.Survey || !underground.tools.getTool(toolType)?.canUseTool()) {
             return;

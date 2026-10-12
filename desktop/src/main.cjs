@@ -13,6 +13,8 @@ app.setAppUserModelId('fun.ggzz.pokeclicker.cloud');
 // Fixed application identity keeps upgrades and ZIP installations on the same private profile.
 const dataArgument = process.argv.find(value => value.startsWith('--data-dir='));
 const dataDirectory = dataArgument?.slice('--data-dir='.length);
+const backgroundTest = process.argv.includes('--background-test');
+if (backgroundTest && !dataDirectory) throw new Error('Background testing requires an isolated data directory');
 if (dataDirectory && !path.isAbsolute(dataDirectory)) throw new Error('Data directory must be absolute');
 app.setPath('userData', dataDirectory || path.join(app.getPath('appData'), 'PokeclickerCloud'));
 protocol.registerSchemesAsPrivileged([{ scheme: 'pokeclicker', privileges: {
@@ -64,7 +66,7 @@ function harden(window, initialUrl) {
 
 function windowOptions(preload) {
     return {
-        show: false, backgroundColor: '#f5f8fc',
+        show: false, skipTaskbar: backgroundTest, backgroundColor: '#f5f8fc',
         webPreferences: {
             ...(preload ? { preload: path.join(__dirname, preload) } : {}),
             nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true,
@@ -74,7 +76,7 @@ function windowOptions(preload) {
 }
 
 function openLogin() {
-    if (loginWindow && !loginWindow.isDestroyed()) { loginWindow.focus(); return loginPromise; }
+    if (loginWindow && !loginWindow.isDestroyed()) { if (!backgroundTest) loginWindow.focus(); return loginPromise; }
     loginResult = { ok: false, message: '已取消登录，可继续使用本地进度。' };
     loginPromise = new Promise(resolve => { completeLogin = resolve; });
     loginWindow = new BrowserWindow({ ...windowOptions('login-preload.cjs'), width: 580, height: 580,
@@ -82,7 +84,7 @@ function openLogin() {
     });
     loginWindow.setMenu(null);
     harden(loginWindow, LOGIN_URL);
-    loginWindow.once('ready-to-show', () => loginWindow?.show());
+    loginWindow.once('ready-to-show', () => { if (!backgroundTest) loginWindow?.show(); });
     loginWindow.on('closed', () => {
         loginWindow = null;
         completeLogin?.(loginResult);
@@ -93,11 +95,11 @@ function openLogin() {
 }
 
 function openHelp() {
-    if (helpWindow && !helpWindow.isDestroyed()) { helpWindow.focus(); return; }
+    if (helpWindow && !helpWindow.isDestroyed()) { if (!backgroundTest) helpWindow.focus(); return; }
     helpWindow = new BrowserWindow({ ...windowOptions(), width: 900, height: 780, title: '操作手册 — Pokeclicker Cloud' });
     helpWindow.setMenu(null);
     harden(helpWindow, HELP_URL);
-    helpWindow.once('ready-to-show', () => helpWindow?.show());
+    helpWindow.once('ready-to-show', () => { if (!backgroundTest) helpWindow?.show(); });
     helpWindow.on('closed', () => { helpWindow = null; });
     void helpWindow.loadURL(HELP_URL);
 }
@@ -122,6 +124,10 @@ async function saveAndQuit() {
     try {
         const result = await prepareSave();
         if (!result?.ok) {
+            if (backgroundTest) {
+                console.error('Local save failed:', result?.message);
+                return;
+            }
             await dialog.showMessageBox(mainWindow, { type: 'warning', title: '暂未关闭游戏',
                 message: '请先完成本地保存', detail: result?.message || '请导出存档备份后再重试。', buttons: ['回到游戏'] });
             return;
@@ -139,7 +145,7 @@ if (!app.requestSingleInstanceLock()) {
     app.quit();
 } else {
     app.on('second-instance', () => {
-        if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); }
+        if (mainWindow && !backgroundTest) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); }
     });
     app.on('before-quit', event => {
         if (mainWindow && !mainWindow.isDestroyed()) { event.preventDefault(); void saveAndQuit(); }
@@ -151,7 +157,8 @@ if (!app.requestSingleInstanceLock()) {
             ui: path.resolve(__dirname, '../ui'),
         };
         if (!fs.existsSync(path.join(roots.game, 'index.html'))) {
-            dialog.showErrorBox('缺少本地游戏文件', '请重新解压完整 ZIP 或重新安装客户端。开发环境请先运行 npm run desktop:build。');
+            if (backgroundTest) console.error('Missing local game files');
+            else dialog.showErrorBox('缺少本地游戏文件', '请重新解压完整 ZIP 或重新安装客户端。开发环境请先运行 npm run desktop:build。');
             app.quit(); return;
         }
         cloud = createCloudClient({ origin: 'https://play.ggzz.fun', userData: app.getPath('userData'), safeStorage });
@@ -173,7 +180,7 @@ if (!app.requestSingleInstanceLock()) {
         });
         harden(mainWindow, GAME_URL);
         mainWindow.on('close', event => { event.preventDefault(); void saveAndQuit(); });
-        mainWindow.once('ready-to-show', () => mainWindow.show());
+        mainWindow.once('ready-to-show', () => { if (!backgroundTest) mainWindow.show(); });
         mainWindow.on('closed', () => { mainWindow = null; });
 
         ipcMain.handle('desktop:cloud', (event, input) => {
@@ -217,5 +224,9 @@ if (!app.requestSingleInstanceLock()) {
             ] },
         ]));
         void mainWindow.loadURL(GAME_URL);
-    }).catch(() => { dialog.showErrorBox('客户端启动失败', '请重新安装客户端；保留 %APPDATA%\\PokeclickerCloud 内的本机进度。'); app.exit(1); });
+    }).catch(error => {
+        if (backgroundTest) console.error('Desktop startup failed:', error.message);
+        else dialog.showErrorBox('客户端启动失败', '请重新安装客户端；保留 %APPDATA%\\PokeclickerCloud 内的本机进度。');
+        app.exit(1);
+    });
 }

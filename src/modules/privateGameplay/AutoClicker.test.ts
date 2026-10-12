@@ -199,16 +199,69 @@ describe('built-in online mining clicks', () => {
         const grid = [{ layerDepth: 0 }, { layerDepth: 1000 }, { layerDepth: 3 }];
         const mine = { grid, completed: false, timeUntilDiscovery: 0, getCoordinateForGridIndex: (index: number) => ({ x: index, y: 0 }) };
         const ready = ko.observable(true);
+        const charges = ko.observable(0);
+        const battery = { maxCharges: 10, canDischarge: vi.fn(() => charges() >= 10), discharge: vi.fn(() => charges(0)) };
         const useTool = vi.fn((_tool: UndergroundToolType, x: number) => { grid[x].layerDepth--; });
-        const underground = { canAccess: vi.fn(() => true), mine, tools: {
+        const underground = { canAccess: vi.fn(() => true), mine, battery, tools: {
             selectedToolType: UndergroundToolType.Chisel,
             getTool: () => ({ canUseTool: ready }), useTool,
         } };
         Object.assign(h.game, { underground });
         Object.assign(UndergroundController, { lastMineClick: -50 });
         Settings.setSettingByName('ggzz.private.autoClickAttack', false);
-        return { ...h, underground, mine, ready, useTool };
+        return { ...h, underground, mine, ready, useTool, battery, charges };
     }
+
+    it('discharges a full battery once through the manual entry and resumes digging on the next pulse', () => {
+        const h = mining();
+        h.charges(9);
+        h.controller.start();
+        expect(h.battery.discharge).not.toHaveBeenCalled();
+        h.useTool.mockClear();
+        h.charges(10);
+        vi.advanceTimersByTime(50);
+        expect(h.battery.discharge).toHaveBeenCalledTimes(1);
+        expect(h.charges()).toBe(0);
+        expect(h.useTool).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(100);
+        expect(h.battery.discharge).toHaveBeenCalledTimes(1);
+        expect(h.useTool).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([UndergroundToolType.Chisel, UndergroundToolType.Survey])('discharges independently of tool %i and its durability', tool => {
+        const h = mining();
+        h.ready(false);
+        h.underground.tools.selectedToolType = tool;
+        h.charges(10);
+        h.controller.start();
+        expect(h.battery.discharge).toHaveBeenCalledTimes(1);
+        expect(h.useTool).not.toHaveBeenCalled();
+    });
+
+    it.each(['locked', 'discovering', 'completed', 'paused', 'disabled'])('retains full charges while %s', condition => {
+        const h = mining();
+        h.charges(10);
+        if (condition === 'locked') h.underground.canAccess.mockReturnValue(false);
+        if (condition === 'discovering') h.mine.timeUntilDiscovery = 1;
+        if (condition === 'completed') h.mine.completed = true;
+        if (condition === 'paused') h.game.gameState = GameConstants.GameState.paused;
+        if (condition === 'disabled') PrivateGameplay.toggleAutoMine();
+        h.controller.start();
+        vi.advanceTimersByTime(1000);
+        expect(h.battery.discharge).not.toHaveBeenCalled();
+        expect(h.charges()).toBe(10);
+        expect(h.useTool).not.toHaveBeenCalled();
+    });
+
+    it('does not dig again when the discharge completes the layer', () => {
+        const h = mining();
+        h.charges(10);
+        h.battery.discharge.mockImplementation(() => { h.charges(0); h.mine.completed = true; return 0; });
+        h.controller.start();
+        vi.advanceTimersByTime(1000);
+        expect(h.battery.discharge).toHaveBeenCalledTimes(1);
+        expect(h.useTool).not.toHaveBeenCalled();
+    });
 
     it('defaults on and uses the real manual entry at 20/s without inspecting hidden rewards', () => {
         const h = mining();

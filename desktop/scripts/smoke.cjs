@@ -69,6 +69,7 @@ async function run() {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     serverOrigin = 'http://localhost:' + server.address().port;
     const dev = process.argv.includes('--dev');
+    const backgroundTest = !process.argv.includes('--show-windows');
     const executableArgument = process.argv.find(value => value.startsWith('--exe='));
     const executable = executableArgument ? executableArgument.slice(6) : path.join(root, dev ? 'desktop/node_modules/electron/dist/electron.exe' : 'output/desktop/win-unpacked/PokeclickerCloud.exe');
     const profiles = [path.join(work, 'device-a'), path.join(work, 'device-b')];
@@ -80,7 +81,7 @@ async function run() {
     let lastPage;
     async function launch(profile) {
         const env = { ...process.env, TEMP: work, TMP: work }; delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS;
-        const app = await electron.launch({ executablePath: executable, args: [...(dev ? [path.join(root, 'desktop')] : []), '--data-dir=' + profile], env, timeout: 60000 });
+        const app = await electron.launch({ executablePath: executable, args: [...(dev ? [path.join(root, 'desktop')] : []), '--data-dir=' + profile, ...(backgroundTest ? ['--background-test'] : [])], env, timeout: 60000 });
         running.add(app);
         // Redirect before waiting for the renderer: startup session checks also belong to the fixture.
         await app.evaluate((_electron, destination) => {
@@ -91,6 +92,17 @@ async function run() {
                 return original(destination + url.pathname + url.search, init);
             };
         }, serverOrigin);
+        if (backgroundTest) {
+            await app.evaluate(({ app, BrowserWindow }) => {
+                globalThis.visibleTestWindows = [];
+                const watch = window => {
+                    if (window.isVisible()) globalThis.visibleTestWindows.push(window.id);
+                    window.on('show', () => globalThis.visibleTestWindows.push(window.id));
+                };
+                BrowserWindow.getAllWindows().forEach(watch);
+                app.on('browser-window-created', (_event, window) => watch(window));
+            });
+        }
         app.on('window', page => page.on('pageerror', error => errors.push(error.message)));
         const page = await app.firstWindow(); lastPage = page;
         page.on('pageerror', error => errors.push(error.message));
@@ -118,10 +130,19 @@ async function run() {
         await status(page, '登录成功');
     }
     async function quit(app) {
+        if (backgroundTest) assert.deepEqual(await app.evaluate(() => globalThis.visibleTestWindows), []);
         const exited = once(app.process(), 'exit');
         await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === 'pokeclicker://game/').close());
         await Promise.race([exited, new Promise((_, reject) => { const timer = setTimeout(() => reject(new Error('Graceful close timed out')), 25000); timer.unref(); })]);
         running.delete(app);
+    }
+    async function backgroundWindow(app, active) {
+        await app.evaluate(({ BrowserWindow }, options) => {
+            const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL() === 'pokeclicker://game/');
+            if (options.hidden) window.hide();
+            else if (options.active) window.minimize();
+            else window.restore();
+        }, { hidden: backgroundTest, active });
     }
     try {
         online = false;
@@ -192,11 +213,11 @@ async function run() {
         const autoClickAfter = await pageA.evaluate(() => ({ clicks: App.game.statistics.clickAttacks(), time: performance.now() }));
         assert.ok(autoClickAfter.clicks - autoClickBefore.clicks <= Math.ceil((autoClickAfter.time - autoClickBefore.time) / 50) + 1);
         const backgroundClicks = await pageA.evaluate(() => App.game.statistics.clickAttacks());
-        await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === 'pokeclicker://game/').minimize());
+        await backgroundWindow(a, true);
         try {
             await pageA.waitForFunction(before => App.game.statistics.clickAttacks() >= before + 4, backgroundClicks, { polling: 50, timeout: 5000 });
         } finally {
-            await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === 'pokeclicker://game/').restore());
+            await backgroundWindow(a, false);
         }
         await pageA.locator('#auto-click-toggle').click();
         assert.equal(await pageA.locator('#auto-click-toggle').getAttribute('aria-pressed'), 'false');
@@ -216,7 +237,7 @@ async function run() {
             delete window.autoClickEnemyFixture;
         });
         await pageA.screenshot({ path: path.join(output, 'auto-click-controls.png') });
-        checks.push('Auto click defaults to 20/s, typed settings and the battle toggle stay in sync, attacks respect the cooldown, minimized desktop attacks continue, and disabling stops attacks.');
+        checks.push('Auto click defaults to 20/s, typed settings and the battle toggle stay in sync, attacks respect the cooldown, background desktop attacks continue, and disabling stops attacks.');
         if (process.argv.includes('--auto-click-only')) {
             await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('shown.bs.modal', () => resolve()).modal('show')));
             await pageA.locator('#settingsModal a[href="#settings-game"]').click();
@@ -229,7 +250,8 @@ async function run() {
             assert.deepEqual(await pageA.evaluate(() => ({ enabled: PrivateGameplay.autoClickEnabled(), rate: PrivateGameplay.autoClickRate() })), { enabled: false, rate: 5 });
             checks.push('Opening the saved game after a desktop restart restores the disabled state and non-default 5/s frequency.');
             assert.deepEqual(errors, []);
-            const report = { passed: true, checks, desktopVersion, packaged: !dev };
+            if (backgroundTest) assert.deepEqual(await a.evaluate(() => globalThis.visibleTestWindows), []);
+            const report = { passed: true, checks, desktopVersion, packaged: !dev, backgroundTest };
             await fs.writeFile(path.join(output, 'auto-click-smoke-report.json'), JSON.stringify(report, null, 2));
             console.log(JSON.stringify(report, null, 2));
             return;
@@ -398,11 +420,11 @@ async function run() {
         await pageA.waitForFunction(before => App.game.statistics.undergroundToolsUsed[UndergroundToolType.Chisel]() >= before + 3, mineBefore, { timeout: 3000 });
         assert.equal(await pageA.locator('#auto-mine-quick-toggle').getAttribute('aria-pressed'), 'true');
         const mineBackgroundBefore = await pageA.evaluate(() => App.game.statistics.undergroundToolsUsed[UndergroundToolType.Chisel]());
-        await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === 'pokeclicker://game/').minimize());
+        await backgroundWindow(a, true);
         try {
             await pageA.waitForFunction(before => App.game.statistics.undergroundToolsUsed[UndergroundToolType.Chisel]() >= before + 3, mineBackgroundBefore, { timeout: 3000 });
         } finally {
-            await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === 'pokeclicker://game/').restore());
+            await backgroundWindow(a, false);
         }
         await mineModal.locator('#auto-mine-toggle').click();
         const mineStopped = await pageA.evaluate(() => {
@@ -412,14 +434,32 @@ async function run() {
         await pageA.waitForFunction(() => performance.now() - window.mineStoppedAt >= 200);
         assert.equal(await pageA.evaluate(() => App.game.statistics.undergroundToolsUsed[UndergroundToolType.Chisel]()), mineStopped);
         assert.equal(await pageA.locator('#auto-mine-quick-toggle').getAttribute('aria-pressed'), 'false');
+        const batteryBefore = await pageA.evaluate(() => {
+            const underground = App.game.underground;
+            if (underground.mine.completed) underground.generateMine(MineType.Random);
+            underground.mine.tick(100_000);
+            underground.tools.selectedToolType = UndergroundToolType.Survey;
+            underground.battery.fromJSON({ charges: underground.battery.maxCharges, batteryCooldown: 0 });
+            window.batteryTestAt = performance.now();
+            return Object.values(App.game.statistics.undergroundBatteryDischarges).reduce((sum, counter) => sum + counter(), 0);
+        });
+        await pageA.waitForFunction(() => performance.now() - window.batteryTestAt >= 200);
+        assert.equal(await pageA.evaluate(() => App.game.underground.battery.charges === App.game.underground.battery.maxCharges), true);
+        await mineModal.locator('#auto-mine-toggle').click();
+        await pageA.waitForFunction(before => Object.values(App.game.statistics.undergroundBatteryDischarges).reduce((sum, counter) => sum + counter(), 0) === before + 1, batteryBefore, { timeout: 5000 });
+        await pageA.waitForFunction(() => !App.game.underground.battery.toJSON().activeDischargeID, undefined, { timeout: 10000 });
+        assert.equal(await pageA.evaluate(() => App.game.underground.battery.charges < App.game.underground.battery.maxCharges), true);
+        await mineModal.locator('#auto-mine-toggle').click();
         await pageA.evaluate(() => $('#toaster').hide());
         await mineModal.locator('.modal-content').screenshot({ path: path.join(output, 'auto-mine-controls.png') });
         await pageA.evaluate(() => new Promise(resolve => $('#mineModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
         await pageA.evaluate(() => { App.game.underground.fromJSON(window.mineSmoke); delete window.mineSmoke; $('#toaster').show(); });
-        checks.push('Mining toggle operates the real Chisel and durability, stays synchronized with the sidebar, continues minimized and stops when disabled.');
+        checks.push('Mining toggle operates the real Chisel and durability, stays synchronized with the sidebar, continues in the background and stops when disabled.');
+        checks.push('Full battery charges remain while automation is off; enabling automation triggers one real discharge even with Survey selected and finishes the original mining pattern.');
         if (process.argv.includes('--farm-only')) {
             assert.deepEqual(errors, []);
-            const farmReport = { passed: true, checks, desktopVersion, packaged: !dev, farmsVerified: 16 };
+            if (backgroundTest) assert.deepEqual(await a.evaluate(() => globalThis.visibleTestWindows), []);
+            const farmReport = { passed: true, checks, desktopVersion, packaged: !dev, farmsVerified: 16, backgroundTest };
             await fs.writeFile(path.join(output, 'farm-smoke-report.json'), JSON.stringify(farmReport, null, 2));
             console.log(JSON.stringify(farmReport, null, 2));
             return;
@@ -657,7 +697,7 @@ async function run() {
         const keyA = await pageA.evaluate(() => Save.key);
         await pageA.evaluate(() => { App.game.dreamOrbController.onlineTimeMs(GameConstants.HOUR - 5000); });
         const seconds = await pageA.evaluate(() => App.game.statistics.secondsPlayed());
-        await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
+        await backgroundWindow(a, true);
         try {
             await pageA.waitForFunction(start => App.game.statistics.secondsPlayed() >= start + 2, seconds, { timeout: 15000, polling: 200 });
         } catch (error) {
@@ -667,11 +707,11 @@ async function run() {
             throw error;
         }
         await pageA.waitForFunction(() => App.game.dreamOrbController.orbs[0].amount() === 9, undefined, { timeout: 20000 });
-        await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].restore());
+        await backgroundWindow(a, false);
         assert.ok(await pageA.evaluate(() => !!App.game.worker));
         await pageA.evaluate(() => { App.game.dreamOrbController.onlineTimeMs(20 * GameConstants.MINUTE); Save.store(player); });
-        checks.push('A minimized packaged client earns exactly one Dream Orb at the online threshold through the background game clock.');
-        checks.push('Local game cold-starts without a network, has isolated storage/Web Locks, no renderer Node, and continues ticking while minimized.');
+        checks.push('A background client earns exactly one Dream Orb at the online threshold through the background game clock.');
+        checks.push('Local game cold-starts without a network, has isolated storage/Web Locks, no renderer Node, and continues ticking in the background.');
 
         // Freeze only the frontier combat clock in this disposable fixture so real
         // buttons and settlement can be checked against a precise completed range.
@@ -983,7 +1023,7 @@ async function run() {
         await quit(b); await quit(a);
         assert.deepEqual(errors, []);
         checks.push('No uncaught renderer errors during the desktop acceptance flow.');
-        await fs.writeFile(path.join(output, 'smoke-report.json'), JSON.stringify({ passed: true, executable, desktopVersion, packaged: !dev, checks, requests: requests.filter(item => item.path.startsWith('/api/') || item.path.startsWith('/auth/')), note: 'Isolated fixtures only; this does not replace the user’s real two-device acceptance.' }, null, 2));
+        await fs.writeFile(path.join(output, 'smoke-report.json'), JSON.stringify({ passed: true, executable, desktopVersion, packaged: !dev, backgroundTest, checks, requests: requests.filter(item => item.path.startsWith('/api/') || item.path.startsWith('/auth/')), note: 'Isolated fixtures only; this does not replace the user’s real two-device acceptance.' }, null, 2));
         console.log(JSON.stringify({ passed: true, checks }, null, 2));
     } catch (error) {
         console.error('SMOKE FAILED:', error.message);

@@ -8,7 +8,7 @@
 
     <div id="undergroundCard" class="card-body p-0 show">
         <div class="text-center py-1">
-            <button id="auto-mine-quick-toggle" class="btn btn-sm text-nowrap" title="切换矿场自动挖掘，使用当前选中的工具。" data-bind="click: () => PrivateGameplay.toggleAutoMine(), text: `自动：${PrivateGameplay.autoMineEnabled() ? '开' : '关'}`, css: { 'btn-success': PrivateGameplay.autoMineEnabled(), 'btn-secondary': !PrivateGameplay.autoMineEnabled() }, attr: { 'aria-pressed': String(PrivateGameplay.autoMineEnabled()) }"></button>
+            <button id="auto-mine-quick-toggle" class="btn btn-sm text-nowrap" title="切换矿场自动挖掘，使用当前工具，电池满时自动放电。" data-bind="click: () => PrivateGameplay.toggleAutoMine(), text: `自动：${PrivateGameplay.autoMineEnabled() ? '开' : '关'}`, css: { 'btn-success': PrivateGameplay.autoMineEnabled(), 'btn-secondary': !PrivateGameplay.autoMineEnabled() }, attr: { 'aria-pressed': String(PrivateGameplay.autoMineEnabled()) }"></button>
         </div>
         <div class="container">
             <div class="row p-1 d-flex justify-content-center flex-wrap" style="column-gap: 1rem; row-gap: 0.25rem">
