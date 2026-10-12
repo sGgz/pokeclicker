@@ -52,15 +52,19 @@
                   </thead>
                   <tbody>
                     <tr>
-                      <td class="text-left">Growth Duration</td>
+                      <td class="text-left" title="按全局加成和当前田未锁定格子的现有肥料、邻近光环估算；各格速度不同时显示范围，肥料耗尽或光环变化会影响实际时间。">预计收获时间</td>
+                      <td class="text-left tight"><code data-bind="html: FarmController.getBerryGrowthTimePreview($data)">-</code></td>
+                    </tr>
+                    <tr>
+                      <td class="text-left">基础成熟时间</td>
                       <td class="text-left tight"><code data-bind="html: GameConstants.formatSecondsToTime(BerryList[$data].growthTime[3])">-</code></td>
                     </tr>
                     <tr>
-                      <td class="text-left">Berry Stage Duration</td>
+                      <td class="text-left">基础成熟保留时间</td>
                       <td class="text-left tight"><code data-bind="html: GameConstants.formatSecondsToTime(BerryList[$data].growthTime[4]-BerryList[$data].growthTime[3])">-</code></td>
                     </tr>
                     <tr>
-                      <td class="text-left">Total Life Span</td>
+                      <td class="text-left">基础总生命周期</td>
                       <td class="text-left tight"><code data-bind="html: GameConstants.formatSecondsToTime(BerryList[$data].growthTime[4])">-</code></td>
                     </tr>
                     </tbody>
@@ -145,7 +149,7 @@
                             <td><img src="" data-bind="attr: { src: `assets/images/farm/${BerryType[$data]}Tree${PlotStage[PlotStage.Berry]}.png` }"/></td>
                           </tr>
                           <tr>
-                            <th colspan="4">Total Time until Stage</th>
+                            <th colspan="4">各阶段累计基础时间</th>
                           </tr>
                           <tr>
                             <td><code data-bind="html: GameConstants.formatSecondsToTime(BerryList[$data].growthTime[0])">-</code></td>

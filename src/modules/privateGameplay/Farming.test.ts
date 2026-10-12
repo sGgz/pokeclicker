@@ -75,6 +75,118 @@ function setup() {
     return { ...classes, farming, wallet, notification, app, unlockFirst, addFarm, ripe, setBalance: (value: number) => { balance = value; } };
 }
 
+function growthPreview(FarmController, app, detail = false) {
+    const template = document.createElement('div');
+    template.innerHTML = readFileSync(`src/components/${detail ? 'berryDexModal' : 'farmModal'}.html`, 'utf8');
+    const row = Array.from(template.querySelectorAll(detail ? 'tr' : '#berryDexPreviewTable tr'))
+        .find(element => element.textContent.includes('Growth Duration') || element.textContent.includes('预计收获时间'));
+    const preview = row.querySelector('code').cloneNode(true) as HTMLElement;
+    ko.applyBindings({ $data: BerryType.Cheri, BerryList, GameConstants, FarmController, App: app }, preview);
+    return preview;
+}
+
+describe('树果收获时间预览', () => {
+    it('将全局生长加成应用到实际预览绑定', () => {
+        const { farming, FarmController, app } = setup();
+        farming.getFarmPlots(0)[0].isUnlocked = true;
+        app.game.oakItems.calculateBonus = () => 2;
+        const preview = growthPreview(FarmController, app);
+        expect(preview.innerHTML).toBe(GameConstants.formatSecondsToTime(Math.ceil(BerryList[BerryType.Cheri].growthTime[PlotStage.Bloom] / 2)));
+        const template = document.createElement('div');
+        template.innerHTML = readFileSync('src/components/farmModal.html', 'utf8');
+        const seedBindings = runInNewContext(`({${template.querySelector('#seedList li').getAttribute('data-bind')}})`, {
+            $data: BerryType.Cheri, App: app, FarmController, BerryList, BerryType, GameConstants, FarmingTool,
+        });
+        expect(seedBindings.tooltip.title).toContain(`<u>预计收获时间</u>: ${preview.innerHTML}<br/>`);
+        ko.cleanNode(preview);
+    });
+
+    it('预览和详情随全局加成变化更新，并与新种格子的倒计时保持一致', () => {
+        const { farming, FarmController, app } = setup();
+        const plot = farming.getFarmPlots(0)[0];
+        plot.isUnlocked = true;
+        plot.plant(BerryType.Cheri);
+        const bonus = ko.observable(1);
+        app.game.oakItems.calculateBonus = () => bonus();
+        const previews = [growthPreview(FarmController, app), growthPreview(FarmController, app, true)];
+        for (const multiplier of [1, 1.3, 2]) {
+            bonus(multiplier);
+            previews.forEach(preview => expect(preview.innerHTML).toBe(GameConstants.formatSecondsToTime(plot.calcTimeLeft(true))));
+        }
+        previews.forEach(preview => ko.cleanNode(preview));
+    });
+
+    it('叠加肥料和邻近生长光环，预览成熟格子重种时使用生长倍率', () => {
+        vi.useFakeTimers();
+        try {
+            const { farming, FarmController, app, ripe } = setup();
+            farming.getFarmPlots(0).forEach(plot => { plot.isUnlocked = false; });
+            const plot = ripe(0, 0);
+            plot.isUnlocked = true;
+            plot.mulch = MulchType.Boost_Mulch;
+            const neighbour = ripe(0, 1, BerryType.Wacan);
+            neighbour.isUnlocked = true;
+            neighbour.isSafeLocked = true;
+            app.game.oakItems.calculateBonus = () => 2;
+            vi.advanceTimersByTime(60);
+            const preview = growthPreview(FarmController, app);
+            expect(preview.innerHTML).toBe(GameConstants.formatSecondsToTime(Math.ceil(30 / (2 * 1.5 * 1.3))));
+            plot.plant(BerryType.Cheri);
+            expect(preview.innerHTML).toBe(GameConstants.formatSecondsToTime(plot.calcTimeLeft(true)));
+            plot.update(plot.calcTimeLeft(true));
+            expect(plot.stage()).toBe(PlotStage.Berry);
+            ko.cleanNode(preview);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('按当前田展示时间范围，忽略未解锁和锁定格子，并在切田后更新', () => {
+        const { farming, FarmController, app, addFarm } = setup();
+        addFarm();
+        farming.selectedFarm(0);
+        const plots = farming.getFarmPlots(0);
+        plots[0].mulch = MulchType.Boost_Mulch;
+        plots[1].mulch = MulchType.Freeze_Mulch;
+        plots[1].isSafeLocked = true;
+        plots[2].mulch = MulchType.Freeze_Mulch;
+        plots[2].isUnlocked = false;
+        const preview = growthPreview(FarmController, app);
+        expect(preview.innerHTML).toBe('20 secs ～ 30 secs');
+        farming.selectedFarm(1);
+        expect(preview.innerHTML).toBe('30 secs');
+        farming.getFarmPlots(1).forEach(plot => { plot.mulch = MulchType.Amaze_Mulch; });
+        expect(preview.innerHTML).toBe('24 secs');
+        ko.cleanNode(preview);
+    });
+
+    it('明确显示冻结暂停，不输出无效时间', () => {
+        const { farming, FarmController, app } = setup();
+        const plots = farming.getFarmPlots(0);
+        plots.forEach(plot => { plot.isUnlocked = false; });
+        plots[0].isUnlocked = true;
+        plots[0].mulch = MulchType.Freeze_Mulch;
+        const preview = growthPreview(FarmController, app);
+        expect(preview.innerHTML).toBe('暂停生长');
+        plots[1].isUnlocked = true;
+        expect(preview.innerHTML).toBe('30 secs 起（部分格子暂停生长）');
+        ko.cleanNode(preview);
+    });
+
+    it('没有可操作格子时按全局加成估算', () => {
+        const { farming, FarmController, app } = setup();
+        farming.getFarmPlots(0).forEach(plot => { plot.isUnlocked = false; });
+        app.game.oakItems.calculateBonus = () => 2;
+        const preview = growthPreview(FarmController, app);
+        expect(preview.innerHTML).toBe('15 secs');
+        farming.getFarmPlots(0)[0].isUnlocked = true;
+        farming.getFarmPlots(0)[0].isSafeLocked = true;
+        farming.getFarmPlots(0)[0].mulch = MulchType.Freeze_Mulch;
+        expect(preview.innerHTML).toBe('15 secs');
+        ko.cleanNode(preview);
+    });
+});
+
 describe('multiple farms', () => {
     it('remembers each farm search, seed and page without resetting the page on a farm switch', () => {
         const { farming, FarmController, addFarm } = setup();

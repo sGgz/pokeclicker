@@ -385,6 +385,27 @@ class FarmController {
         return `assets/images/items/berry/${BerryType[index]}.png`;
     }
 
+    public static getBerryGrowthTimePreview(berry: BerryType): string {
+        const farming = App.game.farming;
+        const baseTime = BerryList[berry].growthTime[PlotStage.Bloom];
+        const globalMultiplier = farming.getGrowthMultiplier();
+        // 按当前田可操作格子的现有肥料和光环估算，成熟作物的衰败倍率不用于新种预览。
+        const plots = farming.plotList.filter(plot => plot.isUnlocked && !plot.isSafeLocked);
+        const times = plots.length
+            ? plots.map(plot => Math.ceil(baseTime / (globalMultiplier * plot.getGrowthMultiplier(PlotStage.Seed))))
+            : [Math.ceil(baseTime / globalMultiplier)];
+        const shortest = Math.min(...times);
+        const longest = Math.max(...times);
+        const format = (seconds: number) => Number.isFinite(seconds) ? GameConstants.formatSecondsToTime(seconds) : '暂停生长';
+        if (shortest === longest) {
+            return format(shortest);
+        }
+        if (!Number.isFinite(longest)) {
+            return `${format(shortest)} 起（部分格子暂停生长）`;
+        }
+        return `${format(shortest)} ～ ${format(longest)}`;
+    }
+
     public static getHint(index: number, checkSeen = false, checkUnlocked = false) {
         if (checkUnlocked && App.game.farming.unlockedBerries[index]()) {
             return '';

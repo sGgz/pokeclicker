@@ -87,7 +87,9 @@
                                             tooltip: {
                                                 html: true,
                                                 title: App.game.farming.unlockedBerries[$data]() ?
-                                                    `<u>Growth Duration</u>: ${GameConstants.formatSecondsToTime(BerryList[$data].growthTime[3])}<br/>
+                                                    `<u>预计收获时间</u>: ${FarmController.getBerryGrowthTimePreview($data)}<br/>
+                                                    基础时间: ${GameConstants.formatSecondsToTime(BerryList[$data].growthTime[3])}<br/>
+                                                    按当前田加成估算，肥料或光环变化时会调整。<br/>
                                                     ${BerryList[$data].harvestAmount.toLocaleString('en-US')} <img width='12px' alt='${BerryType[$data]}' src='${FarmController.getBerryImage($data)}' /> per harvest<br/>
                                                     ${BerryList[$data].farmValue.toLocaleString('en-US')} <img width='12px' alt='Farm Points' src='assets/images/currency/farmPoint.svg' /> per harvest`
                                                     : '',
@@ -337,7 +339,13 @@
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td class="text-left">Growth Duration</td>
+                                                <td class="text-left" title="从种下到成熟，计入全局加成和当前田未锁定格子的肥料、邻近光环；格子速度不同时显示范围。肥料耗尽或光环变化会影响实际时间。">预计收获时间</td>
+                                                <td class="text-left tight">
+                                                    <code data-bind="html: FarmController.getBerryGrowthTimePreview($data)">-</code>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-left">基础成熟时间</td>
                                                 <td class="text-left tight">
                                                     <code data-bind="html: GameConstants.formatSecondsToTime(BerryList[$data].growthTime[3])">-</code>
                                                 </td>
