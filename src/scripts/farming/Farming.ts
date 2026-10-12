@@ -6,6 +6,9 @@ interface FarmField {
     name: KnockoutObservable<string>;
     plots: Plot[];
     hands: FarmHands;
+    berrySearch: KnockoutObservable<string>;
+    selectedBerry: KnockoutObservable<BerryType>;
+    berryPage: KnockoutObservable<number>;
 }
 
 class Farming implements Feature {
@@ -33,6 +36,9 @@ class Farming implements Feature {
         return {
             id,
             name: ko.observable(`农田 ${id + 1}`),
+            berrySearch: ko.observable(''),
+            selectedBerry: ko.observable(BerryType.Cheri),
+            berryPage: ko.observable(0),
             plots: plots ?? Array.from({ length: 25 }, (_, index) => new Plot(true, BerryType.None, 0, MulchType.None, 0, index, id)),
             hands: new FarmHands(id),
         };
@@ -1149,7 +1155,10 @@ class Farming implements Feature {
             unlockedBerries: this.unlockedBerries.map(ko.unwrap),
             mulchList: this.mulchList.map(ko.unwrap),
             plotList: this.getFarmPlots(0).map(plot => plot.toJSON()),
-            farms: this.farms().map(farm => ({ name: farm.name(), plotList: farm.plots.map(plot => plot.toJSON()), farmHands: farm.hands.toJSON() })),
+            farms: this.farms().map(farm => ({
+                name: farm.name(), plotList: farm.plots.map(plot => plot.toJSON()), farmHands: farm.hands.toJSON(),
+                berrySearch: farm.berrySearch(), selectedBerry: farm.selectedBerry(), berryPage: farm.berryPage(),
+            })),
             selectedFarm: this.selectedFarm(),
             farmHandExperience: Object.fromEntries(FarmHands.list.map(hand => [hand.name, hand.experience()])),
             shovelAmt: this.shovelAmt(),
@@ -1213,6 +1222,15 @@ class Farming implements Feature {
                 farm.name(data.name.slice(0, 30));
             }
             farm.hands.fromJSON(data?.farmHands);
+            if (typeof data?.berrySearch === 'string') {
+                farm.berrySearch(data.berrySearch);
+            }
+            if (Number.isInteger(data?.selectedBerry) && data.selectedBerry >= 0 && data.selectedBerry < BerryList.length && this.unlockedBerries[data.selectedBerry]()) {
+                farm.selectedBerry(data.selectedBerry);
+            }
+            if (Number.isInteger(data?.berryPage) && data.berryPage >= 0 && data.berryPage < Math.ceil(BerryList.length / FarmController.BERRIES_PER_PAGE)) {
+                farm.berryPage(data.berryPage);
+            }
             return farm;
         }));
         this.unlockedPlotCount(this.getFarmPlots(0).filter(p => p.isUnlocked).length);

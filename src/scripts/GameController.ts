@@ -195,7 +195,7 @@ class GameController {
                         [Settings.getSetting('hotkey.farm.harvestBatch').value]: () => FarmController.harvestBatch(),
                         [Settings.getSetting('hotkey.farm.replantBatch').value]: () => FarmController.harvestBatch(true),
                     } : {
-                        [Settings.getSetting('hotkey.farm.mulchBatch').value]: () => FarmController.mulchAll(),
+                        [Settings.getSetting('hotkey.farm.mulchBatch').value]: () => FarmController.mulchBatch(),
                     }),
                     [Settings.getSetting('hotkey.farm.clearBatch').value]: () => FarmController.shovelBatch(!FarmController.berryListVisible()),
                 };

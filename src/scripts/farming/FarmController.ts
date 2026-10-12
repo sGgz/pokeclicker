@@ -33,6 +33,14 @@ class FarmController {
         this.reportBatch('种植', App.game.farming.batchPlant(targets, this.selectedBerry()), targets);
     }
 
+    public static plantAll() {
+        App.game.farming.plantAll(this.selectedBerry());
+    }
+
+    public static harvestAll() {
+        App.game.farming.harvestAll();
+    }
+
     public static harvestBatch(replant = false) {
         const targets = this.targetFarms();
         this.reportBatch(replant ? '收获后重种' : '收获', App.game.farming.batchHarvest(targets, replant), targets);
@@ -97,15 +105,32 @@ class FarmController {
         this.reportBatch(`助手配置已应用，新增雇用 ${hired} 份`, 0, targets);
     }
 
-    public static navigateIndex: KnockoutObservable<number> = ko.observable(0);
+    public static navigateIndex = ko.pureComputed({
+        read: () => {
+            const farm = App.game.farming.farms()[App.game.farming.selectedFarm()];
+            const lastPage = Math.max(0, Math.ceil(FarmController.filteredBerryList().length / FarmController.BERRIES_PER_PAGE) - 1);
+            return Math.min(farm.berryPage(), lastPage);
+        },
+        write: (page: number) => App.game.farming.farms()[App.game.farming.selectedFarm()].berryPage(page),
+    });
     public static berryListFiltered: KnockoutObservableArray<BerryType> = ko.observableArray([]);
     public static numberOfTabs: KnockoutComputed<number>;
     public static farmingModalTabSelected: KnockoutObservable<string> = ko.observable('berryFarmView');
 
     public static berryListEnd: KnockoutComputed<number>;
-    public static berryListSearch: KnockoutObservable<string> = ko.observable('');
+    public static berryListSearch = ko.pureComputed({
+        read: () => App.game.farming.farms()[App.game.farming.selectedFarm()].berrySearch(),
+        write: (search: string) => {
+            const farm = App.game.farming.farms()[App.game.farming.selectedFarm()];
+            farm.berrySearch(search);
+            farm.berryPage(0);
+        },
+    });
 
-    public static selectedBerry: KnockoutObservable<BerryType> = ko.observable(BerryType.Cheri);
+    public static selectedBerry = ko.pureComputed({
+        read: () => App.game.farming.farms()[App.game.farming.selectedFarm()].selectedBerry(),
+        write: (berry: BerryType) => App.game.farming.farms()[App.game.farming.selectedFarm()].selectedBerry(berry),
+    });
     public static selectedMulch: KnockoutObservable<MulchType> = ko.observable(MulchType.Boost_Mulch);
     public static selectedFarmTool: KnockoutObservable<FarmingTool> = ko.observable(FarmingTool.Berry);
     public static selectedFarmModuleTool: KnockoutObservable<FarmingTool> = ko.observable(FarmingTool.Berry);
@@ -129,10 +154,6 @@ class FarmController {
             const highestMutationHint = highestMutation?.mutatedBerry ?? 0;
             return Math.max(App.game.farming.highestUnlockedBerry(), highestMutationHint);
         });
-
-        this.berryListSearch.subscribe(() => this.navigateIndex(0));
-
-        this.navigateIndex(0);
     }
 
     public static openFarmModal() {
@@ -272,23 +293,36 @@ class FarmController {
         return this.calculateCssClassFromTool(plot, this.selectedFarmModuleTool());
     }
 
-    public static async mulchAll() {
-        const targets = this.targetFarms();
+    public static mulchAll() {
+        return this.applyMulch([App.game.farming.selectedFarm()], false);
+    }
+
+    public static mulchBatch() {
+        return this.applyMulch(this.targetFarms(), true);
+    }
+
+    private static async applyMulch(targets: number[], batch: boolean) {
         const mulch = this.selectedMulch();
         const amount = this.getAmount();
+        const apply = () => {
+            const count = App.game.farming.batchMulch(targets, mulch, amount);
+            if (batch) {
+                this.reportBatch('施肥', count, targets);
+            }
+        };
         if (!Settings.getSetting('confirmBeformeMulchingAllPlots').observableValue()) {
-            this.reportBatch('施肥', App.game.farming.batchMulch(targets, mulch, amount), targets);
+            apply();
             return;
         }
 
         const confirmed = await Notifier.confirm({
-            title: 'Mulch All',
+            title: batch ? '批量施肥' : '当前田施肥',
             message: `将 ${MulchType[mulch].replace('_', ' ')} 应用到 ${targets.length} 块田，每格最多 ${amount} 份，库存不足时均分。`,
             type: NotificationConstants.NotificationOption.info,
             confirm: 'Mulch',
         });
         if (confirmed) {
-            this.reportBatch('施肥', App.game.farming.batchMulch(targets, mulch, amount), targets);
+            apply();
         }
     }
 

@@ -76,6 +76,98 @@ function setup() {
 }
 
 describe('multiple farms', () => {
+    it('remembers each farm search, seed and page without resetting the page on a farm switch', () => {
+        const { farming, FarmController, addFarm } = setup();
+        addFarm();
+        addFarm();
+        FarmController.initialize();
+        // Keep the computed controls subscribed, as they are while the modal is open.
+        const subscriptions = [FarmController.berryListSearch, FarmController.navigateIndex, FarmController.selectedBerry].map(control => control.subscribe(() => undefined));
+        farming.selectedFarm(0);
+        FarmController.berryListSearch('ch');
+        FarmController.selectedBerry(BerryType.Chesto);
+        farming.selectedFarm(1);
+        expect(FarmController.berryListSearch()).toBe('');
+        expect(FarmController.selectedBerry()).toBe(BerryType.Cheri);
+        FarmController.navigateIndex(2);
+        FarmController.selectedBerry(BerryType.Pecha);
+        farming.selectedFarm(2);
+        FarmController.berryListSearch('cheri');
+        farming.selectedFarm(0);
+        expect(FarmController.berryListSearch()).toBe('ch');
+        expect(FarmController.selectedBerry()).toBe(BerryType.Chesto);
+        farming.selectedFarm(1);
+        expect(FarmController.navigateIndex()).toBe(2);
+        expect(FarmController.selectedBerry()).toBe(BerryType.Pecha);
+        FarmController.berryListSearch('pecha');
+        expect(FarmController.navigateIndex()).toBe(0);
+        farming.selectedFarm(2);
+        expect(FarmController.berryListSearch()).toBe('cheri');
+        subscriptions.forEach(subscription => subscription.dispose());
+    });
+
+    it('restores independent farm controls with the save and defaults safely for old or invalid data', () => {
+        const first = setup();
+        first.addFarm();
+        first.farming.selectedFarm(0);
+        first.FarmController.berryListSearch('ch');
+        first.FarmController.selectedBerry(BerryType.Chesto);
+        first.farming.selectedFarm(1);
+        first.FarmController.selectedBerry(BerryType.Pecha);
+        first.FarmController.navigateIndex(2);
+        const saved = JSON.parse(JSON.stringify(first.farming.toJSON()));
+        const second = setup();
+        second.farming.fromJSON(saved);
+        second.FarmController.initialize();
+        expect(second.FarmController.selectedBerry()).toBe(BerryType.Pecha);
+        expect(second.FarmController.navigateIndex()).toBe(2);
+        second.farming.selectedFarm(0);
+        expect(second.FarmController.berryListSearch()).toBe('ch');
+        expect(second.FarmController.selectedBerry()).toBe(BerryType.Chesto);
+        expect(JSON.parse(JSON.stringify(second.farming.toJSON())).farms).toEqual(saved.farms);
+        second.farming.fromJSON({ farms: [{}, { berrySearch: 7, selectedBerry: -1, berryPage: Infinity }] });
+        expect(second.farming.farms().map(farm => [farm.berrySearch(), farm.selectedBerry(), farm.berryPage()])).toEqual([
+            ['', BerryType.Cheri, 0], ['', BerryType.Cheri, 0],
+        ]);
+    });
+
+    it('keeps lower plant and harvest controls on the current farm even when the batch scope is all', () => {
+        const { farming, FarmController, addFarm, ripe } = setup();
+        addFarm();
+        addFarm();
+        FarmController.batchScope('all');
+        farming.selectedFarm(1);
+        FarmController.selectedBerry(BerryType.Chesto);
+        FarmController.plantAll();
+        expect(farming.farms().map(farm => farm.plots.filter(plot => plot.berry === BerryType.Chesto).length)).toEqual([0, 25, 0]);
+        [0, 1, 2].forEach(id => ripe(id));
+        FarmController.harvestAll();
+        expect(farming.getFarmPlots(1)[0].isEmpty()).toBe(true);
+        expect(farming.getFarmPlots(0)[0].stage()).toBe(PlotStage.Berry);
+        expect(farming.getFarmPlots(2)[0].stage()).toBe(PlotStage.Berry);
+        FarmController.harvestBatch();
+        expect([0, 1, 2].every(id => farming.getFarmPlots(id)[0].isEmpty())).toBe(true);
+        FarmController.plantBatch();
+        expect(farming.farms().every(farm => farm.plots.every(plot => plot.berry === BerryType.Chesto))).toBe(true);
+    });
+
+    it('separates current-farm mulching from selected-farm batch mulching and shares the inventory', async () => {
+        const { farming, FarmController, addFarm } = setup();
+        addFarm();
+        addFarm();
+        FarmController.batchScope('all');
+        farming.selectedFarm(1);
+        farming.mulchList[MulchType.Boost_Mulch](100);
+        await FarmController.mulchAll();
+        expect(farming.farms().map(farm => farm.plots.filter(plot => plot.mulch !== MulchType.None).length)).toEqual([0, 25, 0]);
+        expect(farming.mulchList[MulchType.Boost_Mulch]()).toBe(75);
+        FarmController.batchScope('selected');
+        FarmController.checkedFarms([0, 2]);
+        await FarmController.mulchBatch();
+        expect(farming.farms().every(farm => farm.plots.every(plot => plot.mulch === MulchType.Boost_Mulch))).toBe(true);
+        expect(farming.mulchList[MulchType.Boost_Mulch]()).toBe(25);
+    });
+
     it('requires the original 25 plots and purchases complete farms at the agreed prices up to 16', () => {
         const { farming, wallet, unlockFirst } = setup();
         expect(farming.buyFarm()).toBe(false);

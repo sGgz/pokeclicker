@@ -251,7 +251,34 @@ async function run() {
         await farmModal.getByRole('button', { name: /购买下一块田/ }).click();
         assert.equal(await pageA.evaluate(() => App.game.farming.farms().length), 3);
         await farmModal.locator('#farmBatchScope').selectOption('all');
-        await farmModal.getByRole('button', { name: '种植', exact: true }).click();
+        const batchActions = farmModal.locator('.farm-batch-actions');
+        const searchSeeds = farmModal.locator('#seeds input[placeholder="Search"]');
+        await farmModal.locator('#activeFarm').selectOption('0');
+        await searchSeeds.fill('cheri');
+        await farmModal.locator('#seedList li').filter({ hasText: 'Cheri' }).click();
+        await farmModal.locator('#activeFarm').selectOption('1');
+        assert.equal(await searchSeeds.inputValue(), '');
+        await searchSeeds.fill('chesto');
+        await farmModal.locator('#seedList li').filter({ hasText: 'Chesto' }).click();
+        await farmModal.locator('#activeFarm').selectOption('2');
+        await searchSeeds.fill('pecha');
+        await farmModal.locator('#seedList li').filter({ hasText: 'Pecha' }).click();
+        await farmModal.locator('#activeFarm').selectOption('0');
+        assert.equal(await searchSeeds.inputValue(), 'cheri');
+        assert.equal(await pageA.evaluate(() => FarmController.selectedBerry()), 0);
+        await farmModal.locator('#activeFarm').selectOption('1');
+        assert.equal(await searchSeeds.inputValue(), 'chesto');
+        assert.equal(await pageA.evaluate(() => FarmController.selectedBerry() === BerryType.Chesto), true);
+        await pageA.evaluate(() => { App.game.farming.berryInventory[BerryType.Chesto](1000); });
+        await farmModal.locator('#seeds').getByRole('button', { name: '种植', exact: true }).click();
+        assert.deepEqual(await pageA.evaluate(() => App.game.farming.farms().map(farm => farm.plots.filter(plot => !plot.isEmpty()).length)), [0, 25, 0]);
+        await pageA.evaluate(() => App.game.farming.getFarmPlots(1).forEach(plot => { plot.age = BerryList[plot.berry].growthTime[PlotStage.Bloom]; }));
+        await farmModal.locator('#seeds').getByRole('button', { name: '收获', exact: true }).click();
+        assert.deepEqual(await pageA.evaluate(() => App.game.farming.farms().map(farm => farm.plots.filter(plot => !plot.isEmpty()).length)), [0, 0, 0]);
+        await farmModal.locator('#activeFarm').selectOption('2');
+        assert.equal(await searchSeeds.inputValue(), 'pecha');
+        await pageA.evaluate(() => { FarmController.selectedBerry(BerryType.Cheri); });
+        await batchActions.getByRole('button', { name: '种植', exact: true }).click();
         assert.deepEqual(await pageA.evaluate(() => App.game.farming.farms().map(farm => farm.plots.filter(plot => !plot.isEmpty()).length)), [25, 25, 25]);
         await pageA.evaluate(() => App.game.farming.farms().forEach(farm => farm.plots.forEach(plot => { plot.age = BerryList[plot.berry].growthTime[PlotStage.Bloom]; })));
         await pageA.keyboard.press('h');
@@ -271,8 +298,12 @@ async function run() {
         assert.equal(await farmModal.locator('.farm-batch-actions').getByRole('button', { name: '施肥', exact: true }).isVisible(), true);
         assert.equal(await farmModal.locator('.farm-batch-actions').getByRole('button', { name: '清肥料', exact: true }).isVisible(), true);
         const mulchBefore = await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]());
+        await farmModal.locator('#mulches').getByRole('button', { name: '施肥', exact: true }).click();
+        assert.deepEqual(await pageA.evaluate(() => App.game.farming.farms().map(farm => farm.plots.filter(plot => plot.mulch !== MulchType.None).length)), [0, 0, 25]);
+        assert.equal(await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]()), mulchBefore - 25);
+        const batchMulchBefore = await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]());
         await pageA.keyboard.press('m');
-        assert.equal(await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]()), mulchBefore - 75);
+        assert.equal(await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]()), batchMulchBefore - 75);
         await pageA.evaluate(() => { App.game.farming.mulchShovelAmt(100); });
         await pageA.keyboard.press('c');
         const mulchConfirm = pageA.locator('.modal.show').filter({ hasText: '批量铲除肥料' });
@@ -290,6 +321,7 @@ async function run() {
         const afterMulch = await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]());
         await pageA.keyboard.press('m');
         assert.equal(await pageA.evaluate(() => App.game.farming.mulchList[MulchType.Boost_Mulch]()), afterMulch);
+        await farmModal.locator('.modal-content').screenshot({ path: path.join(output, 'farm-batch-controls.png') });
         await farmModal.getByLabel('农田名称', { exact: true }).fill('测试生产田');
         await farmModal.getByLabel('农田名称', { exact: true }).press('Tab');
         await pageA.keyboard.press('[');
@@ -314,6 +346,7 @@ async function run() {
             const saved = JSON.parse(JSON.stringify(farming.toJSON()));
             farming.fromJSON(saved);
             if (farming.farms().length !== 3 || farming.farms()[2].name() !== '测试生产田' || farming.farms()[1].hands.list[0].level !== 50) throw new Error('Farm save round trip failed');
+            if (farming.farms()[0].berrySearch() !== 'cheri' || farming.farms()[1].selectedBerry() !== BerryType.Chesto || farming.farms()[2].berrySearch() !== 'pecha') throw new Error('Independent farm controls did not survive the save');
             while (farming.farms().length < 16) {
                 if (!farming.buyFarm()) throw new Error('Unable to unlock all sixteen farms');
             }
@@ -338,6 +371,7 @@ async function run() {
         });
         checks.push('Multi-farm purchase, all-farm planting, scoped harvest and plant hotkeys, farm switching, shared helper levels without a perpetual UI label, and save round-trip work in real Electron.');
         checks.push('Mulch hotkey applies to the selected farm scope; berry and mulch buttons and hotkeys follow the visible tab.');
+        checks.push('Each farm retains its own search and seed through switching and save round-trip; lower plant, harvest and mulch controls affect only the current farm even with all farms selected.');
         await pageA.evaluate(() => {
             window.mineSmoke = JSON.parse(JSON.stringify(App.game.underground.toJSON()));
             App.game.keyItems.gainKeyItem(KeyItemType.Explorer_kit, true);
