@@ -1029,14 +1029,13 @@ async function run() {
         await b.evaluate(({ Menu }) => Menu.getApplicationMenu().items.find(item => item.label === '帮助').submenu.items[0].click());
         const help = await helpPending;
         await help.locator('h1').waitFor();
-        await captureWindow(a, help, 'offline-manual.png');
+        await captureWindow(b, help, 'offline-manual.png');
         assert.ok((await help.locator('body').innerText()).includes('同步后换设备'));
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('原价的 1%'));
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('Battle Frontier 快速挑战与主动结算'));
         assert.ok((await help.locator('.meta').innerText()).includes('桌面程序 ' + desktopVersion));
-        await help.locator('#private-gameplay').scrollIntoViewIfNeeded();
         await help.locator('#private-gameplay').evaluate(element => element.scrollIntoView());
-        await captureWindow(a, help, 'private-gameplay-manual.png');
+        await captureWindow(b, help, 'private-gameplay-manual.png');
         checks.push('The Chinese operation manual, including private gameplay instructions, opens locally while offline.');
         await quit(b); await quit(a);
         assert.deepEqual(errors, []);
