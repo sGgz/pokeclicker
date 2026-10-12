@@ -335,6 +335,17 @@ async function run() {
             hand.hire();
         });
         assert.ok((await farmModal.locator('#farmHandsView').textContent()).includes('Alex · Lv.50'));
+        assert.equal(await farmModal.locator('#farmHandsView .card').filter({ hasText: 'Alex · Lv.50' }).getByRole('row').filter({ hasText: 'Efficiency:' }).locator('td').last().innerText(), '25 actions/cycle');
+        const actionCaps = await pageA.evaluate(() => {
+            const riley = App.game.farming.farmHands.list.find(hand => hand.name === 'Riley');
+            const initial = riley.efficiency;
+            riley.gainExperience(122_499);
+            const beforeMax = riley.efficiency;
+            riley.gainExperience(1);
+            return { initial, beforeMax, riley: App.game.farming.farms().map(farm => farm.hands.list.find(hand => hand.name === 'Riley').efficiency),
+                jessie: App.game.farming.farmHands.list.find(hand => hand.name === 'Jessie').efficiency };
+        });
+        assert.deepEqual(actionCaps, { initial: 25, beforeMax: 25, riley: [50, 50, 50], jessie: 50 });
         assert.ok(!(await farmModal.textContent()).includes('永动'));
         assert.equal(await pageA.evaluate(() => App.game.farming.farmHands.list[0].tooltip().includes('永动')), false);
         assert.equal(await pageA.evaluate(() => App.game.farming.farms()[0].hands.list[0].level), 50);
@@ -346,6 +357,7 @@ async function run() {
             const saved = JSON.parse(JSON.stringify(farming.toJSON()));
             farming.fromJSON(saved);
             if (farming.farms().length !== 3 || farming.farms()[2].name() !== '测试生产田' || farming.farms()[1].hands.list[0].level !== 50) throw new Error('Farm save round trip failed');
+            if (farming.farmHands.list[0].efficiency !== 25 || farming.farmHands.list.find(hand => hand.name === 'Riley').efficiency !== 50) throw new Error('Farm hand action caps changed after save round trip');
             if (farming.farms()[0].berrySearch() !== 'cheri' || farming.farms()[1].selectedBerry() !== BerryType.Chesto || farming.farms()[2].berrySearch() !== 'pecha') throw new Error('Independent farm controls did not survive the save');
             while (farming.farms().length < 16) {
                 if (!farming.buyFarm()) throw new Error('Unable to unlock all sixteen farms');
@@ -372,6 +384,7 @@ async function run() {
         checks.push('Multi-farm purchase, all-farm planting, scoped harvest and plant hotkeys, farm switching, shared helper levels without a perpetual UI label, and save round-trip work in real Electron.');
         checks.push('Mulch hotkey applies to the selected farm scope; berry and mulch buttons and hotkeys follow the visible tab.');
         checks.push('Each farm retains its own search and seed through switching and save round-trip; lower plant, harvest and mulch controls affect only the current farm even with all farms selected.');
+        checks.push('Level 50 Alex displays 25 actions/cycle; Riley stays at 25 until reaching level 50, then jumps to 50 in every farm; Jessie stays at 50 and action caps survive save round-trip.');
         await pageA.evaluate(() => {
             window.mineSmoke = JSON.parse(JSON.stringify(App.game.underground.toJSON()));
             App.game.keyItems.gainKeyItem(KeyItemType.Explorer_kit, true);

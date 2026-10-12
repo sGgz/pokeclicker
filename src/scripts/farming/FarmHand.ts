@@ -44,7 +44,10 @@ class FarmHand {
     }
 
     get efficiency(): number {
-        return Math.min(this.maxEfficiency, this.baseEfficiency + Math.floor((this.level - 1) / 5));
+        if (this.baseEfficiency >= 25) {
+            return this.isMaxLevel ? this.maxEfficiency : Math.min(this.maxEfficiency, this.baseEfficiency);
+        }
+        return Math.min(this.maxEfficiency, this.baseEfficiency + Math.floor((25 - this.baseEfficiency) * (this.level - 1) / (FarmHand.MAX_LEVEL - 1)));
     }
 
     get recovery(): number {

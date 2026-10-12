@@ -375,6 +375,66 @@ describe('multiple farms', () => {
 
 describe('farm hand levels and independent employment', () => {
     it.each([
+        ['Alex', 1, 25], ['Logan', 3, 25], ['Joey', 5, 25], ['Charlie', 10, 25],
+        ['Bailey', 12, 25], ['Kerry', 16, 25], ['Riley', 25, 50], ['Jamie', 5, 25], ['Jessie', 50, 50],
+    ])('grows %s from %i actions to %i without decreasing or exceeding the cap', (name, initial, maximum) => {
+        const { farming } = setup();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === name);
+        expect(hand.efficiency).toBe(initial);
+        let previous = initial;
+        for (let level = 2; level <= 50; level++) {
+            hand.experience(50 * level * (level - 1));
+            expect(hand.efficiency).toBeGreaterThanOrEqual(previous);
+            expect(hand.efficiency).toBeLessThanOrEqual(maximum);
+            expect(Number.isInteger(hand.efficiency)).toBe(true);
+            if (initial >= 25 && level < 50) {
+                expect(hand.efficiency).toBe(initial);
+            }
+            previous = hand.efficiency;
+        }
+        expect(hand.efficiency).toBe(maximum);
+    });
+
+    it.each([
+        ['Alex', 25, 12], ['Alex', 49, 24],
+    ])('gradually increases %s at level %i to %i actions', (name, level, expected) => {
+        const { farming } = setup();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === name);
+        hand.experience(50 * level * (level - 1));
+        expect(hand.efficiency).toBe(expected);
+    });
+
+    it('keeps Riley at 25 actions until the exact level 50 experience threshold', () => {
+        const { farming } = setup();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Riley');
+        hand.experience(122_499);
+        expect(hand.level).toBe(49);
+        expect(hand.efficiency).toBe(25);
+        hand.gainExperience(1);
+        expect(hand.level).toBe(50);
+        expect(hand.efficiency).toBe(50);
+    });
+
+    it('lets a level 50 Riley harvest and plant all 25 plots independently in three farms', () => {
+        const { farming, addFarm, ripe } = setup();
+        addFarm();
+        addFarm();
+        farming.farms()[0].hands.list.find(hand => hand.name === 'Riley').gainExperience(122_500);
+        farming.farms().forEach((farm, id) => {
+            farm.plots.forEach((plot, index) => ripe(id, index));
+            const hand = farm.hands.list.find(candidate => candidate.name === 'Riley');
+            hand.focus(BerryType.Cheri);
+            hand.shouldHarvest(true);
+            hand.hire();
+        });
+        const before = farming.berryInventory[BerryType.Cheri]();
+        farming.farms().forEach(farm => farm.hands.list.find(hand => hand.name === 'Riley').tick());
+        expect(farming.farms().every(farm => farm.plots.every(plot => plot.berry === BerryType.Cheri && plot.age === 0))).toBe(true);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(before + 75 * (BerryList[BerryType.Cheri].harvestAmount - 1));
+        expect(farming.farms().every(farm => farm.hands.list.find(hand => hand.name === 'Riley').energy() === 70)).toBe(true);
+    });
+
+    it.each([
         [1, 1, 4],
         [21, 1.408163, 4.408163],
         [41, 1.816327, 4.816327],
@@ -476,10 +536,10 @@ describe('farm hand levels and independent employment', () => {
         hand.gainExperience(122_500);
         expect(hand.level).toBe(50);
         expect(hand.maxEnergy).toBe(255);
-        expect(hand.efficiency).toBe(10);
+        expect(hand.efficiency).toBe(25);
         expect(hand.workTick).toBeLessThan(1_000_000);
         hand.focus(BerryType.Cheri);
-        farming.berryInventory[BerryType.Cheri](3000);
+        farming.berryInventory[BerryType.Cheri](6000);
         hand.energy(0);
         hand.work();
         expect(hand.energy()).toBe(2);
@@ -488,7 +548,7 @@ describe('farm hand levels and independent employment', () => {
             farming.plotList.forEach(plot => { plot.berry = BerryType.None; });
             hand.work();
             expect(hand.energy()).toBe(2);
-            expect(farming.plotList.filter(plot => !plot.isEmpty())).toHaveLength(10);
+            expect(farming.plotList.filter(plot => !plot.isEmpty())).toHaveLength(25);
         }
         expect(hand.experience()).toBe(122_500);
         expect(hand.tooltip()).not.toContain('永动');
@@ -502,6 +562,7 @@ describe('farm hand levels and independent employment', () => {
         expect(hand.level).toBe(49);
         expect(hand.maxEnergy).toBe(250);
         hand.focus(BerryType.Cheri);
+        farming.berryInventory[BerryType.Cheri](2000);
         hand.energy(1);
         hand.work();
         expect(hand.energy()).toBeCloseTo(0.979592, 6);
