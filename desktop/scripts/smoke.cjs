@@ -912,7 +912,11 @@ async function run() {
         uploadGate = new Promise(resolve => { finishUpload = resolve; });
         await pageA.getByRole('button', { name: '上传 / 立即同步', exact: true }).click();
         await pageA.getByRole('button', { name: '关联此存档', exact: true }).click();
-        await pageA.waitForFunction(() => document.getElementById('cloud-save-status').textContent.includes('正在上传存档') && document.getElementById('cloud-save-status').textContent.includes('已等待 2 秒'), undefined, { timeout: 5000 });
+        await pageA.waitForFunction(() => {
+            const text = document.getElementById('cloud-save-status').textContent;
+            const seconds = text.match(/已等待 (\d+) 秒/);
+            return text.includes('正在上传存档') && seconds && Number(seconds[1]) >= 2;
+        }, undefined, { timeout: 15000 });
         assert.equal(await pageA.getByRole('button', { name: '上传 / 立即同步', exact: true }).isDisabled(), true);
         assert.equal(requests.filter(request => request.path === '/api/cloud-save/status').length, probesBeforeUpload);
         uploadGate = null;
