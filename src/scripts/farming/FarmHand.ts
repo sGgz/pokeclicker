@@ -51,7 +51,7 @@ class FarmHand {
     }
 
     get recovery(): number {
-        return 1 + (this.level - 1) / (FarmHand.MAX_LEVEL - 1);
+        return Math.ceil(1 + (this.level - 1) / (FarmHand.MAX_LEVEL - 1));
     }
 
     get isMaxLevel(): boolean {
@@ -119,7 +119,7 @@ class FarmHand {
         // Calculate how much to charge the player in farm points
         this.cost = new Amount(+Math.pow(100, 1 + cost * 0.08).toPrecision(2), GameConstants.Currency.farmPoint);
         this.tooltip = ko.pureComputed(() => `<strong>${this.name} · 农田 ${this.farmId + 1} · Lv.${this.level}</strong><br/>
-            每轮恢复 ${this.recovery.toFixed(2)} 点体力<br/>
+            每轮恢复 ${this.recovery} 点体力<br/>
             Energy: ${this.energy().toLocaleString('en-US', { maximumFractionDigits: 2 })}/${this.maxEnergy}<br/>
             Work Cycle: ${GameConstants.formatTimeFullLetters((this.workTick - this.workTicks()) / GameConstants.SECOND)}<br/>
             Next Payment: ${GameConstants.formatTimeFullLetters((this.costTick - this.costTicks()) / GameConstants.SECOND)}`

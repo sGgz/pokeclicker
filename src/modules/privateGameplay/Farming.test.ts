@@ -546,25 +546,57 @@ describe('farm hand levels and independent employment', () => {
         expect(farming.farms().every(farm => farm.hands.list.find(hand => hand.name === 'Riley').energy() === 70)).toBe(true);
     });
 
-    it.each([
-        [1, 1, 4],
-        [21, 1.408163, 4.408163],
-        [41, 1.816327, 4.816327],
-        [49, 1.979592, 4.979592],
-        [50, 2, 5],
-    ])('applies recovery and the same work cost at level %i', (level, recovery, remaining) => {
+    it.each(Array.from({ length: 50 }, (_, index) => [
+        index + 1, index === 0 ? 1 : 2, index === 0 ? 4 : 5,
+    ]))('Lv.%i 工作、休息和零体力时按整数恢复，且不超过容量上限', (level, recovery, remaining) => {
         const { farming, unlockFirst } = setup();
         unlockFirst();
         const hand = farming.farmHands.list[0];
         hand.gainExperience(50 * level * (level - 1));
+        expect(hand.recovery).toBe(recovery);
         hand.energy(5);
         hand.focus(BerryType.Cheri);
         hand.work();
-        expect(hand.energy()).toBeCloseTo(remaining, 6);
+        expect(hand.energy()).toBe(remaining);
         expect(farming.plotList.some(plot => !plot.isEmpty())).toBe(true);
+        const experienceAfterWork = hand.experience();
         hand.focus(BerryType.None);
         hand.work();
-        expect(hand.energy()).toBeCloseTo(remaining + recovery, 5);
+        expect(hand.energy()).toBe(remaining + recovery);
+        expect(hand.experience()).toBe(experienceAfterWork);
+        farming.plotList.forEach(plot => { plot.berry = BerryType.None; });
+        hand.focus(BerryType.Cheri);
+        hand.energy(0);
+        hand.work();
+        expect(hand.energy()).toBe(recovery);
+        expect(farming.plotList.every(plot => plot.isEmpty())).toBe(true);
+        expect(hand.experience()).toBe(experienceAfterWork);
+        hand.focus(BerryType.None);
+        hand.energy(hand.maxEnergy - 1);
+        hand.work();
+        expect(hand.energy()).toBe(hand.maxEnergy);
+        expect(hand.experience()).toBe(experienceAfterWork);
+    });
+
+    it('实际恢复单元格和提示随等级更新，Lv.1 显示 1 点，Lv.2–50 显示 2 点且不带小数', () => {
+        const { farming } = setup();
+        const hand = farming.farmHands.list[0];
+        const template = document.createElement('div');
+        template.innerHTML = readFileSync('src/components/farmModal.html', 'utf8');
+        const row = Array.from(template.querySelectorAll('#farmHandsView tr'))
+            .find(element => element.querySelector('td')?.textContent === '体力恢复');
+        const recoveryCell = row.querySelector('td.text-right').cloneNode(true) as HTMLElement;
+        ko.applyBindings(hand, recoveryCell);
+        try {
+            for (let level = 1; level <= 50; level++) {
+                hand.experience(50 * level * (level - 1));
+                const recovery = level === 1 ? 1 : 2;
+                expect(recoveryCell.textContent).toBe(`${recovery} 点/轮`);
+                expect(hand.tooltip()).toContain(`每轮恢复 ${recovery} 点体力`);
+            }
+        } finally {
+            ko.cleanNode(recoveryCell);
+        }
     });
 
     it('shares experience while keeping energy, assignments and wages independent', () => {
@@ -614,18 +646,21 @@ describe('farm hand levels and independent employment', () => {
         expect(hand.experience()).toBe(3);
     });
 
-    it('recovers by level and caps recovery at capacity without giving idle experience', () => {
+    it('未雇佣助手按等级恢复整数体力，上限截断且不增加休息经验', () => {
         const { farming } = setup();
         const hand = farming.farmHands.list[0];
         hand.gainExperience(50 * 21 * 20);
         expect(hand.level).toBe(21);
         hand.energy(0);
-        hand.work();
-        expect(hand.energy()).toBeCloseTo(1.408163, 6);
+        hand.workTicks(Math.ceil(hand.workTick) - GameConstants.TICK_TIME);
+        hand.tick();
+        expect(hand.energy()).toBe(2);
         expect(hand.experience()).toBe(21_000);
         hand.energy(hand.maxEnergy - 1);
-        hand.work();
+        hand.workTicks(Math.ceil(hand.workTick) - GameConstants.TICK_TIME);
+        hand.tick();
         expect(hand.energy()).toBe(hand.maxEnergy);
+        expect(hand.experience()).toBe(21_000);
     });
 
     it('does not loop or award experience when saved planting focus refers to a locked berry', () => {
@@ -666,7 +701,7 @@ describe('farm hand levels and independent employment', () => {
         expect(hand.tooltip()).not.toContain('永动');
     });
 
-    it('keeps level 49 subject to exhaustion and uses the agreed larger energy capacity', () => {
+    it('Lv.49 每轮恢复与工作消耗抵消，零体力先休息，并保留旧存档的小数体力', () => {
         const { farming, unlockFirst } = setup();
         unlockFirst();
         const hand = farming.farmHands.list[0];
@@ -677,23 +712,27 @@ describe('farm hand levels and independent employment', () => {
         farming.berryInventory[BerryType.Cheri](2000);
         hand.energy(1);
         hand.work();
-        expect(hand.energy()).toBeCloseTo(0.979592, 6);
+        expect(hand.energy()).toBe(1);
         for (let cycle = 0; cycle < 49; cycle++) {
             farming.plotList.forEach(plot => { plot.berry = BerryType.None; });
             hand.work();
+            expect(farming.plotList.filter(plot => !plot.isEmpty())).toHaveLength(24);
+            expect(hand.energy()).toBe(1);
         }
         expect(hand.level).toBe(49);
-        expect(hand.energy()).toBe(0);
+        hand.energy(0);
         farming.plotList.forEach(plot => { plot.berry = BerryType.None; });
         hand.work();
         expect(farming.plotList.every(plot => plot.isEmpty())).toBe(true);
-        expect(hand.energy()).toBeCloseTo(1.979592, 6);
+        expect(hand.energy()).toBe(2);
         hand.energy(0.01);
         farming.plotList.forEach(plot => { plot.berry = BerryType.None; });
         hand.work();
-        expect(hand.energy()).toBe(0);
+        expect(farming.plotList.filter(plot => !plot.isEmpty())).toHaveLength(24);
+        expect(hand.energy()).toBe(0.01);
+        hand.focus(BerryType.None);
         hand.work();
-        expect(hand.energy()).toBeCloseTo(1.979592, 6);
+        expect(hand.energy()).toBe(2.01);
     });
 
     it('continues working only its own farm while another farm is selected', () => {

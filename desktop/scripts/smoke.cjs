@@ -452,6 +452,58 @@ async function run() {
         });
         assert.ok((await farmModal.locator('#farmHandsView').textContent()).includes('Alex · Lv.50'));
         assert.equal(await farmModal.locator('#farmHandsView .card').filter({ hasText: 'Alex · Lv.50' }).getByRole('row').filter({ hasText: 'Efficiency:' }).locator('td').last().innerText(), '25 actions/cycle');
+        assert.equal(await farmModal.locator('#farmHandsView .card').filter({ hasText: 'Alex · Lv.50' }).getByRole('row').filter({ hasText: '体力恢复' }).locator('td').last().innerText(), '2 点/轮');
+        // 临时切换共享等级并调用真实工作逻辑，结束后恢复助手、作物与库存。
+        await pageA.evaluate(() => { window.farmRecoverySmoke = JSON.parse(JSON.stringify(App.game.farming.toJSON())); });
+        try {
+            for (const [level, recovery] of [[1, 1], [2, 2], [49, 2], [50, 2]]) {
+                const result = await pageA.evaluate(level => {
+                    const farming = App.game.farming;
+                    const hand = farming.farmHands.list.find(candidate => candidate.name === 'Alex');
+                    const plots = farming.getFarmPlots(hand.farmId);
+                    hand.experience(50 * level * (level - 1));
+                    hand.focus(BerryType.Cheri);
+                    hand.shouldHarvest(false);
+                    hand.shouldCatch(false);
+                    hand.plots([0]);
+                    plots.forEach(plot => { plot.berry = BerryType.None; plot.isSafeLocked = true; });
+                    plots[0].isUnlocked = true;
+                    plots[0].isSafeLocked = false;
+                    farming.berryInventory[BerryType.Cheri](1000);
+                    hand.energy(5);
+                    hand.work();
+                    const workEnergy = hand.energy();
+                    const planted = plots[0].berry === BerryType.Cheri;
+                    plots[0].berry = BerryType.None;
+                    hand.energy(0);
+                    const beforeRestExperience = hand.experience();
+                    hand.work();
+                    const restEnergy = hand.energy();
+                    const zeroEnergySkippedWork = plots[0].isEmpty() && hand.experience() === beforeRestExperience;
+                    hand.focus(BerryType.None);
+                    hand.energy(5);
+                    hand.work();
+                    const idleEnergy = hand.energy();
+                    hand.energy(hand.maxEnergy - 1);
+                    hand.work();
+                    return { level: hand.level, recovery: hand.recovery, workEnergy, planted, restEnergy,
+                        zeroEnergySkippedWork, idleEnergy, capacityReached: hand.energy() === hand.maxEnergy, tooltip: hand.tooltip() };
+                }, level);
+                assert.deepEqual({ ...result, tooltip: undefined }, { level, recovery, workEnergy: 5 + recovery - 2, planted: true,
+                    restEnergy: recovery, zeroEnergySkippedWork: true, idleEnergy: 5 + recovery, capacityReached: true, tooltip: undefined });
+                assert.ok([result.recovery, result.workEnergy, result.restEnergy, result.idleEnergy].every(Number.isInteger));
+                assert.ok(result.tooltip.includes(`每轮恢复 ${recovery} 点体力`));
+                assert.equal(/每轮恢复\s+\d+\./.test(result.tooltip), false);
+                const recoveryCell = farmModal.locator('#farmHandsView .card').filter({ hasText: `Alex · Lv.${level}` }).getByRole('row').filter({ hasText: '体力恢复' }).locator('td').last();
+                assert.equal(await recoveryCell.innerText(), `${recovery} 点/轮`);
+            }
+        } finally {
+            await pageA.evaluate(() => {
+                App.game.farming.fromJSON(window.farmRecoverySmoke);
+                delete window.farmRecoverySmoke;
+            });
+        }
+        checks.push('农场助手 Lv.1 每轮恢复 1 点，Lv.2、Lv.49、Lv.50 每轮恢复 2 点；实际工作、零体力休息与空闲恢复均使用整数，界面与悬浮提示没有小数，并保持体力上限。');
         const actionCaps = await pageA.evaluate(() => {
             const riley = App.game.farming.farmHands.list.find(hand => hand.name === 'Riley');
             const initial = riley.efficiency;

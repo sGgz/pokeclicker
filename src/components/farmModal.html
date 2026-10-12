@@ -451,7 +451,7 @@
                     <p>首块田的 25 格全部解锁后，可用农田币逐块购买新田，最多 16 块。第 N 块田价格为 10,000 × (N − 1)²，新田直接解锁 25 格。库存和图鉴共用，变异、邻近光环和防枯萎效果仅在同一块田内生效。全局光环按种类取各田最强值。</p>
                     <p>同名助手共享等级经验，最高 Lv.50；各田的体力、配置和工资独立，每田最多雇 3 名。成功种植、收获、发起捕获分别获得 1、2、1 经验。升级增加速度、操作次数和体力上限，不自动补满体力。</p>
                     <p>初始不足 25 action 的助手随等级逐步提高，满级达到 25；初始 25 的助手在 Lv.1～49 保持 25，Lv.50 一次提升至 50；初始 50 的助手保持 50。收获与种植分别消耗一次 action。</p>
-                    <p>每轮恢复体力，恢复量随等级提升；有实际工作的轮次消耗 2 点体力。体力为零时先休息一轮。工资在休息期间照常支付，离线不模拟农田工作。</p>
+                    <p>每轮恢复量向上取整：Lv.1 恢复 1 点，Lv.2～Lv.50 恢复 2 点；有实际工作的轮次消耗 2 点体力。体力为零时先休息一轮。工资在休息期间照常支付，离线不模拟农田工作。</p>
                     <p>每块田独立记住搜索、种子选择和列表页码。上方按钮和键盘快捷键按批量范围执行，使用当前选中的树果或肥料；下方种植、收获、施肥按钮仅操作当前田。锁定格会跳过，批量种子不足时按田轮流分配。快捷键仅在农田主页面生效，输入时不触发，可在设置中修改。</p>
                     <p class="farm-hotkey-help">
                         <span>切田 <kbd data-bind="text: Settings.getSetting('hotkey.farm.previousFarm').observableValue()"></kbd> / <kbd data-bind="text: Settings.getSetting('hotkey.farm.nextFarm').observableValue()"></kbd></span>
@@ -577,7 +577,7 @@
                                         </tr>
                                         <tr>
                                             <td>体力恢复</td>
-                                            <td class="text-right" data-bind="text: `${$data.recovery.toFixed(2)} 点/轮`"></td>
+                                            <td class="text-right" data-bind="text: `${$data.recovery} 点/轮`"></td>
                                         </tr>
                                         <tr data-bind="tooltip: {
                                                 title: 'Automatically paid every hour while hired.',
