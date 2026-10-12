@@ -129,6 +129,8 @@ npm --prefix desktop run smoke
 
 冒烟测试使用 Playwright 的 Electron API、真实游戏和真实 Worker handler，只以本机 fixture 替代 GitHub 存储与网络目标。调试器在隔离测试进程中替换 `globalThis.fetch`；生产包没有测试服务器入口、认证后门或真实密码。测试通过 `--data-dir=绝对路径` 选择隔离目录，不接触默认用户数据，也不访问真实云档。截图和报告位于 `output/playwright/desktop/`，隔离数据位于 `output/desktop-tests/`；两者均被 Git 忽略。
 
+浏览器 fixture 使用本机 HTTPS 服务，保留生产登录 Cookie 的 `Secure`、`HttpOnly` 和 `SameSite` 约束；HTTP fixture 可能被浏览器拒绝保存 Cookie。`desktop/test/fixtures/localhost-test-*.pem` 是公开的测试自签名证书与配套密钥，仅测试浏览器上下文忽略该证书错误，不安装到系统信任库，不随生产客户端打包。桌面主进程的本机网络替身继续沿用隔离 HTTP 服务，两者共用真实 Worker handler。
+
 实际两台用户设备间的恢复验收仍按手册完成，测试替身不代表真实 GitHub 写入成功。
 
 ## 安全与更新边界

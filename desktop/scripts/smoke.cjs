@@ -7,6 +7,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const { createServer } = require('node:http');
+const { createServer: createHttpsServer } = require('node:https');
 const { once } = require('node:events');
 const { spawnSync } = require('node:child_process');
 
@@ -57,22 +58,31 @@ async function run() {
         },
     }) });
     let serverOrigin;
-    const server = createServer(async (incoming, outgoing) => {
+    let webOrigin;
+    const handleRequest = async (incoming, outgoing) => {
         if (!online) { incoming.socket.destroy(); return; }
         try {
             const chunks = []; for await (const chunk of incoming) chunks.push(chunk);
             const headers = new Headers();
             for (const [key, value] of Object.entries(incoming.headers)) if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(', ') : value);
-            if (headers.get('origin') === serverOrigin) headers.set('origin', origin);
+            if (headers.get('origin') === serverOrigin || headers.get('origin') === webOrigin) headers.set('origin', origin);
             const body = Buffer.concat(chunks);
             const response = await handler(new Request(origin + incoming.url, { method: incoming.method, headers, ...(body.length ? { body } : {}) }), fixture);
             requests.push({ method: incoming.method, path: incoming.url, status: response.status });
             outgoing.writeHead(response.status, Object.fromEntries(response.headers));
             outgoing.end(Buffer.from(await response.arrayBuffer()));
         } catch { outgoing.writeHead(500); outgoing.end('Test fixture error'); }
-    });
+    };
+    const server = createServer(handleRequest);
+    // 浏览器使用 HTTPS 保留真实的 Secure Cookie 约束；证书仅用于隔离测试，不加入系统信任库。
+    const webServer = createHttpsServer({
+        key: await fs.readFile(path.join(root, 'desktop/test/fixtures/localhost-test-key.pem')),
+        cert: await fs.readFile(path.join(root, 'desktop/test/fixtures/localhost-test-cert.pem')),
+    }, handleRequest);
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     serverOrigin = 'http://localhost:' + server.address().port;
+    await new Promise(resolve => webServer.listen(0, '127.0.0.1', resolve));
+    webOrigin = 'https://localhost:' + webServer.address().port;
     const dev = process.argv.includes('--dev');
     const backgroundTest = !process.argv.includes('--show-windows');
     const executableArgument = process.argv.find(value => value.startsWith('--exe='));
@@ -954,10 +964,11 @@ async function run() {
 
         // Browser fixture uses the same real Worker handler and the production website build.
         browser = await chromium.launch({ channel: process.env.PC_BROWSER_CHANNEL || 'msedge', headless: true });
-        const context = await browser.newContext();
-        await context.route('**/*', route => new URL(route.request().url()).origin === serverOrigin ? route.continue() : route.abort());
+        const context = await browser.newContext({ ignoreHTTPSErrors: true });
+        await context.route('**/*', route => new URL(route.request().url()).origin === webOrigin ? route.continue() : route.abort());
         const web = await context.newPage();
-        await web.goto(serverOrigin + '/');
+        lastPage = web;
+        await web.goto(webOrigin + '/');
         await web.getByLabel('游戏专用密码', { exact: true }).fill(password);
         await web.getByRole('button', { name: '登录游戏', exact: true }).click();
         await web.getByRole('link', { name: '进入游戏', exact: true }).click();
@@ -1125,6 +1136,7 @@ async function run() {
         }
         await browser?.close();
         server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+        webServer.closeAllConnections(); await new Promise(resolve => webServer.close(resolve));
     }
 }
 run().catch(error => { console.error(error.stack); process.exitCode = 1; });
