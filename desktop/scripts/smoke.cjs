@@ -779,7 +779,7 @@ async function run() {
         assert.equal(await pageA.evaluate(() => BattleFrontierRunner.started()), true);
         await pageA.evaluate(() => { for (let i = 0; i < 6; i++) BattleFrontierBattle.defeatPokemon(); });
         assert.equal(await pageA.evaluate(() => BattleFrontierRunner.automation.earnedPoints()), 4);
-        await autoPanel.screenshot({ path: path.join(output, 'battle-frontier-automation.png') });
+        await pageA.screenshot({ path: path.join(output, 'battle-frontier-automation.png') });
         await autoPanel.getByRole('button', { name: 'Stop Automation (Keep Current Run)', exact: true }).click();
         await pageA.waitForTimeout(1100);
         await pageA.evaluate(() => window.frontierSmoke.tick.call(BattleFrontierRunner));
