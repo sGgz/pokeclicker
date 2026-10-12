@@ -553,6 +553,10 @@ async function run() {
         await pageA.locator('#party-list-filters summary').click();
         await pageA.locator('#party-list-search').fill('9');
         await pageA.waitForFunction(() => PartyController.getSortedList().length === 1 && PartyController.getSortedList()[0].id === 9);
+        await pageA.waitForFunction(() => {
+            const rows = document.querySelectorAll('#pokemonListContainer .pokemon-row');
+            return rows.length === 1 && rows[0].textContent.includes('Blastoise');
+        }, undefined, { timeout: 5000 });
         assert.ok((await pageA.locator('#pokemonListContainer .pokemon-row').innerText()).includes('EVs:'));
         await pageA.locator('#party-display-value').selectOption(String(2));
         await pageA.waitForFunction(() => document.querySelector('#pokemonListContainer .pokemon-row')?.textContent.includes('Attack:'));
