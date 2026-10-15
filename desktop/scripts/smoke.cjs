@@ -248,6 +248,10 @@ async function run() {
         assert.equal(await pageA.evaluate(() => PrivateGameplay.drakeChestPriority()), undefined);
         await chestPriority.selectOption('epic');
         assert.equal(await pageA.evaluate(() => PrivateGameplay.drakeChestPriority()), 'epic');
+        const clearEnemies = pageA.locator('select[name="ggzz.private.drakeClearEnemies"]');
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.drakeClearEnemies()), false);
+        await clearEnemies.selectOption({ label: '开启' });
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.drakeClearEnemies()), true);
         await pageA.locator('select[name="ggzz.private.pricingMode"]').selectOption('base-price');
         assert.equal(await pageA.evaluate(() => PrivateGameplay.optimizedPathfinding()), true);
         assert.equal(await pageA.evaluate(() => PrivateGameplay.fixedItemPrices()), true);
@@ -258,6 +262,102 @@ async function run() {
         assert.equal(await pageA.evaluate(() => PrivateGameplay.guideFeeRate()), 0.01);
         await pageA.screenshot({ path: path.join(output, 'private-gameplay-settings.png') });
         await pageA.evaluate(() => new Promise(resolve => $('#settingsModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        // 雇用弹窗与设置页共享同一开关；全部操作仅作用于本次新建的隔离存档。
+        await pageA.evaluate(() => {
+            window.drakeTownSmoke = player.town;
+            player.town = TownList['Viridian Forest'];
+            return new Promise(resolve => $('#dungeonGuidesModal').one('shown.bs.modal', () => resolve()).modal('show'));
+        });
+        const hireClearEnemies = pageA.locator('#drake-clear-enemies');
+        assert.equal(await hireClearEnemies.locator('option:checked').textContent(), '开启');
+        await hireClearEnemies.selectOption({ label: '关闭' });
+        assert.equal(await pageA.evaluate(() => PrivateGameplay.drakeClearEnemies()), false);
+        await hireClearEnemies.selectOption({ label: '开启' });
+        await pageA.evaluate(() => new Promise(resolve => $('#dungeonGuidesModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        await pageA.evaluate(() => { player.town = window.drakeTownSmoke; delete window.drakeTownSmoke; });
+        const drakeRuns = await pageA.evaluate(() => {
+            const drake = DungeonGuides.list.find(guide => guide.name === 'Drake');
+            const saved = {
+                map: DungeonRunner.map, timeLeft: DungeonRunner.timeLeft(), fighting: DungeonRunner.fighting(),
+                finished: DungeonRunner.dungeonFinished(), catching: DungeonBattle.catching(), ticks: drake.ticks,
+                generateEnemy: DungeonBattle.generateNewEnemy, interaction: DungeonRunner.handleInteraction,
+                gameState: App.game.gameState, mode: Settings.getSetting('ggzz.private.guidePathfinding').value,
+            };
+            const results = [];
+            App.game.gameState = GameConstants.GameState.paused;
+            try {
+                for (const mode of ['official', 'optimized']) {
+                    for (const timeLeft of [10_000, 9_999]) {
+                        Settings.setSettingByName('ggzz.private.guidePathfinding', mode);
+                        const types = GameConstants.DungeonTileType;
+                        const map = new DungeonMap(5, () => ({ tier: 'epic', loot: null }));
+                        const tiles = map.board()[0];
+                        tiles.flat().forEach(tile => { tile.type(types.empty); tile.isVisited = true; tile.hasPlayer = false; });
+                        tiles[0][0].type(types.boss);
+                        tiles[0][2].type(types.chest);
+                        tiles[0][2].metadata = { tier: 'epic', loot: null };
+                        tiles[0][4].type(types.enemy);
+                        map.playerPosition(new Point(1, 0, 0));
+                        map.currentTile().hasPlayer = true;
+                        DungeonRunner.map = map;
+                        DungeonRunner.timeLeft(timeLeft);
+                        DungeonRunner.fighting(false);
+                        DungeonRunner.dungeonFinished(false);
+                        DungeonBattle.catching(false);
+                        DungeonGuidePlanner.reset();
+                        const events = [];
+                        let waitsForBattle = false;
+                        let waitsForCatch = false;
+                        // 固定遭遇和奖励结算，只核对成品中的真实移动、规划与助手交互顺序。
+                        DungeonBattle.generateNewEnemy = () => { events.push('enemy'); DungeonRunner.fighting(true); };
+                        DungeonRunner.handleInteraction = () => {
+                            if (map.currentTile().type() === types.chest) {
+                                events.push('chest');
+                                map.currentTile().type(types.empty);
+                            } else if (map.currentTile().type() === types.boss) events.push('boss');
+                            else throw new Error('Unexpected Drake fixture interaction');
+                        };
+                        const tick = () => { drake.ticks = drake.interval - GameConstants.DUNGEON_TICK; drake.tick(); };
+                        for (let step = 0; step < 15 && !events.includes('boss'); step++) {
+                            tick();
+                            if (DungeonRunner.fighting()) {
+                                const before = map.playerPosition();
+                                tick();
+                                waitsForBattle = map.playerPosition() === before;
+                                DungeonRunner.fighting(false);
+                                map.currentTile().type(types.empty);
+                                DungeonBattle.catching(true);
+                                tick();
+                                waitsForCatch = map.playerPosition() === before;
+                                DungeonBattle.catching(false);
+                            }
+                        }
+                        results.push({ mode, timeLeft, events, waitsForBattle, waitsForCatch });
+                    }
+                }
+                return results;
+            } finally {
+                DungeonRunner.map = saved.map;
+                DungeonRunner.timeLeft(saved.timeLeft);
+                DungeonRunner.fighting(saved.fighting);
+                DungeonRunner.dungeonFinished(saved.finished);
+                DungeonBattle.catching(saved.catching);
+                DungeonBattle.generateNewEnemy = saved.generateEnemy;
+                DungeonRunner.handleInteraction = saved.interaction;
+                drake.ticks = saved.ticks;
+                DungeonGuidePlanner.reset();
+                Settings.setSettingByName('ggzz.private.guidePathfinding', saved.mode);
+                App.game.gameState = saved.gameState;
+            }
+        });
+        for (const result of drakeRuns) {
+            assert.deepEqual(result.events, result.timeLeft === 10_000 ? ['chest', 'enemy', 'boss'] : ['chest', 'boss']);
+            if (result.timeLeft === 10_000) {
+                assert.equal(result.waitsForBattle, true);
+                assert.equal(result.waitsForCatch, true);
+            }
+        }
+        checks.push('Drake 清怪默认关闭，设置页和雇用弹窗同步；官方与优化模式均先开宝箱、再清怪、最后挑战 BOSS，等待战斗和捕捉结束，剩余 9999 毫秒时跳过清怪。');
         const autoClickBefore = await pageA.evaluate(() => ({ clicks: App.game.statistics.clickAttacks(), time: performance.now() }));
         await pageA.locator('#auto-click-toggle').click();
         await pageA.waitForFunction(before => App.game.statistics.clickAttacks() >= before + 4, autoClickBefore.clicks, { timeout: 3000 });
@@ -995,6 +1095,8 @@ async function run() {
             return { enabled: settings['ggzz.private.autoClickAttack'], rate: settings['ggzz.private.autoClickRate'] };
         }, keyA), { enabled: false, rate: 20 });
         checks.push('Auto click enabled state and chosen frequency remain in the saved profile after a desktop restart.');
+        assert.equal(await pageA.evaluate(key => JSON.parse(localStorage.getItem('settings' + key))['ggzz.private.drakeClearEnemies'], keyA), true);
+        checks.push('Drake 清怪开关在隔离桌面实例关闭并重启后仍然保存。');
         assert.equal(await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key)).profile.name, keyA), 'Desktop fixture A');
         const restoredOrbs = await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key))['dream-orbs'], keyA);
         assert.equal(restoredOrbs.orbs.find(orb => orb.color === 'Pink').amount, 9);
@@ -1037,6 +1139,7 @@ async function run() {
         assert.equal(remote.envelope.payload.settings['ggzz.private.pricingMode'], 'base-price');
         assert.equal(remote.envelope.payload.settings['ggzz.private.guidePathfinding'], 'optimized');
         assert.equal(remote.envelope.payload.settings['ggzz.private.drakeChestPriority'], 'epic');
+        assert.equal(remote.envelope.payload.settings['ggzz.private.drakeClearEnemies'], true);
         assert.equal(remote.envelope.payload.settings['ggzz.private.guideFeeRate'], 0.01);
         assert.equal(remote.envelope.payload.settings['ggzz.private.fixedVitaminPurchased'], true);
         checks.push('Desktop uploads a real game snapshot through the unchanged Worker protocol and receives a revision/SHA receipt.');
@@ -1076,6 +1179,7 @@ async function run() {
         assert.equal(restoredSettings['ggzz.private.pricingMode'], 'base-price');
         assert.equal(restoredSettings['ggzz.private.guidePathfinding'], 'optimized');
         assert.equal(restoredSettings['ggzz.private.drakeChestPriority'], 'epic');
+        assert.equal(restoredSettings['ggzz.private.drakeClearEnemies'], true);
         assert.equal(restoredSettings['ggzz.private.guideFeeRate'], 0.01);
         assert.equal(restoredSettings['ggzz.private.fixedVitaminPurchased'], true);
         assert.equal(restoredSettings['ggzz.private.hatcherySlotLimit'], 4);
