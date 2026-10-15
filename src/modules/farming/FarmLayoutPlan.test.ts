@@ -48,6 +48,71 @@ describe('农场布局分享码与持久化意图', () => {
         expect(FarmLayoutPlan.parse(encoded(original).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''))).toEqual(original);
     });
 
+    it('原生分享与重复规范化保留空位突变和原株进化的明确目标', () => {
+        const original = FarmLayoutPlan.blank('明确目标');
+        original.cells[0] = { role: 'mutation', berry: BerryType.None, targetBerry: BerryType.Lum, mulch: MulchType.Surprise_Mulch, freezeStage: PlotStage.Berry };
+        original.cells[1] = { role: 'evolve', berry: BerryType.Passho, targetBerry: BerryType.Yache, mulch: MulchType.Surprise_Mulch, freezeStage: PlotStage.Berry };
+        expect(FarmLayoutPlan.normalize(original)).toEqual(original);
+        expect(FarmLayoutPlan.parse(JSON.stringify(original))).toEqual(original);
+        expect(FarmLayoutPlan.parse(encoded(original))).toEqual(original);
+        expect(FarmLayoutPlan.normalize(FarmLayoutPlan.normalize(original))).toEqual(original);
+    });
+
+    it.each(['lum-mutation', 'passho-mutation', 'liechi-mutation'])('完整旧预设按布局拓扑补全突变目标：%s', id => {
+        const current = FarmLayoutPlan.createPreset(id);
+        const legacy = { ...current, name: '改过的名称', cells: current.cells.map(cell => ({ ...cell, targetBerry: BerryType.None })) };
+        const normalized = FarmLayoutPlan.normalize(legacy);
+        expect(normalized.name).toBe('改过的名称');
+        expect(normalized.cells).toEqual(current.cells);
+        expect(FarmLayoutPlan.parse(JSON.stringify(legacy)).cells).toEqual(current.cells);
+        expect(legacy.cells.every(cell => cell.targetBerry === BerryType.None)).toBe(true);
+    });
+
+    it('补全已知预设的缺失目标时保留手工明确指定的竞争目标', () => {
+        const legacy = FarmLayoutPlan.createPreset('lum-mutation');
+        legacy.cells.filter(cell => cell.role === 'mutation').forEach(cell => { cell.targetBerry = BerryType.None; });
+        legacy.cells[6].targetBerry = BerryType.Persim;
+        const normalized = FarmLayoutPlan.normalize(legacy);
+        expect(normalized.cells[6].targetBerry).toBe(BerryType.Persim);
+        [8, 16, 18].forEach(index => expect(normalized.cells[index].targetBerry).toBe(BerryType.Lum));
+    });
+
+    it.each(['role', 'berry', 'mulch'])('改过任意格的%s就不按完整预设猜测目标', field => {
+        const legacy = FarmLayoutPlan.createPreset('lum-mutation');
+        legacy.cells.filter(cell => cell.role === 'mutation').forEach(cell => { cell.targetBerry = BerryType.None; });
+        if (field === 'role') { legacy.cells[0].role = 'cycle'; }
+        if (field === 'berry') { legacy.cells[0].berry = BerryType.Oran; }
+        if (field === 'mulch') { legacy.cells[0].mulch = MulchType.None; }
+        expect(FarmLayoutPlan.normalize(legacy).cells.filter(cell => cell.role === 'mutation').every(cell => cell.targetBerry === BerryType.None)).toBe(true);
+    });
+
+    it('布局名称不能用于猜测目标，未知分享码先保留待选并提示施肥门槛', () => {
+        const source = simulator({ mulch: MulchType.Surprise_Mulch });
+        const imported = FarmLayoutPlan.parse(JSON.stringify(source));
+        imported.name = FarmLayoutPlan.presets.find(preset => preset.id === 'lum-mutation').name;
+        const normalized = FarmLayoutPlan.normalize(imported);
+        expect(normalized.cells[0]).toMatchObject({ role: 'mutation', targetBerry: BerryType.None });
+        expect(normalized.notes.some(note => note.includes('先选择目标树果') && note.includes('Surprise 或 Amaze'))).toBe(true);
+        expect(FarmLayoutPlan.normalize(normalized)).toEqual(normalized);
+    });
+
+    it('不从旧 Enigma 阵猜测个人目标，提示按本存档重新确认', () => {
+        const plan = FarmLayoutPlan.createPreset('enigma-directions', undefined, [BerryType.Pomeg, BerryType.Kelpsy, BerryType.Qualot, BerryType.Hondew]);
+        plan.cells.filter(cell => cell.role === 'mutation').forEach(cell => { cell.targetBerry = BerryType.None; });
+        const normalized = FarmLayoutPlan.normalize(plan);
+        expect(normalized.cells.filter(cell => cell.role === 'mutation').every(cell => cell.targetBerry === BerryType.None)).toBe(true);
+        expect(normalized.notes.some(note => note.includes('Enigma') && note.includes('本存档'))).toBe(true);
+    });
+
+    it('自动提示不会使最多 20 条自定义说明变成无法再次读取的布局', () => {
+        const plan = FarmLayoutPlan.blank();
+        plan.cells[0].role = 'mutation';
+        plan.notes = Array(20).fill('自定义说明');
+        const normalized = FarmLayoutPlan.normalize(plan);
+        expect(normalized.notes).toHaveLength(20);
+        expect(FarmLayoutPlan.normalize(normalized)).toEqual(normalized);
+    });
+
     it('接受带换行的 Wiki 分享码', () => {
         expect(FarmLayoutPlan.parse(`  ${WIKI_LUM.slice(0, 400)}\n${WIKI_LUM.slice(400)}  `).cells).toEqual(FarmLayoutPlan.parse(WIKI_LUM).cells);
     });
@@ -109,6 +174,14 @@ describe('农场布局分享码与持久化意图', () => {
         expect(result.cells[1]).not.toBe(result.cells[2]);
     });
 
+    it('保留与生产格继续清除无关目标字段，不把它解释成突变角色', () => {
+        const plan = FarmLayoutPlan.blank();
+        plan.cells[0] = { role: 'keep', berry: BerryType.Passho, targetBerry: BerryType.Yache, mulch: MulchType.None, freezeStage: PlotStage.Berry };
+        plan.cells[1] = { ...plan.cells[0], role: 'cycle' };
+        const normalized = FarmLayoutPlan.normalize(plan);
+        expect(normalized.cells.slice(0, 2).map(cell => cell.targetBerry)).toEqual([BerryType.None, BerryType.None]);
+    });
+
     it.each([
         '', '   ', 'not a layout', '{}', '[]', '{"version":2}', 'e30=', '!!!!', 'null', 'a'.repeat(64_001),
     ])('拒绝非法或过长的分享内容：%s', value => {
@@ -153,6 +226,15 @@ describe('农场布局分享码与持久化意图', () => {
 });
 
 describe('Wiki 布局预设结构', () => {
+    it.each([
+        ['lum-mutation', BerryType.Lum], ['passho-mutation', BerryType.Passho],
+        ['liechi-mutation', BerryType.Liechi], ['enigma-directions', BerryType.Enigma],
+    ])('%s 的突变格记录主目标，不使用竞争产物作为施肥依据', (id, target) => {
+        const cells = FarmLayoutPlan.createPreset(id as string).cells.filter(cell => cell.role === 'mutation');
+        expect(cells.length).toBeGreaterThan(0);
+        expect(cells.every(cell => cell.targetBerry === target)).toBe(true);
+    });
+
     it('所有预设都能独立规范化且具有来源', () => {
         FarmLayoutPlan.presets.forEach(preset => {
             const plan = FarmLayoutPlan.createPreset(preset.id, BerryType.Liechi, [BerryType.Pomeg, BerryType.Kelpsy, BerryType.Qualot, BerryType.Hondew]);

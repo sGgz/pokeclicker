@@ -39,10 +39,10 @@ class FarmLayoutController {
         return ['passho-rows', 'passho-ring', 'wacan-lum'].includes(this.selectedPreset());
     }
 
-    public static berryOptions() {
+    public static berryOptions(emptyText = '请选择树果') {
         const farming = App.game.farming;
         return [
-            { value: BerryType.None, text: '请选择树果' },
+            { value: BerryType.None, text: emptyText },
             ...Object.values(BerryType).filter((berry): berry is BerryType => typeof berry === 'number' && berry >= 0).map(berry => ({
                 value: berry,
                 text: `${BerryType[berry]} · ${farming.unlockedBerries[berry]() ? farming.berryInventory[berry]().toLocaleString('en-US') : '未解锁'}`,
@@ -117,7 +117,7 @@ class FarmLayoutController {
             this.layout().setPlan(FarmLayoutPlan.parse(this.importText()));
             this.selectedCell(0);
             this.hasError(false);
-            this.feedback('导入成功，请核对每格角色后启用。模拟器中的植物年龄不会写入农田。');
+            this.feedback('导入成功，请核对每格角色和突变目标后启用。未指定目标时停止追加突变肥，模拟器中的植物年龄不会写入农田。');
         } catch (error) {
             this.showError(error);
         }
@@ -161,7 +161,7 @@ class FarmLayoutController {
             return '隔离留空';
         }
         if (cell.role === 'mutation') {
-            return cell.targetBerry >= 0 ? BerryType[cell.targetBerry] : '等待突变';
+            return cell.targetBerry >= 0 ? `等待 ${BerryType[cell.targetBerry]}` : '未指定突变目标';
         }
         if (cell.role === 'evolve') {
             return `${cell.berry >= 0 ? BerryType[cell.berry] : '未选'} → ${cell.targetBerry >= 0 ? BerryType[cell.targetBerry] : '未选'}`;
@@ -179,6 +179,9 @@ class FarmLayoutController {
         }
         if (cell.mulch === MulchType.Rich_Mulch) {
             return '收获前 Rich';
+        }
+        if (['mutation', 'evolve'].includes(cell.role) && [MulchType.Surprise_Mulch, MulchType.Amaze_Mulch].includes(cell.mulch)) {
+            return `有目标突变机会时 ${cell.mulch === MulchType.Surprise_Mulch ? 'Surprise' : 'Amaze'}`;
         }
         return this.mulches.find(mulch => mulch.value === cell.mulch)?.text ?? '不追加肥料';
     }

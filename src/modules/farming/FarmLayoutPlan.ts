@@ -27,6 +27,7 @@ const FREEZE = MulchType.Freeze_Mulch;
 const SURPRISE = MulchType.Surprise_Mulch;
 const RICH = MulchType.Rich_Mulch;
 const BOOST = MulchType.Boost_Mulch;
+const UNKNOWN_MUTATION_TARGET_NOTE = '分享码不包含明确的突变目标；未识别的突变格需先选择目标树果，助手才会追加 Surprise 或 Amaze。Enigma 请按本存档重新生成个人配方或手动确认目标。';
 
 function record(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -164,6 +165,34 @@ export default class FarmLayoutPlan {
     }
 
     static normalize(value: unknown): LayoutPlan {
+        const plan = this.normalizePlan(value);
+        if (plan.cells.some(item => item.role === 'mutation' && item.targetBerry === NONE)) {
+            // 旧版没有保存空位的突变目标，只按完整布局识别固定预设，不能根据名称或当前可突变产物猜测。
+            const known = ['lum-mutation', 'passho-mutation', 'liechi-mutation']
+                .map(id => this.createPreset(id))
+                .find(preset => preset.cells.every((item, index) => {
+                    const actual = plan.cells[index];
+                    return actual.role === item.role && actual.berry === item.berry && actual.mulch === item.mulch;
+                }));
+            if (known) {
+                plan.cells.forEach((item, index) => {
+                    if (item.role === 'mutation' && item.targetBerry === NONE) {
+                        item.targetBerry = known.cells[index].targetBerry;
+                    }
+                });
+            }
+        }
+        const notes = plan.notes?.filter(note => note !== UNKNOWN_MUTATION_TARGET_NOTE) ?? [];
+        if (notes.length < 20 && plan.cells.some(item => item.role === 'mutation' && item.targetBerry === NONE)) {
+            notes.push(UNKNOWN_MUTATION_TARGET_NOTE);
+        }
+        if (notes.length || plan.notes !== undefined) {
+            plan.notes = notes;
+        }
+        return plan;
+    }
+
+    private static normalizePlan(value: unknown): LayoutPlan {
         if (!record(value) || value.version !== 1) {
             throw new Error('布局版本无效，仅支持版本 1');
         }
@@ -190,7 +219,7 @@ export default class FarmLayoutPlan {
             if (role === 'ignore' || role === 'empty') {
                 return cell(role);
             }
-            return cell(role, role === 'mutation' ? NONE : berry, mulch, role === 'evolve' ? target : NONE);
+            return cell(role, role === 'mutation' ? NONE : berry, mulch, ['mutation', 'evolve'].includes(role) ? target : NONE);
         });
         const notes = checkedNotes(value.notes);
         return { version: 1, name: value.name.trim(), cells, ...(notes === undefined ? {} : { notes }) };
@@ -242,23 +271,23 @@ export default class FarmLayoutPlan {
         }
         const plan: LayoutPlan = { version: 1, name: preset.name, cells: Array.from({ length: PLOT_COUNT }, () => cell('empty')) };
         const keep = (index: number, berry: number, mulch = MulchType.None) => { plan.cells[index] = cell('keep', berry, mulch); };
-        const mutation = (index: number) => { plan.cells[index] = cell('mutation', NONE, SURPRISE); };
+        const mutation = (index: number, target: BerryType) => { plan.cells[index] = cell('mutation', NONE, SURPRISE, target); };
         if (id === 'lum-mutation') {
             [7, 6, 4, 6, 7, 5, -1, 2, -1, 5, 3, 1, 0, 1, 3, 5, -1, 2, -1, 5, 7, 6, 4, 6, 7].forEach((berry, index) => {
-                if (berry === NONE) { mutation(index); } else { keep(index, berry, FREEZE); }
+                if (berry === NONE) { mutation(index, BerryType.Lum); } else { keep(index, berry, FREEZE); }
             });
             plan.notes = ['短寿命原料可能在慢助手下一轮前枯萎；可先手工完成成熟和冻结，再由助手续肥。'];
         } else if (id === 'passho-mutation') {
             [1, -1, 6, -1, 1, 21, -1, 44, -1, 21, -1, -1, -1, -1, -1, 6, -1, 1, -1, 6, 44, -1, 21, -1, 44].forEach((berry, index) => {
                 if ([1, 3, 6, 8, 11, 13, 16, 18, 21, 23].includes(index)) {
-                    mutation(index);
+                    mutation(index, BerryType.Passho);
                 } else if (berry !== NONE) {
                     keep(index, berry, [BerryType.Chesto, BerryType.Oran].includes(berry) ? FREEZE : MulchType.None);
                 }
             });
         } else if (id === 'liechi-mutation') {
             plan.cells.forEach((_, index) => {
-                if ([12, 13].includes(index)) { mutation(index); } else { keep(index, BerryType.Passho); }
+                if ([12, 13].includes(index)) { mutation(index, BerryType.Liechi); } else { keep(index, BerryType.Passho); }
             });
             plan.notes = ['需要完成 Land vs. Water 任务线；23 株 Passho 必须同时成熟。'];
         } else if (id === 'yache-mutation') {
@@ -289,11 +318,11 @@ export default class FarmLayoutPlan {
             const berries = enigmaBerries ?? [NONE, NONE, NONE, NONE];
             berries.forEach(berry => berryNumber(berry, 'Enigma 四向原料'));
             [6, 18].forEach(index => {
-                mutation(index);
+                mutation(index, BerryType.Enigma);
                 [index - 5, index - 1, index + 1, index + 5].forEach((position, direction) => keep(position, berries[direction], FREEZE));
             });
             plan.notes = ['四向顺序为北、西、东、南，只能使用本存档的 Enigma 个人配方；未指定的原料需补全后才能启用。'];
         }
-        return this.normalize(plan);
+        return this.normalizePlan(plan);
     }
 }

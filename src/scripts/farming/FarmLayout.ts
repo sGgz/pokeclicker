@@ -9,6 +9,8 @@ type FarmLayoutAction = {
     berry?: number;
     mulch?: number;
     amount?: number;
+    growSeconds?: number;
+    deadlineSeconds?: number;
 };
 
 class FarmLayout {
@@ -79,7 +81,112 @@ class FarmLayout {
             || (plots[index]?.berry === cell.berry && plots[index].stage() === PlotStage.Berry));
     }
 
-    private desiredMulch(cell: FarmLayoutCell, plot: Plot): number {
+    private mutationOpportunity(index: number, cell: FarmLayoutCell): { ready: boolean; reason: string } {
+        const plot = App.game.farming.getFarmPlots(this.farmId)[index];
+        if (cell.role === 'mutation' && plot.berry !== BerryType.None) {
+            return { ready: false, reason: '突变产物正在生长，不追加突变肥料' };
+        }
+        if (cell.targetBerry < 0) {
+            return { ready: false, reason: '请选择突变目标，未指定目标时不追加突变肥料' };
+        }
+        const definitions = App.game.farming.mutations.filter(mutation => mutation.mutatedBerry === cell.targetBerry);
+        if (!definitions.length) {
+            return { ready: false, reason: '没有匹配目标的突变配方，不追加突变肥料' };
+        }
+        let unlocked = false;
+        let eligible = false;
+        // Enigma 查询会重设共用种子，资格预览必须恢复随机数状态。
+        const previousSeed = SeededRand.state;
+        try {
+            const ready = definitions.some(definition => {
+                const mutation = definition.forFarm(this.farmId);
+                if (!mutation.unlocked) {
+                    return false;
+                }
+                unlocked = true;
+                if (!mutation.getMutationPlots().includes(index)) {
+                    return false;
+                }
+                eligible = true;
+                return mutation.getTotalMutationChance(index) > 0;
+            });
+            if (ready) {
+                return { ready: true, reason: `已具备 ${BerryType[cell.targetBerry]} 突变机会` };
+            }
+        } finally {
+            SeededRand.state = previousSeed;
+        }
+        return { ready: false, reason: !unlocked ? '目标配方尚未解锁，检查原料和任务条件'
+            : eligible ? '当前目标突变概率为零，不追加突变肥料' : '目标配方条件未满足，不追加突变肥料' };
+    }
+
+    private isTimingSource(cell: FarmLayoutCell): boolean {
+        return (cell.role === 'keep' || cell.role === 'evolve')
+            && this.plan().cells.some(candidate => candidate.role === 'mutation' || candidate.role === 'evolve');
+    }
+
+    private maturitySeconds(index: number, cell: FarmLayoutCell): number {
+        const farming = App.game.farming;
+        const plot = farming.getFarmPlots(this.farmId)[index];
+        if (!plot?.isUnlocked || cell.berry < 0 || !this.matches(cell, plot)) {
+            return Infinity;
+        }
+        if (cell.role === 'evolve' && plot.berry === cell.targetBerry) {
+            return 0;
+        }
+        if (plot.berry !== BerryType.None && plot.stage() === PlotStage.Berry) {
+            return 0;
+        }
+        if (plot.berry === BerryType.None && (plot.isSafeLocked || !this.owner(index) || !farming.unlockedBerries[cell.berry]?.() || !farming.hasBerry(cell.berry))) {
+            return Infinity;
+        }
+        const multiplier = farming.getGrowthMultiplier() * plot.getGrowthMultiplier(PlotStage.Seed);
+        if (!(multiplier > 0) || !Number.isFinite(multiplier)) {
+            return Infinity;
+        }
+        const age = plot.berry === BerryType.None ? 0 : plot.age;
+        return Math.max(0, BerryList[cell.berry].growthTime[PlotStage.Bloom] - age) / multiplier;
+    }
+
+    private plantingSchedule(index: number, cell: FarmLayoutCell): { wait: number; growSeconds: number; reason?: string } {
+        if (!this.isTimingSource(cell)) {
+            return { wait: 0, growSeconds: 0 };
+        }
+        const growSeconds = this.maturitySeconds(index, cell);
+        if (!Number.isFinite(growSeconds)) {
+            return { wait: Infinity, growSeconds, reason: '原料格无法生长或播种，检查冻结肥料、锁定、种子和助手' };
+        }
+        const sourceTimes = this.plan().cells.map((source, position) => this.isTimingSource(source) ? this.maturitySeconds(position, source) : 0);
+        if (sourceTimes.some(time => !Number.isFinite(time))) {
+            return { wait: Infinity, growSeconds, reason: '突变原料存在阻塞，等待处理错种、冻结幼苗、缺种或未分配的格子' };
+        }
+        return { wait: Math.max(0, Math.max(...sourceTimes) - growSeconds), growSeconds };
+    }
+
+    private freezeTimingBlock(index: number, cell: FarmLayoutCell, hand: FarmHand): string | undefined {
+        if (!this.isTimingSource(cell) || cell.mulch !== MulchType.Freeze_Mulch) {
+            return undefined;
+        }
+        if (cell.berry !== BerryType.Petaya && App.game.farming.berryInFarm(BerryType.Petaya, PlotStage.Berry, true, this.farmId)) {
+            return undefined;
+        }
+        const plot = App.game.farming.getFarmPlots(this.farmId)[index];
+        const growSeconds = this.maturitySeconds(index, cell);
+        const decay = App.game.farming.getGrowthMultiplier() * plot.getGrowthMultiplier(PlotStage.Berry);
+        if (!(decay > 0) || !Number.isFinite(growSeconds)) {
+            return undefined;
+        }
+        const ripeSeconds = (BerryList[cell.berry].growthTime[PlotStage.Berry] - BerryList[cell.berry].growthTime[PlotStage.Bloom]) / decay;
+        const cycle = Math.ceil(hand.workTick / GameConstants.TICK_TIME) * GameConstants.TICK_TIME / GameConstants.SECOND;
+        const firstWork = hand.energy() + hand.recovery <= FarmHand.WORK_ENERGY_COST ? cycle * 2 : cycle;
+        const firstRipeWork = Math.max(firstWork, Math.ceil(growSeconds / cycle) * cycle);
+        if (firstRipeWork + GameConstants.TICK_TIME / GameConstants.SECOND >= growSeconds + ripeSeconds) {
+            return '当前助手来不及首次冻结此原料，暂停播种；请改派更快助手或手动完成成熟冻结';
+        }
+        return undefined;
+    }
+
+    private desiredMulch(cell: FarmLayoutCell, plot: Plot, index: number): number {
         if (cell.role === 'ignore' || cell.role === 'empty') {
             return MulchType.None;
         }
@@ -97,6 +204,11 @@ class FarmLayout {
         if (cell.mulch === MulchType.Rich_Mulch && !this.shouldHarvest(cell, plot)) {
             return MulchType.None;
         }
+        const mutationBoost = (cell.role === 'mutation' || cell.role === 'evolve')
+            && (cell.mulch === MulchType.Surprise_Mulch || cell.mulch === MulchType.Amaze_Mulch);
+        if ((mutationBoost || (cell.role === 'mutation' && plot.berry === BerryType.None)) && !this.mutationOpportunity(index, cell).ready) {
+            return MulchType.None;
+        }
         return cell.mulch;
     }
 
@@ -104,6 +216,14 @@ class FarmLayout {
         const count = this.plan().cells.filter((cell, index) => cell.role !== 'ignore' && cell.role !== 'empty' && this.owner(index) === hand).length;
         // 预留一次巡田和体力恢复时间，续肥不能只够到紧接着的下一轮。
         return (Math.ceil(count / Math.max(1, hand.efficiency)) + 1) * hand.workTick / GameConstants.SECOND * 2 + 30;
+    }
+
+    private freezeDeadlineSeconds(plot: Plot): number {
+        if (plot.mulch === MulchType.Freeze_Mulch) {
+            return plot.mulchTimeLeft * App.game.farming.getMulchDurationMultiplier();
+        }
+        const decay = App.game.farming.getGrowthMultiplier() * plot.getGrowthMultiplier(PlotStage.Berry);
+        return decay > 0 ? Math.max(0, BerryList[plot.berry].growthTime[PlotStage.Berry] - plot.age) / decay : Infinity;
     }
 
     private nextAction(index: number, hand: FarmHand): FarmLayoutAction | undefined {
@@ -115,7 +235,11 @@ class FarmLayout {
         }
         if (plot.berry === BerryType.None && ['keep', 'cycle', 'evolve'].includes(cell.role)) {
             if (farming.unlockedBerries[cell.berry]?.() && farming.hasBerry(cell.berry)) {
-                return { index, kind: 'plant', berry: cell.berry, priority: 2 };
+                const schedule = this.plantingSchedule(index, cell);
+                if (schedule.wait > 0.001 || this.freezeTimingBlock(index, cell, hand)) {
+                    return undefined;
+                }
+                return { index, kind: 'plant', berry: cell.berry, priority: 2, growSeconds: schedule.growSeconds };
             }
             return undefined;
         }
@@ -123,7 +247,7 @@ class FarmLayout {
         if (harvest && cell.role === 'cycle' && !this.supportsReady()) {
             return undefined;
         }
-        const mulch = this.desiredMulch(cell, plot);
+        const mulch = this.desiredMulch(cell, plot, index);
         if (mulch !== MulchType.None) {
             const compatible = plot.mulch === MulchType.None || plot.mulch === mulch;
             const duration = farming.getMulchDurationMultiplier();
@@ -131,7 +255,10 @@ class FarmLayout {
             const needed = plot.mulch !== mulch || (mulch !== MulchType.Rich_Mulch && plot.mulchTimeLeft <= window);
             if (compatible && needed && farming.hasMulch(mulch)) {
                 const amount = mulch === MulchType.Rich_Mulch ? 1 : Math.max(1, Math.ceil((window * 2 - plot.mulchTimeLeft) / GameConstants.MULCH_USE_TIME));
-                return { index, kind: 'mulch', mulch, amount, priority: mulch === MulchType.Freeze_Mulch ? 0 : harvest ? 1 : 3 };
+                return {
+                    index, kind: 'mulch', mulch, amount, priority: mulch === MulchType.Freeze_Mulch ? 0 : harvest ? 1 : 3,
+                    deadlineSeconds: mulch === MulchType.Freeze_Mulch ? this.freezeDeadlineSeconds(plot) : undefined,
+                };
             }
             if (harvest && mulch === MulchType.Rich_Mulch && plot.mulch !== mulch) {
                 return undefined;
@@ -151,8 +278,11 @@ class FarmLayout {
         const farming = App.game.farming;
         while (result.actions < budget) {
             const actions = this.plan().cells.map((_, index) => this.nextAction(index, hand)).filter((action): action is FarmLayoutAction => !!action);
-            // 同优先级轮流巡格，防止低效率助手总照顾第一格而饿死后面的格子。
-            actions.sort((left, right) => left.priority - right.priority || ((left.index - this.nextIndex + 25) % 25) - ((right.index - this.nextIndex + 25) % 25));
+            // 冻结先抢救将枯萎或将断肥的原料，其余同优先级轮流巡格。
+            actions.sort((left, right) => left.priority - right.priority
+                || (left.deadlineSeconds ?? Infinity) - (right.deadlineSeconds ?? Infinity)
+                || (right.growSeconds ?? 0) - (left.growSeconds ?? 0)
+                || ((left.index - this.nextIndex + 25) % 25) - ((right.index - this.nextIndex + 25) % 25));
             const action = actions[0];
             if (!action) {
                 break;
@@ -214,9 +344,26 @@ class FarmLayout {
             if (!farming.hasBerry(cell.berry)) {
                 return `缺少 ${BerryType[cell.berry]} 种子`;
             }
+            const freezeBlock = this.freezeTimingBlock(index, cell, hand);
+            if (freezeBlock) {
+                return freezeBlock;
+            }
+            const schedule = this.plantingSchedule(index, cell);
+            if (schedule.reason) {
+                return schedule.reason;
+            }
+            if (schedule.wait > 0.001) {
+                return `错峰播种：约 ${GameConstants.formatSecondsToTime(Math.ceil(schedule.wait))} 后进入种植窗口，等待长周期原料`;
+            }
             return `等待 ${hand.name} 播种`;
         }
-        const mulch = this.desiredMulch(cell, plot);
+        if ((cell.role === 'mutation' && plot.berry === BerryType.None) || (cell.role === 'evolve' && plot.berry === cell.berry)) {
+            const opportunity = this.mutationOpportunity(index, cell);
+            if (!opportunity.ready) {
+                return opportunity.reason;
+            }
+        }
+        const mulch = this.desiredMulch(cell, plot, index);
         if (mulch !== MulchType.None) {
             if (plot.mulch !== MulchType.None && plot.mulch !== mulch) {
                 return '等待现有肥料耗尽，不自动铲肥';
@@ -229,7 +376,7 @@ class FarmLayout {
             return '预览中，启用后由助手执行';
         }
         if (cell.role === 'mutation' && plot.berry === BerryType.None) {
-            return '保持空位，等待游戏规则触发突变';
+            return `已具备 ${BerryType[cell.targetBerry]} 突变机会，保持空位等待游戏判定`;
         }
         if (this.shouldHarvest(cell, plot)) {
             if (cell.role === 'cycle' && !this.supportsReady()) {

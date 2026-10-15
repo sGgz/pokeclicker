@@ -15,11 +15,15 @@ import FarmingTool from '../enums/FarmingTool';
 import SizeUnits from '../enums/SizeUnits';
 import { BerryList } from '../farming/BerryList';
 import FarmLayoutPlan from '../farming/FarmLayoutPlan';
+import SeededRand from '../utilities/SeededRand';
 
 const scripts = [
     'FarmHand.ts', 'Plot.ts', 'FarmLayout.ts', 'mutation/Mutation.ts',
-    'mutation/mutationTypes/GrowMutation.ts', 'mutation/mutationTypes/FieldMutation.ts',
-    'Farming.ts', 'FarmController.ts',
+    'mutation/mutationTypes/GrowMutation.ts', 'mutation/mutationTypes/GrowNearMutation.ts',
+    'mutation/mutationTypes/GrowNearBerryMutation.ts', 'mutation/mutationTypes/FieldMutation.ts',
+    'mutation/mutationTypes/EvolveMutation.ts', 'mutation/mutationTypes/EvolveNearMutation.ts',
+    'mutation/mutationTypes/EvolveNearBerryStrictMutation.ts', 'mutation/mutationTypes/EnigmaMutation.ts',
+    'Farming.ts', 'FarmController.ts', 'FarmLayoutController.ts',
 ].map(file => transpileModule(readFileSync(`src/scripts/farming/${file}`, 'utf8'), {
     compilerOptions: { target: ScriptTarget.ES2020 },
 }).outputText).join('\n');
@@ -48,15 +52,15 @@ function setup() {
         NotificationOption: { info: 0, warning: 1, success: 2, danger: 3 },
         NotificationSetting: { Farming: { farm_hand: 0 } },
     };
-    const classes = runInNewContext(`${scripts}\n({ Farming, FarmHands, FarmHand, FarmController, FieldMutation });`, {
+    const classes = runInNewContext(`${scripts}\n({ Farming, FarmHands, FarmHand, FarmController, FarmLayoutController, GrowNearBerryMutation, FieldMutation, EvolveNearBerryStrictMutation, EnigmaMutation });`, {
         ko, GameConstants, GameHelper, Amount, BerryType, BerryList, MulchType, PlotStage, AuraType, FarmNotificationType, FarmingTool, SizeUnits, FarmLayoutPlan,
         App: app, Notifier: notification, NotificationConstants: constants,
         TotalBerriesUnlockedRequirement: requirement, UniqueItemOwnedRequirement: requirement,
-        SeededRand: { seed: vi.fn(), intBetween: () => 1 },
+        SeededRand,
         Rand: { chance: () => false },
         WandererPokemon: { fromJSON: () => undefined },
         OakItemType: { Sprayduck: 0, Sprinklotad: 1, Squirtbottle: 2 },
-        MultiplierDecreaser: { Berry: 0 }, player: { lowerItemMultipliers: vi.fn() },
+        MultiplierDecreaser: { Berry: 0 }, player: { lowerItemMultipliers: vi.fn(), trainerId: '12345' },
         Settings: { getSetting: () => ({ observableValue: () => false }) },
         LogBookTypes: { OTHER: 0 }, createLogContent: { unableToPayFarmHand: () => '' },
     });
@@ -108,7 +112,446 @@ function enableLayout(farming, cells: Record<number, Record<string, unknown>>, f
     return layout;
 }
 
+function advanceLayoutFarm(farming, seconds: number, farmId = 0) {
+    const tick = GameConstants.TICK_TIME / GameConstants.SECOND;
+    const steps = Math.ceil(seconds / tick);
+    for (let step = 0; step < steps; step++) {
+        farming.getFarmPlots(farmId).forEach(plot => plot.update(tick));
+        farming.farms()[farmId].hands.tick();
+    }
+}
+
 describe('农场布局助手真实作业', () => {
+    it('突变时机：目标下拉框保留数字类型，编辑暂停布局且导出保存目标', () => {
+        const { farming, unlockFirst, FarmLayoutController } = setup();
+        unlockFirst();
+        const layout = enableLayout(farming, { 0: { role: 'mutation', targetBerry: BerryType.Lum } });
+        const template = document.createElement('div');
+        template.innerHTML = readFileSync('src/components/farmModal.html', 'utf8');
+        const select = template.querySelector('#farmLayoutTargetBerry').cloneNode(true) as HTMLSelectElement;
+        ko.applyBindings({ FarmLayoutController }, select);
+        expect(select.value).toBe(String(BerryType.Lum));
+
+        select.value = String(BerryType.Passho);
+        select.dispatchEvent(new Event('change'));
+
+        expect(layout.plan().cells[0].targetBerry).toBe(BerryType.Passho);
+        expect(typeof layout.plan().cells[0].targetBerry).toBe('number');
+        expect(layout.enabled()).toBe(false);
+        expect(JSON.parse(FarmLayoutController.exportText()).cells[0].targetBerry).toBe(BerryType.Passho);
+        expect(FarmLayoutController.berryText(0)).toContain('Passho');
+        ko.cleanNode(select);
+    });
+
+    it('突变时机：冻结预算不足时先保住快枯萎的 Cheri，再照顾长寿命 Sitrus', () => {
+        const { farming, unlockFirst } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.gainExperience(122_500);
+        hand.maxEfficiency = 1;
+        hand.hire();
+        const cells: Record<number, Record<string, unknown>> = {
+            0: { role: 'keep', berry: BerryType.Cheri, mulch: MulchType.Freeze_Mulch },
+            6: { role: 'mutation', targetBerry: BerryType.Lum },
+        };
+        [1, 2, 3].forEach(index => {
+            const plot = farming.getFarmPlots(0)[index];
+            plot.plant(BerryType.Sitrus);
+            plot.age = BerryList[BerryType.Sitrus].growthTime[PlotStage.Bloom] - 10;
+            cells[index] = { role: 'keep', berry: BerryType.Sitrus, mulch: MulchType.Freeze_Mulch };
+        });
+        enableLayout(farming, cells);
+        farming.mulchList[MulchType.Freeze_Mulch](1000);
+        const plant = vi.spyOn(farming, 'plant');
+
+        advanceLayoutFarm(farming, 85);
+
+        const cheri = farming.getFarmPlots(0)[0];
+        expect(cheri.berry).toBe(BerryType.Cheri);
+        expect(cheri.stage()).toBe(PlotStage.Berry);
+        expect(cheri.mulch).toBe(MulchType.Freeze_Mulch);
+        [1, 2, 3].forEach(index => expect(farming.getFarmPlots(0)[index].mulch).toBe(MulchType.Freeze_Mulch));
+        expect(plant).toHaveBeenCalledTimes(1);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(999);
+    });
+
+    it('突变时机：母株未成熟时不施 Surprise，真实配方可突变后才施肥', () => {
+        const { farming, unlockFirst, GrowNearBerryMutation } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list[0];
+        hand.gainExperience(122_500);
+        hand.hire();
+        const source = farming.getFarmPlots(0)[0];
+        const target = farming.getFarmPlots(0)[1];
+        source.plant(BerryType.Cheri);
+        const mutation = new GrowNearBerryMutation(1, BerryType.Lum, [BerryType.Cheri]);
+        farming.mutations = [mutation];
+        farming.mulchList[MulchType.Surprise_Mulch](100);
+        enableLayout(farming, {
+            0: { role: 'keep', berry: BerryType.Cheri },
+            1: { role: 'mutation', targetBerry: BerryType.Lum, mulch: MulchType.Surprise_Mulch },
+        });
+
+        expect(mutation.forFarm(0).getMutationPlots()).not.toContain(1);
+        hand.work();
+        expect(target.mulch).toBe(MulchType.None);
+        expect(farming.mulchList[MulchType.Surprise_Mulch]()).toBe(100);
+
+        source.update(BerryList[BerryType.Cheri].growthTime[PlotStage.Bloom]);
+        expect(source.stage()).toBe(PlotStage.Berry);
+        expect(mutation.forFarm(0).getMutationPlots()).toContain(1);
+        hand.work();
+        expect(target.mulch).toBe(MulchType.Surprise_Mulch);
+        expect(farming.mulchList[MulchType.Surprise_Mulch]()).toBeLessThan(100);
+    });
+
+    it('突变时机：长周期母株先种，短周期母株等待成熟时间差后再种', () => {
+        const { farming, unlockFirst, GrowNearBerryMutation } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.gainExperience(122_500);
+        hand.hire();
+        const mutation = new GrowNearBerryMutation(1, BerryType.Lum, [BerryType.Sitrus, BerryType.Cheri]);
+        farming.mutations = [mutation];
+        enableLayout(farming, {
+            0: { role: 'keep', berry: BerryType.Sitrus },
+            1: { role: 'keep', berry: BerryType.Cheri },
+            6: { role: 'mutation', targetBerry: BerryType.Lum },
+        });
+
+        hand.work();
+
+        expect(farming.getFarmPlots(0)[0].berry).toBe(BerryType.Sitrus);
+        expect(farming.getFarmPlots(0)[1].berry).toBe(BerryType.None);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(1000);
+        expect(mutation.forFarm(0).getMutationPlots()).not.toContain(6);
+    });
+
+    it('突变时机：Lum 实阵从空田错峰播种并自然生长到四格均具备有效突变机会', () => {
+        const { farming, unlockFirst, GrowNearBerryMutation } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.gainExperience(122_500);
+        hand.hire();
+        const plan = FarmLayoutPlan.createPreset('lum-mutation');
+        const layout = farming.farms()[0].layout;
+        layout.setPlan(plan);
+        layout.toggle();
+        const rule = new GrowNearBerryMutation(1, BerryType.Lum, [
+            BerryType.Cheri, BerryType.Chesto, BerryType.Pecha, BerryType.Rawst,
+            BerryType.Aspear, BerryType.Leppa, BerryType.Oran, BerryType.Sitrus,
+        ]);
+        farming.mutations = [rule];
+        farming.mulchList[MulchType.Freeze_Mulch](10_000);
+        farming.mulchList[MulchType.Surprise_Mulch](10_000);
+        const plant = vi.spyOn(farming, 'plant');
+        const mulch = vi.spyOn(farming, 'addMulch');
+        const targets = [6, 8, 16, 18];
+        const tick = GameConstants.TICK_TIME / GameConstants.SECOND;
+
+        advanceLayoutFarm(farming, tick);
+        expect(plant.mock.calls.length).toBe(4);
+        expect(plant.mock.calls.every(([, berry]) => berry === BerryType.Sitrus)).toBe(true);
+        expect(farming.mulchList[MulchType.Surprise_Mulch]()).toBe(10_000);
+
+        let inspected = 0;
+        for (let elapsed = tick; elapsed < 750; elapsed += tick) {
+            advanceLayoutFarm(farming, tick);
+            const calls = mulch.mock.calls.slice(inspected);
+            calls.forEach(([index, type]) => {
+                if (type === MulchType.Surprise_Mulch) {
+                    expect(rule.forFarm(0).getMutationPlots()).toContain(index);
+                }
+            });
+            inspected = mulch.mock.calls.length;
+            if (targets.every(index => farming.getFarmPlots(0)[index].mulch === MulchType.Surprise_Mulch)) {
+                break;
+            }
+        }
+
+        expect(rule.forFarm(0).getMutationPlots()).toEqual(expect.arrayContaining(targets));
+        targets.forEach(index => {
+            expect(farming.getFarmPlots(0)[index].isEmpty()).toBe(true);
+            expect(farming.getFarmPlots(0)[index].mulch).toBe(MulchType.Surprise_Mulch);
+        });
+        plan.cells.forEach((cell, index) => {
+            if (cell.role !== 'keep') return;
+            const plot = farming.getFarmPlots(0)[index];
+            expect(plot.berry).toBe(cell.berry);
+            expect(plot.stage()).toBe(PlotStage.Berry);
+            expect(plot.mulch).toBe(MulchType.Freeze_Mulch);
+        });
+        expect(plant).toHaveBeenCalledTimes(21);
+        expect(farming.mulchList[MulchType.Surprise_Mulch]()).toBeLessThan(10_000);
+    }, 30_000);
+
+    it('突变时机：低级助手来不及首次冻结 Cheri 时暂停播种并提示处理方法', () => {
+        const { farming, unlockFirst } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.hire();
+        const layout = enableLayout(farming, {
+            0: { role: 'keep', berry: BerryType.Cheri, mulch: MulchType.Freeze_Mulch },
+            1: { role: 'mutation', targetBerry: BerryType.Lum },
+        });
+        const seeds = farming.berryInventory[BerryType.Cheri]();
+
+        hand.work();
+
+        expect(hand.workTick / GameConstants.SECOND).toBeGreaterThanOrEqual(BerryList[BerryType.Cheri].growthTime[PlotStage.Berry]);
+        expect(farming.getFarmPlots(0)[0].isEmpty()).toBe(true);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(seeds);
+        expect(layout.status(0)).toMatch(/来不及首次冻结.*暂停播种/);
+    });
+
+    it('突变时机：成熟 Petaya 保活时低级助手可以播种需要冻结的 Cheri', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        ripe(0, 24, BerryType.Petaya);
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.hire();
+        const layout = enableLayout(farming, {
+            0: { role: 'keep', berry: BerryType.Cheri, mulch: MulchType.Freeze_Mulch },
+            1: { role: 'mutation', targetBerry: BerryType.Lum },
+        });
+        farming.mulchList[MulchType.Freeze_Mulch](100);
+
+        hand.work();
+
+        const source = farming.getFarmPlots(0)[0];
+        expect(source.berry).toBe(BerryType.Cheri);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(999);
+        source.update(BerryList[BerryType.Cheri].growthTime[PlotStage.Berry] + 1);
+        expect(source.stage()).toBe(PlotStage.Berry);
+        hand.work();
+        expect(source.mulch).toBe(MulchType.Freeze_Mulch);
+        expect(layout.status(0)).not.toContain('来不及首次冻结');
+    });
+
+    it('突变时机：Yache 真实规则在 Passho 长到 Taller 时即可施肥，无需等待成熟', () => {
+        const { farming, unlockFirst, EvolveNearBerryStrictMutation } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.gainExperience(122_500);
+        hand.hire();
+        const source = farming.getFarmPlots(0)[0];
+        source.plant(BerryType.Passho);
+        const rule = new EvolveNearBerryStrictMutation(.0001, BerryType.Yache, BerryType.Passho, {}, PlotStage.Seed);
+        farming.mutations = [rule];
+        farming.mulchList[MulchType.Surprise_Mulch](100);
+        enableLayout(farming, {
+            0: { role: 'evolve', berry: BerryType.Passho, targetBerry: BerryType.Yache, mulch: MulchType.Surprise_Mulch },
+        });
+
+        hand.work();
+        expect(source.mulch).toBe(MulchType.None);
+        source.update(BerryList[BerryType.Passho].growthTime[PlotStage.Sprout] + 1);
+        expect(source.stage()).toBe(PlotStage.Taller);
+        expect(rule.forFarm(0).getMutationPlots()).toContain(0);
+        hand.work();
+
+        expect(source.stage()).not.toBe(PlotStage.Berry);
+        expect(source.mulch).toBe(MulchType.Surprise_Mulch);
+        expect(farming.mulchList[MulchType.Surprise_Mulch]()).toBeLessThan(100);
+    });
+
+    it('突变时机：Enigma 真实资格查询和实际施肥均恢复共用随机数状态', () => {
+        const { farming, unlockFirst, ripe, EnigmaMutation } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.gainExperience(122_500);
+        hand.hire();
+        const rule = new EnigmaMutation(.0001);
+        farming.mutations = [rule];
+        EnigmaMutation.getReqs().forEach((berry, direction) => ripe(0, [7, 11, 13, 17][direction], berry));
+        farming.mulchList[MulchType.Surprise_Mulch](100);
+        const layout = enableLayout(farming, {
+            12: { role: 'mutation', targetBerry: BerryType.Enigma, mulch: MulchType.Surprise_Mulch },
+        });
+        SeededRand.seed(777777);
+        const previousState = SeededRand.state;
+
+        expect(layout.status(12)).toContain('Enigma');
+        expect(SeededRand.state).toBe(previousState);
+        hand.work();
+
+        expect(farming.getFarmPlots(0)[12].mulch).toBe(MulchType.Surprise_Mulch);
+        expect(SeededRand.state).toBe(previousState);
+    });
+
+    it('突变时机：等待阶段不耗工作预算，真实播种仍扣种子、体力并获得经验', () => {
+        const { farming, unlockFirst } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.maxEfficiency = 1;
+        hand.hire();
+        enableLayout(farming, {
+            0: { role: 'keep', berry: BerryType.Sitrus },
+            1: { role: 'keep', berry: BerryType.Oran },
+            6: { role: 'mutation', targetBerry: BerryType.Lum },
+        });
+        const energy = hand.energy();
+        hand.work();
+        expect(farming.getFarmPlots(0)[0].berry).toBe(BerryType.Sitrus);
+        expect(farming.getFarmPlots(0)[1].isEmpty()).toBe(true);
+        expect(farming.berryInventory[BerryType.Sitrus]()).toBe(999);
+        expect(farming.berryInventory[BerryType.Oran]()).toBe(1000);
+        expect(hand.experience()).toBe(1);
+        expect(hand.energy()).toBe(energy - 1);
+
+        hand.work();
+        expect(hand.experience()).toBe(1);
+        expect(hand.energy()).toBe(energy);
+        expect(farming.berryInventory[BerryType.Oran]()).toBe(1000);
+    });
+
+    it('突变时机：生长倍率改变后按真实剩余时间重算播种时机', () => {
+        const { farming, unlockFirst } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.gainExperience(122_500);
+        hand.hire();
+        enableLayout(farming, {
+            0: { role: 'keep', berry: BerryType.Sitrus },
+            1: { role: 'keep', berry: BerryType.Oran },
+            6: { role: 'mutation', targetBerry: BerryType.Lum },
+        });
+        advanceLayoutFarm(farming, 250);
+        expect(farming.getFarmPlots(0)[0].berry).toBe(BerryType.Sitrus);
+        expect(farming.getFarmPlots(0)[1].isEmpty()).toBe(true);
+
+        vi.spyOn(farming, 'getGrowthMultiplier').mockReturnValue(2);
+        advanceLayoutFarm(farming, 30);
+        hand.work();
+
+        expect(farming.getFarmPlots(0)[0].age).toBeGreaterThan(300);
+        expect(farming.getFarmPlots(0)[1].berry).toBe(BerryType.Oran);
+        expect(farming.berryInventory[BerryType.Oran]()).toBe(999);
+    });
+
+    it.each([
+        { reason: '长周期母株被提前冻结', berry: BerryType.Sitrus, mulch: MulchType.Freeze_Mulch, status: /冻结|暂停/ },
+        { reason: '母株格已有错种的稀有树果', berry: BerryType.Liechi, mulch: MulchType.None, status: /不符|冲突|等待/ },
+    ])('突变时机：$reason 时保留现场并阻止短周期种子白种', ({ berry, mulch, status }) => {
+        const { farming, unlockFirst } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.gainExperience(122_500);
+        hand.hire();
+        const source = farming.getFarmPlots(0)[0];
+        source.plant(berry);
+        source.mulch = mulch;
+        source.mulchTimeLeft = mulch === MulchType.None ? 0 : 100_000;
+        const layout = enableLayout(farming, {
+            0: { role: 'keep', berry: BerryType.Sitrus },
+            1: { role: 'keep', berry: BerryType.Oran },
+            6: { role: 'mutation', targetBerry: BerryType.Lum, mulch: MulchType.Surprise_Mulch },
+        });
+        farming.mulchList[MulchType.Surprise_Mulch](100);
+        const shovels = farming.shovelAmt();
+
+        hand.work();
+
+        expect(source.berry).toBe(berry);
+        expect(source.age).toBe(0);
+        expect(farming.getFarmPlots(0)[1].isEmpty()).toBe(true);
+        expect(farming.berryInventory[BerryType.Oran]()).toBe(1000);
+        expect(farming.mulchList[MulchType.Surprise_Mulch]()).toBe(100);
+        expect(farming.shovelAmt()).toBe(shovels);
+        expect(layout.status(1)).toMatch(status);
+    });
+
+    it('突变时机：竞争配方已经就绪不能替代布局指定目标的成熟要求', () => {
+        const { farming, unlockFirst, ripe, GrowNearBerryMutation } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list[0];
+        hand.hire();
+        ripe(0, 0, BerryType.Cheri);
+        const competing = new GrowNearBerryMutation(1, BerryType.Persim, [BerryType.Cheri]);
+        const target = new GrowNearBerryMutation(1, BerryType.Lum, [BerryType.Cheri, BerryType.Chesto]);
+        farming.mutations = [competing, target];
+        farming.mulchList[MulchType.Surprise_Mulch](100);
+        enableLayout(farming, { 1: { role: 'mutation', targetBerry: BerryType.Lum, mulch: MulchType.Surprise_Mulch } });
+
+        expect(competing.forFarm(0).getMutationPlots()).toContain(1);
+        expect(target.forFarm(0).getMutationPlots()).not.toContain(1);
+        hand.work();
+
+        expect(farming.getFarmPlots(0)[1].mulch).toBe(MulchType.None);
+        expect(farming.mulchList[MulchType.Surprise_Mulch]()).toBe(100);
+    });
+
+    it.each([
+        { reason: '目标规则尚未解锁', unlocked: false, chance: 1, occupied: false },
+        { reason: '目标概率已降至零', unlocked: true, chance: 0, occupied: false },
+        { reason: '突变格已有幼年产物', unlocked: true, chance: 1, occupied: true },
+    ])('突变时机：$reason 时不消耗突变肥料', ({ unlocked, chance, occupied }) => {
+        const { farming, unlockFirst, ripe, GrowNearBerryMutation } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list[0];
+        hand.hire();
+        ripe(0, 0, BerryType.Cheri);
+        const target = farming.getFarmPlots(0)[1];
+        if (occupied) {
+            target.plant(BerryType.Lum);
+        }
+        farming.mutations = [new GrowNearBerryMutation(1, BerryType.Lum, [BerryType.Cheri], {
+            unlockReq: () => unlocked,
+            chanceModifier: () => chance,
+        })];
+        farming.mulchList[MulchType.Surprise_Mulch](100);
+        enableLayout(farming, { 1: { role: 'mutation', targetBerry: BerryType.Lum, mulch: MulchType.Surprise_Mulch } });
+
+        hand.work();
+
+        expect(target.mulch).toBe(MulchType.None);
+        expect(farming.mulchList[MulchType.Surprise_Mulch]()).toBe(100);
+    });
+
+    it('突变时机：检查同目标所有配方，不被未解锁的第一条规则阻塞', () => {
+        const { farming, unlockFirst, ripe, GrowNearBerryMutation } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list[0];
+        hand.hire();
+        ripe(0, 0, BerryType.Cheri);
+        farming.mutations = [
+            new GrowNearBerryMutation(1, BerryType.Lum, [BerryType.Chesto], { unlockReq: () => false }),
+            new GrowNearBerryMutation(1, BerryType.Lum, [BerryType.Cheri]),
+        ];
+        farming.mulchList[MulchType.Surprise_Mulch](100);
+        enableLayout(farming, { 1: { role: 'mutation', targetBerry: BerryType.Lum, mulch: MulchType.Surprise_Mulch } });
+
+        hand.work();
+
+        expect(farming.getFarmPlots(0)[1].mulch).toBe(MulchType.Surprise_Mulch);
+        expect(farming.mulchList[MulchType.Surprise_Mulch]()).toBeLessThan(100);
+    });
+
+    it('突变时机：只读取助手所属农田，其他田的成熟母株不能触发提前施肥', () => {
+        const { farming, addFarm, ripe, GrowNearBerryMutation } = setup();
+        addFarm();
+        farming.getFarmPlots(1).forEach(plot => { plot.isUnlocked = true; });
+        const hand = farming.farms()[1].hands.list[0];
+        hand.hire();
+        ripe(0, 0, BerryType.Cheri);
+        const source = farming.getFarmPlots(1)[0];
+        source.plant(BerryType.Cheri);
+        const target = farming.getFarmPlots(1)[1];
+        farming.mutations = [new GrowNearBerryMutation(1, BerryType.Lum, [BerryType.Cheri])];
+        farming.mulchList[MulchType.Surprise_Mulch](100);
+        enableLayout(farming, { 1: { role: 'mutation', targetBerry: BerryType.Lum, mulch: MulchType.Surprise_Mulch } }, 1);
+        farming.selectedFarm(0);
+
+        hand.work();
+        expect(target.mulch).toBe(MulchType.None);
+        expect(farming.mulchList[MulchType.Surprise_Mulch]()).toBe(100);
+
+        source.update(BerryList[BerryType.Cheri].growthTime[PlotStage.Bloom]);
+        hand.work();
+        expect(target.mulch).toBe(MulchType.Surprise_Mulch);
+        expect(farming.getFarmPlots(0)[1].mulch).toBe(MulchType.None);
+    });
+
     it('Lum 母株保留成熟冻结状态，收获突变格后继续留空且不按 Replant 回种', () => {
         const { farming, unlockFirst, ripe } = setup();
         unlockFirst();

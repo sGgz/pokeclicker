@@ -582,6 +582,8 @@
                         <a class="small" target="_blank" rel="noopener noreferrer" data-bind="visible: !!FarmLayoutController.preset()?.source, attr: { href: FarmLayoutController.preset()?.source }">查看 Wiki 配方依据 ↗</a>
                     </div>
 
+                    <p class="small mt-2 mb-0">突变阵先种长周期原料，再错峰补种短周期原料，每轮按实际生长倍率重新计算。以成熟窗口重叠为目标，不能保证同秒成熟或随机突变成功。</p>
+
                     <details class="mt-3">
                         <summary class="clickable">从 Wiki 模拟器代码或助手布局导入</summary>
                         <label for="farmLayoutImport" class="small mt-2 mb-1">粘贴 Farm Simulator 的 Base64 分享码，或本助手导出的 JSON</label>
@@ -631,9 +633,10 @@
                                 <label for="farmLayoutBerry" class="small mb-1" data-bind="text: FarmLayoutController.role() === 'evolve' ? '种植原株' : '指定树果'"></label>
                                 <select id="farmLayoutBerry" class="custom-select custom-select-sm mb-2" data-bind="options: FarmLayoutController.berryOptions(), optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.berry"></select>
                             </div>
-                            <div data-bind="visible: FarmLayoutController.role() === 'evolve'">
-                                <label for="farmLayoutTargetBerry" class="small mb-1">原株进化目标</label>
-                                <select id="farmLayoutTargetBerry" class="custom-select custom-select-sm mb-2" data-bind="options: FarmLayoutController.berryOptions(), optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.targetBerry"></select>
+                            <div data-bind="visible: ['mutation', 'evolve'].includes(FarmLayoutController.role())">
+                                <label for="farmLayoutTargetBerry" class="small mb-1" data-bind="text: FarmLayoutController.role() === 'mutation' ? '空位突变目标' : '原株进化目标'"></label>
+                                <select id="farmLayoutTargetBerry" class="custom-select custom-select-sm mb-2" data-bind="options: FarmLayoutController.berryOptions('未指定：停止追加突变肥'), optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.targetBerry"></select>
+                                <p class="small text-muted mb-2">Surprise／Amaze 仅在该格满足指定目标的实际突变条件时追加，产物长出后停止追加。分享码未写明目标时，请在这里补选。</p>
                             </div>
                             <div data-bind="visible: !['ignore', 'empty'].includes(FarmLayoutController.role())">
                                 <label for="farmLayoutMulch" class="small mb-1">肥料安排</label>
@@ -652,10 +655,13 @@
                         <ul class="mt-2 mb-2 pl-3">
                             <li>由当前田已雇用助手在 Allowed Plots 范围内执行，照常消耗种子、肥料、工资、体力和工作次数。</li>
                             <li>原料保留：种好指定树果后保留，不自动收获；循环生产：等待所有保留原料及光环株成熟后收获，再重种；原株进化：种好原株，等指定目标进化成熟后收获。</li>
+                            <li>突变阵按现场作物年龄、肥料和生长倍率重算播种顺序，长周期先种、短周期后种；安排 Freeze 的原料成熟后优先冻结。生产光环阵不会因此延后种植光环株。</li>
+                            <li>突变空位和原株进化格仅在指定目标当前可突变且概率大于零时追加 Surprise／Amaze；条件不满足、目标未指定或产物已长出时停止追加。已有肥料会继续消耗，不自动铲除。</li>
                             <li>不托管的格子沿用助手普通规则。暂停布局后，整田恢复普通规则，请留意助手是否会收获原料。</li>
-                            <li>安全锁和未解锁格会跳过；作物冲突与缺少物资会等待，其他可工作的格子继续执行。</li>
+                            <li>安全锁和未解锁格会跳过；突变原料有错种、被冻结的幼苗、缺种或未分配助手时，会暂缓同阵原料补种，并显示原因。</li>
                             <li>Freeze 仅在成熟后施加，会关闭光环；Rich 仅在收获前施加。助手按工作周期提前续肥；现有异种肥料会等耗尽，不会自动铲除。</li>
                             <li>光环来源必须保持正常生长。保留任务和安全锁都不能阻止枯萎或寄生，预设中的防枯萎条件仍需满足。</li>
+                            <li>当前助手来不及完成短寿命原料的首次冻结时，会暂停该格的新播种并提示；请换更快的助手或先手动完成成熟与冻结。成熟 Petaya 已保活的原料不受此限制；冻结优先处理快枯萎或快断肥的原料。</li>
                         </ul>
                     </details>
 
