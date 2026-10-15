@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "name": "Liechi：Passho＋Lum 单株扩种",
+  "cells": [
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 19,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 19,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 19,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 19,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "empty",
+      "berry": -1,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    }
+  ],
+  "notes": [
+    "需要 1 颗 Liechi、8 颗 Passho 和 4 颗 Lum；按从左上到右下的行序保存 25 格。",
+    "中心 Liechi 循环种植收获；8 株 Passho 与 4 株 Lum 保留光环，不使用 Freeze，枯萎后由助手补种。",
+    "助手等待全部光环株成熟后，给成熟 Liechi 施一份 Rich，再按工作额度收获；不需要全程铺 Rich。",
+    "在全部光环成熟且 Rich 生效时，中心每次收获 10 颗 Liechi，扣除一颗补种后净增 9 颗。",
+    "本布局不含 Petaya，也不自动切换 Wacan 加速阵；光环株补种期间可能需要等待其重新成熟。",
+    "导入后布局暂停，请检查预览并分配助手操作全部托管格后启用；导入不搬迁、不铲除已有作物。",
+    "如果唯一 Liechi 仍种在左上角，请保留原株，等本轮收获后再用所得种子布置中心生产格。"
+  ]
+}

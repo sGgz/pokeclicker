@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "name": "Liechi：Passho 双行十格量产",
+  "cells": [
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "cycle",
+      "berry": 61,
+      "targetBerry": -1,
+      "mulch": 1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    },
+    {
+      "role": "keep",
+      "berry": 37,
+      "targetBerry": -1,
+      "mulch": -1,
+      "freezeStage": 4
+    }
+  ],
+  "notes": [
+    "完整种满需要 10 颗 Liechi 和 15 颗 Passho；按从左上到右下的行序保存 25 格。",
+    "第 1、3、5 行保留 Passho 光环，第 2、4 行循环种植收获 Liechi；Passho 不使用 Freeze，枯萎后由助手补种。",
+    "助手等待全部 Passho 成熟后，给成熟 Liechi 各施一份 Rich，再按工作额度收获；不需要全程铺 Rich。",
+    "在全部光环成熟且 Rich 生效时，边缘 4 个生产格各收 2 颗，内部 6 格各收 4 颗；一轮合计 32 颗，扣除 10 颗补种后净增 22 颗。",
+    "本布局不含 Petaya 或 Wacan；缺少 Liechi 种子时助手只会逐格种下现有种子，不会凭空补足十格。",
+    "导入后布局暂停，请检查预览并分配助手操作全部托管格后启用；导入不搬迁、不铲除已有作物。"
+  ]
+}
