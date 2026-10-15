@@ -7,6 +7,7 @@
                 <ul class="nav nav-tabs nav-fill">
                     <li class="nav-item" onclick="FarmController.farmingModalTabSelected('berryFarmView')"><a data-toggle='tab' class='nav-link active' href="#berryFarmView">Farm</a></li>
                     <li class='nav-item' onclick="FarmController.farmingModalTabSelected('farmHandsView')" data-bind="visible: App.game.farming.farmHands.isUnlocked()"><a data-toggle='tab' class='nav-link' href="#farmHandsView">Farm Hands</a></li>
+                    <li class="nav-item" onclick="FarmController.farmingModalTabSelected('farmLayoutView')"><a data-toggle="tab" class="nav-link" href="#farmLayoutView">布局</a></li>
                     <li class='nav-item' onclick="FarmController.farmingModalTabSelected('berryDexView')"><a data-toggle='tab' class='nav-link' href="#berryDexView">Berrydex</a></li>
                     <li class='nav-item' onclick="FarmController.farmingModalTabSelected('helpView')"><a data-toggle='tab' class='nav-link' href="#helpView">Help</a></li>
                     <btn class="btn btn-primary">
@@ -554,6 +555,115 @@
                         You can also use <kbd>Shift + Click</kbd> to safely lock/unlock a plot.<br />
                         The Farm shortcut will be hidden when the Farm module is enabled.
                     </p>
+                </div>
+
+                <div id="farmLayoutView" class="tab-pane fade p-3">
+                    <div class="farm-layout-heading">
+                        <div>
+                            <h5 class="mb-1">农场布局助手</h5>
+                            <p class="small text-muted mb-0">为每格安排原料、突变和生产任务。导入与编辑只保存预览，启用后才由助手执行。</p>
+                        </div>
+                        <span class="badge p-2" data-bind="text: FarmLayoutController.layout().enabled() ? '已启用' : '预览 / 已暂停', css: { 'badge-success': FarmLayoutController.layout().enabled(), 'badge-secondary': !FarmLayoutController.layout().enabled() }"></span>
+                    </div>
+
+                    <div class="farm-layout-preset border rounded p-2 mt-3">
+                        <div class="farm-layout-controls">
+                            <div class="farm-layout-field">
+                                <label for="farmLayoutPreset" class="small mb-1">选择布局预设</label>
+                                <select id="farmLayoutPreset" class="custom-select custom-select-sm" data-bind="options: FarmLayoutController.presets, optionsText: 'name', optionsValue: 'id', value: FarmLayoutController.selectedPreset"></select>
+                            </div>
+                            <div class="farm-layout-field" data-bind="visible: FarmLayoutController.needsProductionBerry()">
+                                <label for="farmLayoutProductionBerry" class="small mb-1">生产目标树果</label>
+                                <select id="farmLayoutProductionBerry" class="custom-select custom-select-sm" data-bind="options: FarmLayoutController.berryOptions(), optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.productionBerry"></select>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bind="click: () => FarmLayoutController.generate()">生成预览</button>
+                        </div>
+                        <p class="small mb-1 mt-2" data-bind="text: FarmLayoutController.preset()?.description"></p>
+                        <a class="small" target="_blank" rel="noopener noreferrer" data-bind="visible: !!FarmLayoutController.preset()?.source, attr: { href: FarmLayoutController.preset()?.source }">查看 Wiki 配方依据 ↗</a>
+                    </div>
+
+                    <details class="mt-3">
+                        <summary class="clickable">从 Wiki 模拟器代码或助手布局导入</summary>
+                        <label for="farmLayoutImport" class="small mt-2 mb-1">粘贴 Farm Simulator 的 Base64 分享码，或本助手导出的 JSON</label>
+                        <textarea id="farmLayoutImport" class="form-control form-control-sm farm-layout-code" rows="3" spellcheck="false" data-bind="textInput: FarmLayoutController.importText"></textarea>
+                        <div class="d-flex flex-wrap align-items-center mt-2 farm-layout-actions">
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bind="click: () => FarmLayoutController.importPlan(), enable: FarmLayoutController.importText().trim().length > 0">导入为预览</button>
+                            <span class="small text-muted">只读取布局意图；不会增加库存、解锁格子或覆盖植物年龄。</span>
+                        </div>
+                    </details>
+
+                    <div class="alert mt-3 mb-2 py-2 small" role="status" aria-live="polite" data-bind="visible: FarmLayoutController.feedback().length > 0, text: FarmLayoutController.feedback, css: { 'alert-danger': FarmLayoutController.hasError(), 'alert-info': !FarmLayoutController.hasError() }"></div>
+
+                    <div class="farm-layout-controls mt-3">
+                        <div class="farm-layout-field">
+                            <label for="farmLayoutName" class="small mb-1">当前田的布局名称</label>
+                            <input id="farmLayoutName" class="form-control form-control-sm" maxlength="60" data-bind="value: FarmLayoutController.planName" />
+                        </div>
+                        <button type="button" class="btn btn-sm" data-bind="click: () => FarmLayoutController.toggle(), text: FarmLayoutController.layout().enabled() ? '暂停布局' : '启用布局', css: { 'btn-warning': FarmLayoutController.layout().enabled(), 'btn-success': !FarmLayoutController.layout().enabled() }, disable: !FarmLayoutController.layout().enabled() && FarmLayoutController.layout().validation().length > 0"></button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bind="click: () => FarmLayoutController.reset()">清空预览</button>
+                    </div>
+
+                    <div class="alert alert-warning small mt-2 mb-2 py-2" data-bind="visible: FarmLayoutController.layout().validation().length > 0">
+                        <strong>请先补全配置：</strong>
+                        <ul class="mb-0 pl-3" data-bind="foreach: FarmLayoutController.layout().validation()"><li data-bind="text: $data"></li></ul>
+                    </div>
+
+                    <div class="farm-layout-workspace mt-3">
+                        <div>
+                            <div class="small text-muted mb-2">点击格子编辑 · 顺序与农田一致 · 红色边框表示当前格受阻</div>
+                            <div class="farm-layout-grid" role="group" aria-label="5 行 5 列布局预览" data-bind="foreach: FarmLayoutController.layout().plan().cells">
+                                <button type="button" class="farm-layout-cell" data-bind="click: () => FarmLayoutController.selectedCell($index()), attr: { 'data-role': $data.role, 'aria-label': FarmLayoutController.cellLabel($index()), 'aria-pressed': FarmLayoutController.selectedCell() === $index(), title: FarmLayoutController.layout().status($index()) }, css: { 'farm-layout-selected': FarmLayoutController.selectedCell() === $index(), 'farm-layout-blocked': FarmLayoutController.blocked($index()) }">
+                                    <span class="farm-layout-cell-position" data-bind="text: `${Math.floor($index() / 5) + 1} · ${$index() % 5 + 1}`"></span>
+                                    <span class="farm-layout-cell-role" data-bind="text: FarmLayoutController.roleText($index())"></span>
+                                    <strong class="farm-layout-cell-berry" data-bind="text: FarmLayoutController.berryText($index())"></strong>
+                                    <span class="farm-layout-cell-mulch" data-bind="text: FarmLayoutController.mulchText($index())"></span>
+                                    <span class="farm-layout-cell-current" data-bind="text: FarmLayoutController.currentText($index())"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="farm-layout-editor border rounded p-2">
+                            <h6 data-bind="text: `编辑第 ${Math.floor(FarmLayoutController.selectedCell() / 5) + 1} 行第 ${FarmLayoutController.selectedCell() % 5 + 1} 列`"></h6>
+                            <p class="small mb-2" aria-live="polite" data-bind="text: FarmLayoutController.layout().status(FarmLayoutController.selectedCell())"></p>
+                            <label for="farmLayoutRole" class="small mb-1">格子任务</label>
+                            <select id="farmLayoutRole" class="custom-select custom-select-sm mb-2" data-bind="options: FarmLayoutController.roles, optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.role"></select>
+                            <div data-bind="visible: ['keep', 'cycle', 'evolve'].includes(FarmLayoutController.role())">
+                                <label for="farmLayoutBerry" class="small mb-1" data-bind="text: FarmLayoutController.role() === 'evolve' ? '种植原株' : '指定树果'"></label>
+                                <select id="farmLayoutBerry" class="custom-select custom-select-sm mb-2" data-bind="options: FarmLayoutController.berryOptions(), optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.berry"></select>
+                            </div>
+                            <div data-bind="visible: FarmLayoutController.role() === 'evolve'">
+                                <label for="farmLayoutTargetBerry" class="small mb-1">原株进化目标</label>
+                                <select id="farmLayoutTargetBerry" class="custom-select custom-select-sm mb-2" data-bind="options: FarmLayoutController.berryOptions(), optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.targetBerry"></select>
+                            </div>
+                            <div data-bind="visible: !['ignore', 'empty'].includes(FarmLayoutController.role())">
+                                <label for="farmLayoutMulch" class="small mb-1">肥料安排</label>
+                                <select id="farmLayoutMulch" class="custom-select custom-select-sm mb-2" data-bind="options: FarmLayoutController.mulches, optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.mulch"></select>
+                            </div>
+                            <p class="small text-muted mb-0">每次编辑都会暂停布局。当前不同品种的作物会保留；需要换种时，请先手动处理该格。</p>
+                            <p class="small mt-2 mb-0" data-bind="visible: FarmLayoutController.role() === 'mutation'">突变格保持空位，出现任何成熟产物后收获，再留空等待下一次突变。</p>
+                            <p class="small mt-2 mb-0" data-bind="visible: FarmLayoutController.role() === 'empty'">隔离空位不种植、不收获已有作物，用于满足孤立等条件。</p>
+                        </div>
+                    </div>
+
+                    <ul class="small mt-3 mb-2 pl-3" data-bind="foreach: FarmLayoutController.layout().plan().notes || []"><li data-bind="text: $data"></li></ul>
+
+                    <details class="small mt-3">
+                        <summary class="clickable">执行规则与格子角色</summary>
+                        <ul class="mt-2 mb-2 pl-3">
+                            <li>由当前田已雇用助手在 Allowed Plots 范围内执行，照常消耗种子、肥料、工资、体力和工作次数。</li>
+                            <li>原料保留：种好指定树果后保留，不自动收获；循环生产：等待所有保留原料及光环株成熟后收获，再重种；原株进化：种好原株，等指定目标进化成熟后收获。</li>
+                            <li>不托管的格子沿用助手普通规则。暂停布局后，整田恢复普通规则，请留意助手是否会收获原料。</li>
+                            <li>安全锁和未解锁格会跳过；作物冲突与缺少物资会等待，其他可工作的格子继续执行。</li>
+                            <li>Freeze 仅在成熟后施加，会关闭光环；Rich 仅在收获前施加。助手按工作周期提前续肥；现有异种肥料会等耗尽，不会自动铲除。</li>
+                            <li>光环来源必须保持正常生长。保留任务和安全锁都不能阻止枯萎或寄生，预设中的防枯萎条件仍需满足。</li>
+                        </ul>
+                    </details>
+
+                    <details class="small mt-3">
+                        <summary class="clickable">导出当前助手布局</summary>
+                        <label for="farmLayoutExport" class="mt-2 mb-1">复制下方 JSON 可保留每格任务，之后在任意农田导入预览。</label>
+                        <textarea id="farmLayoutExport" class="form-control form-control-sm farm-layout-code" rows="4" readonly spellcheck="false" data-bind="value: FarmLayoutController.exportText"></textarea>
+                    </details>
                 </div>
 
                 <div id="farmHandsView" class="tab-pane fade">

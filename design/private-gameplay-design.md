@@ -779,3 +779,32 @@ Drake 清怪已合并并推送到主干 `develop`，程序源码与成品验收�
 北京时间 **2026-10-15 21:50**，配套网页已发布到既有 `YOUR_GAME_HOST`，Worker 为 `pokeclicker-cloud-save`，Cloudflare Version ID 为 `6d4af3ab-1f15-470a-918b-7a8c9d8f766e`，部署列表确认 **100% 流量**。线上公开 GET 检查确认 `/login` 返回 200，未登录游戏入口与两份脚本返回 303 并跳转登录页，云存档状态接口返回 401／`LOGIN_REQUIRED`，响应均为 `private, no-store`。这项检查确认入口与认证保护，不代替真实用户跨设备存档往返。
 
 安装包 SHA-256 为 `d8df86338441a5d87d2f69572760e76498d98ff9ea331d54773c6911e5802a39`；ZIP SHA-256 为 `9c8cac9febe67e471b591c10b6205421d2d1b3977113055ad416e1035163a6e0`。关闭旧客户端后安装 1.0.13，或完整解压本节 ZIP 后运行；网页关闭旧标签后重新打开，继续使用原存档和密码，再按需要开启 Drake 清怪。
+
+## 36. 农场布局助手（2026-10-16）
+
+农场窗口新增「布局」页签。每块田独立保存布局及启用状态；生成预设、导入或逐格编辑只更新预览并暂停执行，点击「启用布局」后，才由本田已雇用助手在 Allowed Plots 范围内执行。布局随原 `farming.farms[]` 保存，旧档缺少布局时默认停用；损坏的布局仅丢弃该田配置，不影响其作物和其他农田。
+
+模型与导入位于 `src/modules/farming/FarmLayoutPlan.ts`，执行集中在 `src/scripts/farming/FarmLayout.ts`，界面协调为 `FarmLayoutController.ts`。布局执行接入原 `FarmHand.work()`，与普通种植、收获及游荡宝可梦处理共享每轮操作上限、体力和工资。所有动作复用带 `farmId` 的原种植、收获、施肥接口，消耗实际种子及肥料，不增加新的免费工作循环。
+
+| 格子任务 | 执行行为 |
+| --- | --- |
+| 不托管 | 沿用助手原有规则 |
+| 隔离留空 | 不播种、不收获、不铲除已有作物，出现植物时提示手动处理 |
+| 突变留空并收获 | 不播种；任何成熟突变产物收获后继续留空 |
+| 保留原料或光环 | 空格补指定原料，正确植株保留，成熟后不收获 |
+| 循环种植收获 | 种指定作物；等布局中保留原料和光环株均正确且成熟后收获，再补种 |
+| 等待原株进化 | 保留源物种直到变成指定目标；目标成熟后收获，再补源物种 |
+
+预设参考官方 Wiki 的 [Lum](https://wiki.pokeclicker.com/#!Berries/Lum)、[Passho](https://wiki.pokeclicker.com/#!Berries/Passho)、[Liechi](https://wiki.pokeclicker.com/#!Berries/Liechi)、[Yache](https://wiki.pokeclicker.com/#!Berries/Yache)、[Watmel](https://wiki.pokeclicker.com/#!Berries/Watmel)、[Enigma](https://wiki.pokeclicker.com/#!Berries/Enigma) 和 [Farm/Setups](https://wiki.pokeclicker.com/#!Farm/Setups)，覆盖 Lum 四空位、Passho 十空位与三个隔离位、23 株 Passho 的 Liechi、九株隔离 Passho 的 Yache、Magost 风味进化 Watmel、Passho 双行量产、Passho＋Lum 单株扩种、Wacan＋Lum 单株生长及个人 Enigma 四向配方，共九种预设。Enigma 使用当前玩家的 `EnigmaMutation.getReqs()`，允许配方物种重复。普通光环阵拒绝 Occa、Kebia、Colbur；普通 Passho 量产阵额外拒绝 Enigma，提示改用有 Babiri 保护的自定义布局。
+
+Wacan 生长预设中心成熟后保留，需要增产时手动切换 Passho 预设或编辑布局，等待实际增产光环就绪后再收获。助手不会自动换光环阵、分批解冻或复刻复杂的 Petaya 时序；突变概率、任务解锁、风味和寄生仍由游戏原规则计算。
+
+导入兼容 Wiki 的 Base64 `save.farming.plotList`、旧 `plots` 格式，以及本助手导出的 JSON 或 UTF-8 Base64。严格校验文本长度、25 格数量、角色、枚举和版本。模拟器的 `age` 只用来生成早期冻结提示，绝不写入真实作物。原码不包含任务角色、生产目标和进化目标：Surprise 空格推断为突变位，已有植物上的 Surprise 推断为待补目标的进化位；空格上的 Rich／Boost 推断为待补品种的生产位。Amaze、Gooey 及已有植物上的 Boost 保守保留，提示手动核对用途；原生 JSON 保留用户明确指定的角色。
+
+安全锁、未解锁格、作物冲突、缺种或缺肥均逐格检查并展示状态。除突变收获格明确收取任意成熟产物外，已有不匹配物种一律保留，不自动铲除作物或肥料。一个格子由首位已雇用、已解锁且允许操作该格的助手负责；所有助手的普通种收都跳过启用布局的托管格，保护母株及空位。暂停布局会恢复普通助手规则，界面明确提示原料可能被普通策略采收。
+
+Freeze 只在成熟后施，不能用于保留光环；Rich 只在实际采收前施一份，已有 Rich 时直接采收。其他肥料按助手实际负责格数及工作周期提前补至巡田所需时长，应用 Sprinklotad 持续时间倍率，已有异种肥料等待耗尽。成熟保留株停止追加 Boost／Amaze，避免花肥加速衰败。施肥和采收各占一次操作；不足两次操作的助手需要分轮完成。保留任务不阻止自然枯萎或寄生，低效率助手可能赶不上短寿命原料的首次成熟，Lum 预设对此有明确说明。
+
+验收覆盖真实 Wiki 分享码、结构校验、各预设邻接关系，以及真实 `Farming`／`FarmHand`／`Plot` 工作链中的原料保护、原株进化、唯一 Liechi 冲突、真实资源成本、操作上限、续肥、收获前 Rich、辅助株成熟门槛、多田与坏布局读档。全量 592 项测试（含 53 项布局模型、116 项农田集成）、ESLint、Stylelint 及生产构建通过。生产构建实际浏览器的 19 项检查覆盖导入、编辑暂停、数字选项、Enigma、切田、实际存档整页重载恢复及 390px 窄屏，交互无未捕获脚本异常；只使用本地隔离测试存档。
+
+本节为源码功能实现，桌面版本保持 1.0.13、游戏版本保持 0.10.27；现有已发布程序需另行合并、构建发布才会包含本功能。

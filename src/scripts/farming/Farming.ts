@@ -6,6 +6,7 @@ interface FarmField {
     name: KnockoutObservable<string>;
     plots: Plot[];
     hands: FarmHands;
+    layout: FarmLayout;
     berrySearch: KnockoutObservable<string>;
     selectedBerry: KnockoutObservable<BerryType>;
     berryPage: KnockoutObservable<number>;
@@ -41,6 +42,7 @@ class Farming implements Feature {
             berryPage: ko.observable(0),
             plots: plots ?? Array.from({ length: 25 }, (_, index) => new Plot(true, BerryType.None, 0, MulchType.None, 0, index, id)),
             hands: new FarmHands(id),
+            layout: new FarmLayout(id),
         };
     }
 
@@ -1158,6 +1160,7 @@ class Farming implements Feature {
             farms: this.farms().map(farm => ({
                 name: farm.name(), plotList: farm.plots.map(plot => plot.toJSON()), farmHands: farm.hands.toJSON(),
                 berrySearch: farm.berrySearch(), selectedBerry: farm.selectedBerry(), berryPage: farm.berryPage(),
+                layout: farm.layout.toJSON(),
             })),
             selectedFarm: this.selectedFarm(),
             farmHandExperience: Object.fromEntries(FarmHands.list.map(hand => [hand.name, hand.experience()])),
@@ -1222,6 +1225,7 @@ class Farming implements Feature {
                 farm.name(data.name.slice(0, 30));
             }
             farm.hands.fromJSON(data?.farmHands);
+            farm.layout.fromJSON(data?.layout);
             if (typeof data?.berrySearch === 'string') {
                 farm.berrySearch(data.berrySearch);
             }

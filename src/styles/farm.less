@@ -22,6 +22,144 @@
             white-space: nowrap;
         }
     }
+
+    .farm-layout-heading,
+    .farm-layout-controls,
+    .farm-layout-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .farm-layout-heading {
+        justify-content: space-between;
+    }
+
+    .farm-layout-controls {
+        align-items: flex-end;
+    }
+
+    .farm-layout-field {
+        flex: 1 1 12rem;
+        min-width: 0;
+    }
+
+    .farm-layout-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 13rem;
+        align-items: start;
+        gap: 0.75rem;
+    }
+
+    .farm-layout-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.3rem;
+    }
+
+    .farm-layout-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        min-width: 0;
+        min-height: 8.5rem;
+        padding: 0.3rem 0.15rem;
+        border: 1px solid #adb5bd;
+        border-top-width: 3px;
+        border-radius: 0.25rem;
+        background: transparent;
+        color: inherit;
+        font-size: 0.7rem;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+        cursor: pointer;
+
+        &[data-role="ignore"] {
+            border-top-color: #6c757d;
+        }
+
+        &[data-role="empty"] {
+            border-top-color: #adb5bd;
+        }
+
+        &[data-role="keep"] {
+            border-top-color: #28a745;
+        }
+
+        &[data-role="cycle"] {
+            border-top-color: #007bff;
+        }
+
+        &[data-role="mutation"],
+        &[data-role="evolve"] {
+            border-top-color: #a76dde;
+        }
+
+        &:hover,
+        &:focus-visible {
+            background: rgba(127, 127, 127, 12%);
+        }
+
+        &.farm-layout-blocked {
+            border-color: #dc3545;
+        }
+
+        &.farm-layout-selected {
+            outline: 2px solid #007bff;
+            outline-offset: 1px;
+        }
+    }
+
+    .farm-layout-cell-position {
+        margin-bottom: 0.15rem;
+        opacity: 0.65;
+        font-size: 0.65rem;
+    }
+
+    .farm-layout-cell-role {
+        margin-bottom: 0.2rem;
+    }
+
+    .farm-layout-cell-berry {
+        margin-bottom: 0.2rem;
+    }
+
+    .farm-layout-cell-mulch {
+        opacity: 0.85;
+    }
+
+    .farm-layout-cell-current {
+        margin-top: auto;
+        padding-top: 0.3rem;
+        opacity: 0.7;
+    }
+
+    .farm-layout-editor {
+        min-width: 0;
+    }
+
+    .farm-layout-code {
+        user-select: text;
+        font-family: monospace;
+        overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 767px) {
+        .farm-layout-workspace {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .farm-layout-cell {
+            min-height: 8rem;
+            font-size: 0.65rem;
+        }
+
+        .farm-layout-controls > button {
+            flex: 1 1 auto;
+        }
+    }
 }
 
 #farmView {

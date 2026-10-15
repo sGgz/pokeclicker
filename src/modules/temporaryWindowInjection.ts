@@ -5,6 +5,7 @@ import SaveSelector from './SaveSelector';
 import CloudSave from './cloudSave/CloudSave';
 import PrivateGameplay from './privateGameplay/settings';
 import DungeonGuidePlanner from './privateGameplay/DungeonGuidePlanner';
+import FarmLayoutPlan from './farming/FarmLayoutPlan';
 import Profile from './profile/Profile';
 import DataStore from './DataStore';
 import * as GameConstants from './GameConstants';
@@ -250,6 +251,7 @@ import * as DownloadUtil from './utilities/DownloadUtil';
 Object.assign(<any>window, {
     PrivateGameplay,
     DungeonGuidePlanner,
+    FarmLayoutPlan,
     CloudSave,
     SaveSelector,
     Profile,

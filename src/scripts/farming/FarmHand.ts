@@ -228,12 +228,17 @@ class FarmHand {
         let workTimes = this.efficiency;
         const farming = App.game.farming;
         const plots = farming.getFarmPlots(this.farmId);
+        const layout = farming.farms()[this.farmId].layout;
+        const layoutWork = layout.work(this, workTimes);
+        workTimes -= layoutWork.actions;
+        this.gainExperience(layoutWork.experience);
+        worked = layoutWork.actions > 0;
 
         // Harvesting berries
         if (this.shouldHarvest()) {
             let readyPlotIndex;
             do {
-                readyPlotIndex = plots.findIndex((p, i) => p.isUnlocked && p.berry !== BerryType.None && p.stage() === PlotStage.Berry && this.plots().includes(i) && !p.isSafeLocked);
+                readyPlotIndex = plots.findIndex((p, i) => p.isUnlocked && p.berry !== BerryType.None && p.stage() === PlotStage.Berry && this.plots().includes(i) && !p.isSafeLocked && !layout.isManaged(i));
                 if (readyPlotIndex >= 0 && workTimes > 0) {
                     const berry = plots[readyPlotIndex].berry;
                     farming.harvest(readyPlotIndex, this.farmId);
@@ -254,7 +259,7 @@ class FarmHand {
             let berry;
             do {
                 // Find empty plots
-                emptyPlotIndex = plots.findIndex((p, i) => p.isUnlocked && p.berry == BerryType.None && this.plots().includes(i) && !p.isSafeLocked);
+                emptyPlotIndex = plots.findIndex((p, i) => p.isUnlocked && p.berry == BerryType.None && this.plots().includes(i) && !p.isSafeLocked && !layout.isManaged(i));
                 // Plant the berry
                 if (emptyPlotIndex >= 0 && workTimes > 0) {
                     // Plant the expected berry

@@ -14,9 +14,10 @@ import FarmNotificationType from '../enums/FarmNotificationType';
 import FarmingTool from '../enums/FarmingTool';
 import SizeUnits from '../enums/SizeUnits';
 import { BerryList } from '../farming/BerryList';
+import FarmLayoutPlan from '../farming/FarmLayoutPlan';
 
 const scripts = [
-    'FarmHand.ts', 'Plot.ts', 'mutation/Mutation.ts',
+    'FarmHand.ts', 'Plot.ts', 'FarmLayout.ts', 'mutation/Mutation.ts',
     'mutation/mutationTypes/GrowMutation.ts', 'mutation/mutationTypes/FieldMutation.ts',
     'Farming.ts', 'FarmController.ts',
 ].map(file => transpileModule(readFileSync(`src/scripts/farming/${file}`, 'utf8'), {
@@ -48,7 +49,7 @@ function setup() {
         NotificationSetting: { Farming: { farm_hand: 0 } },
     };
     const classes = runInNewContext(`${scripts}\n({ Farming, FarmHands, FarmHand, FarmController, FieldMutation });`, {
-        ko, GameConstants, GameHelper, Amount, BerryType, BerryList, MulchType, PlotStage, AuraType, FarmNotificationType, FarmingTool, SizeUnits,
+        ko, GameConstants, GameHelper, Amount, BerryType, BerryList, MulchType, PlotStage, AuraType, FarmNotificationType, FarmingTool, SizeUnits, FarmLayoutPlan,
         App: app, Notifier: notification, NotificationConstants: constants,
         TotalBerriesUnlockedRequirement: requirement, UniqueItemOwnedRequirement: requirement,
         SeededRand: { seed: vi.fn(), intBetween: () => 1 },
@@ -84,6 +85,502 @@ function growthPreview(FarmController, app, detail = false) {
     ko.applyBindings({ $data: BerryType.Cheri, BerryList, GameConstants, FarmController, App: app }, preview);
     return preview;
 }
+
+function layoutPlan(cells: Record<number, Record<string, unknown>>, name = '布局助手集成测试') {
+    return {
+        version: 1,
+        name,
+        cells: Array.from({ length: 25 }, (_, index) => ({
+            role: 'ignore', berry: BerryType.None, targetBerry: BerryType.None,
+            mulch: MulchType.None, freezeStage: PlotStage.Berry,
+            ...cells[index],
+        })),
+    };
+}
+
+function enableLayout(farming, cells: Record<number, Record<string, unknown>>, farmId = 0) {
+    const layout = farming.farms()[farmId].layout;
+    layout.setPlan(layoutPlan(cells));
+    expect(layout.enabled()).toBe(false);
+    expect(layout.validation()).toEqual([]);
+    layout.toggle();
+    expect(layout.enabled()).toBe(true);
+    return layout;
+}
+
+describe('农场布局助手真实作业', () => {
+    it('Lum 母株保留成熟冻结状态，收获突变格后继续留空且不按 Replant 回种', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        const berries = [7, 6, 4, 6, 7, 5, -1, 2, -1, 5, 3, 1, 0, 1, 3, 5, -1, 2, -1, 5, 7, 6, 4, 6, 7];
+        const cells = Object.fromEntries(berries.map((berry, index) => [index, berry < 0
+            ? { role: 'mutation', mulch: MulchType.Surprise_Mulch, targetBerry: BerryType.Lum }
+            : { role: 'keep', berry, mulch: MulchType.Freeze_Mulch }]));
+        berries.forEach((berry, index) => {
+            const plot = berry < 0 ? farming.getFarmPlots(0)[index] : ripe(0, index, berry);
+            plot.mulch = berry < 0 ? MulchType.Surprise_Mulch : MulchType.Freeze_Mulch;
+            plot.mulchTimeLeft = 100_000;
+        });
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Jessie');
+        hand.focus(-2);
+        hand.shouldHarvest(true);
+        hand.hire();
+        enableLayout(farming, cells);
+        const before = farming.berryInventory.map(berry => berry());
+        const target = ripe(0, 6, BerryType.Lum);
+        const amount = target.harvestAmount();
+        hand.work();
+        expect(farming.getFarmPlots(0).filter(plot => plot.isEmpty()).map(plot => plot.index)).toEqual([6, 8, 16, 18]);
+        expect(farming.berryInventory[BerryType.Lum]()).toBe(before[BerryType.Lum] + amount);
+        berries.forEach((berry, index) => {
+            if (berry < 0) return;
+            expect(farming.getFarmPlots(0)[index].berry).toBe(berry);
+            expect(farming.getFarmPlots(0)[index].stage()).toBe(PlotStage.Berry);
+            expect(farming.berryInventory[berry]()).toBe(before[berry]);
+        });
+    });
+
+    it('成熟之前不冻结原料，成熟后按真实库存扣除肥料且不改年龄', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list[0];
+        hand.hire();
+        const plot = farming.getFarmPlots(0)[0];
+        plot.plant(BerryType.Chesto);
+        farming.mulchList[MulchType.Freeze_Mulch](1000);
+        enableLayout(farming, { 0: { role: 'keep', berry: BerryType.Chesto, mulch: MulchType.Freeze_Mulch } });
+        hand.work();
+        expect(plot.mulch).toBe(MulchType.None);
+        expect(plot.age).toBe(0);
+        expect(farming.mulchList[MulchType.Freeze_Mulch]()).toBe(1000);
+        ripe(0, 0, BerryType.Chesto);
+        const age = plot.age;
+        hand.work();
+        const consumed = 1000 - farming.mulchList[MulchType.Freeze_Mulch]();
+        expect(consumed).toBeGreaterThan(0);
+        expect(plot.mulch).toBe(MulchType.Freeze_Mulch);
+        expect(plot.mulchTimeLeft).toBe(consumed * GameConstants.MULCH_USE_TIME);
+        expect(plot.age).toBe(age);
+    });
+
+    it('Yache 原株进化位不收成熟 Passho，只有成熟 Yache 才采收并补回 Passho', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Logan');
+        hand.focus(BerryType.Cheri);
+        hand.shouldHarvest(true);
+        hand.plots([0]);
+        hand.hire();
+        enableLayout(farming, { 0: { role: 'evolve', berry: BerryType.Passho, targetBerry: BerryType.Yache } });
+        const source = ripe(0, 0, BerryType.Passho);
+        const passhoBefore = farming.berryInventory[BerryType.Passho]();
+        hand.work();
+        expect(source.berry).toBe(BerryType.Passho);
+        expect(source.stage()).toBe(PlotStage.Berry);
+        expect(farming.berryInventory[BerryType.Passho]()).toBe(passhoBefore);
+        source.berry = BerryType.Yache;
+        source.age = 0;
+        hand.work();
+        expect(source.berry).toBe(BerryType.Yache);
+        expect(source.age).toBe(0);
+        const yacheBefore = farming.berryInventory[BerryType.Yache]();
+        ripe(0, 0, BerryType.Yache);
+        const amount = source.harvestAmount();
+        hand.work();
+        expect(farming.berryInventory[BerryType.Yache]()).toBe(yacheBefore + amount);
+        expect(farming.berryInventory[BerryType.Passho]()).toBe(passhoBefore - 1);
+        expect(source.berry).toBe(BerryType.Passho);
+        expect(source.age).toBe(0);
+    });
+
+    it('空突变位采收任意成熟副产物后仍留空，纯隔离位保留已有植物', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Logan');
+        hand.shouldHarvest(true);
+        hand.focus(BerryType.Cheri);
+        hand.plots([0, 1]);
+        hand.hire();
+        enableLayout(farming, {
+            0: { role: 'mutation', targetBerry: BerryType.Lum },
+            1: { role: 'empty' },
+        });
+        ripe(0, 0, BerryType.Persim);
+        const isolated = ripe(0, 1, BerryType.Liechi);
+        const before = farming.berryInventory[BerryType.Liechi]();
+        hand.work();
+        expect(farming.getFarmPlots(0)[0].isEmpty()).toBe(true);
+        expect(isolated.berry).toBe(BerryType.Liechi);
+        expect(farming.berryInventory[BerryType.Liechi]()).toBe(before);
+        hand.work();
+        expect(farming.getFarmPlots(0)[0].isEmpty()).toBe(true);
+    });
+
+    it('安全锁和错种冲突逐格阻塞，绝不铲除唯一 Liechi 或消耗铲子', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Logan');
+        hand.shouldHarvest(true);
+        hand.focus(BerryType.Cheri);
+        hand.plots([0, 1, 2]);
+        hand.hire();
+        farming.shovelAmt(9);
+        farming.mulchShovelAmt(8);
+        const unique = ripe(0, 0, BerryType.Liechi);
+        const locked = ripe(0, 1, BerryType.Chesto);
+        locked.isSafeLocked = true;
+        const layout = enableLayout(farming, {
+            0: { role: 'cycle', berry: BerryType.Cheri },
+            1: { role: 'cycle', berry: BerryType.Chesto },
+            2: { role: 'keep', berry: BerryType.Pecha },
+        });
+        const age = unique.age;
+        hand.work();
+        expect(unique.berry).toBe(BerryType.Liechi);
+        expect(unique.age).toBe(age);
+        expect(locked.stage()).toBe(PlotStage.Berry);
+        expect(farming.getFarmPlots(0)[2].berry).toBe(BerryType.Pecha);
+        expect(farming.shovelAmt()).toBe(9);
+        expect(farming.mulchShovelAmt()).toBe(8);
+        expect(layout.status(0)).toBeTruthy();
+        expect(layout.status(1)).toBeTruthy();
+    });
+
+    it('布局与常规作业共享助手效率，未托管格正常种植且托管母株不被普通收获', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list.find(candidate => candidate.name === 'Logan');
+        hand.plots([0, 1, 2, 3, 4]);
+        hand.focus(BerryType.Cheri);
+        hand.shouldHarvest(true);
+        hand.hire();
+        ripe(0, 0, BerryType.Chesto);
+        enableLayout(farming, {
+            0: { role: 'keep', berry: BerryType.Chesto },
+            1: { role: 'mutation', targetBerry: BerryType.Lum },
+            2: { role: 'cycle', berry: BerryType.Cheri },
+        });
+        const seeds = farming.berryInventory[BerryType.Cheri]();
+        hand.work();
+        expect(farming.getFarmPlots(0).filter(plot => plot.berry === BerryType.Cheri).map(plot => plot.index)).toEqual([2, 3, 4]);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(seeds - 3);
+        expect(farming.getFarmPlots(0)[0].berry).toBe(BerryType.Chesto);
+        expect(farming.getFarmPlots(0)[1].isEmpty()).toBe(true);
+        expect(hand.experience()).toBe(3);
+        expect(hand.energy()).toBe(14);
+    });
+
+    it('效率一的助手本轮只采收，下轮才重新播种，并按真实收获量增加库存', () => {
+        const { farming, unlockFirst, ripe, wallet } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list[0];
+        hand.plots([0]);
+        hand.hire();
+        enableLayout(farming, { 0: { role: 'cycle', berry: BerryType.Cheri } });
+        const plot = ripe(0, 0);
+        const seeds = farming.berryInventory[BerryType.Cheri]();
+        const amount = plot.harvestAmount();
+        hand.work();
+        expect(plot.isEmpty()).toBe(true);
+        expect(hand.experience()).toBe(2);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(seeds + amount);
+        hand.work();
+        expect(plot.berry).toBe(BerryType.Cheri);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(seeds + amount - 1);
+        expect(hand.experience()).toBe(3);
+        expect(wallet.loseAmount).toHaveBeenCalledTimes(1);
+    });
+
+    it('Rich 在成熟采收时才施用，施肥和采收分别占用助手动作', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list[0];
+        hand.plots([0]);
+        hand.hire();
+        farming.mulchList[MulchType.Rich_Mulch](20);
+        enableLayout(farming, { 0: { role: 'cycle', berry: BerryType.Cheri, mulch: MulchType.Rich_Mulch } });
+        const plot = farming.getFarmPlots(0)[0];
+        plot.plant(BerryType.Cheri);
+        hand.work();
+        expect(farming.mulchList[MulchType.Rich_Mulch]()).toBe(20);
+        expect(plot.mulch).toBe(MulchType.None);
+        ripe(0, 0);
+        const seeds = farming.berryInventory[BerryType.Cheri]();
+        hand.work();
+        expect(plot.stage()).toBe(PlotStage.Berry);
+        expect(plot.mulch).toBe(MulchType.Rich_Mulch);
+        expect(farming.mulchList[MulchType.Rich_Mulch]()).toBeLessThan(20);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(seeds);
+        const amount = plot.harvestAmount();
+        hand.work();
+        expect(plot.isEmpty()).toBe(true);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(seeds + amount);
+    });
+
+    it('不替换已有其他肥料，待耗尽后再按布局施肥且不消耗肥料铲', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list[0];
+        hand.plots([0]);
+        hand.hire();
+        farming.mulchList[MulchType.Rich_Mulch](20);
+        farming.mulchShovelAmt(3);
+        const plot = ripe(0, 0);
+        plot.mulch = MulchType.Boost_Mulch;
+        plot.mulchTimeLeft = 30;
+        enableLayout(farming, { 0: { role: 'cycle', berry: BerryType.Cheri, mulch: MulchType.Rich_Mulch } });
+        hand.work();
+        expect(plot.berry).toBe(BerryType.Cheri);
+        expect(plot.mulch).toBe(MulchType.Boost_Mulch);
+        expect(farming.mulchList[MulchType.Rich_Mulch]()).toBe(20);
+        expect(farming.mulchShovelAmt()).toBe(3);
+        plot.clearMulch();
+        hand.work();
+        expect(plot.mulch).toBe(MulchType.Rich_Mulch);
+        expect(farming.mulchShovelAmt()).toBe(3);
+    });
+
+    it('现有 Rich 直接用于收获，不因工作窗口长而反复补肥耗尽预算', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list[0];
+        hand.plots([0]);
+        hand.hire();
+        farming.mulchList[MulchType.Rich_Mulch](100);
+        const layout = enableLayout(farming, { 0: { role: 'cycle', berry: BerryType.Cheri, mulch: MulchType.Rich_Mulch } });
+        const plot = ripe(0, 0);
+        plot.mulch = MulchType.Rich_Mulch;
+        plot.mulchTimeLeft = 0.001;
+        const amount = plot.harvestAmount();
+        const before = farming.berryInventory[BerryType.Cheri]();
+        expect(layout.work(hand, 1)).toEqual({ actions: 1, experience: 2 });
+        expect(plot.isEmpty()).toBe(true);
+        expect(farming.mulchList[MulchType.Rich_Mulch]()).toBe(100);
+        expect(farming.berryInventory[BerryType.Cheri]()).toBe(before + amount);
+        ripe(0, 0);
+        plot.clearMulch();
+        expect(layout.work(hand, 50)).toEqual({ actions: 3, experience: 3 });
+        expect(farming.mulchList[MulchType.Rich_Mulch]()).toBe(99);
+        expect(plot.berry).toBe(BerryType.Cheri);
+        expect(plot.age).toBe(0);
+    });
+
+    it('循环生产等待本田辅助株成熟，期间保留成熟 Liechi 并暂停施 Rich', () => {
+        vi.useFakeTimers();
+        try {
+            const { farming, unlockFirst, ripe } = setup();
+            unlockFirst();
+            const hand = farming.farmHands.list.find(candidate => candidate.name === 'Logan');
+            hand.plots([0, 1]);
+            hand.shouldHarvest(true);
+            hand.focus(BerryType.Cheri);
+            hand.hire();
+            farming.mulchList[MulchType.Rich_Mulch](10);
+            const target = ripe(0, 0, BerryType.Liechi);
+            const support = farming.getFarmPlots(0)[1];
+            support.plant(BerryType.Passho);
+            enableLayout(farming, {
+                0: { role: 'cycle', berry: BerryType.Liechi, mulch: MulchType.Rich_Mulch },
+                1: { role: 'keep', berry: BerryType.Passho },
+            });
+            const before = farming.berryInventory[BerryType.Liechi]();
+            hand.work();
+            expect(target.berry).toBe(BerryType.Liechi);
+            expect(target.stage()).toBe(PlotStage.Berry);
+            expect(target.mulch).toBe(MulchType.None);
+            expect(farming.berryInventory[BerryType.Liechi]()).toBe(before);
+            expect(farming.mulchList[MulchType.Rich_Mulch]()).toBe(10);
+            ripe(0, 1, BerryType.Passho);
+            vi.advanceTimersByTime(60);
+            hand.work();
+            expect(target.berry).toBe(BerryType.Liechi);
+            expect(target.age).toBe(0);
+            expect(support.berry).toBe(BerryType.Passho);
+            expect(support.stage()).toBe(PlotStage.Berry);
+            expect(farming.mulchList[MulchType.Rich_Mulch]()).toBe(9);
+            expect(hand.experience()).toBe(3);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('冻结续肥能覆盖低效率助手巡田，并受 Sprinklotad 持续时间加成影响', () => {
+        const run = (duration: number) => {
+            const { farming, unlockFirst, ripe, app } = setup();
+            unlockFirst();
+            app.game.oakItems.calculateBonus = item => item === 1 ? duration : 1;
+            const hand = farming.farmHands.list[0];
+            hand.plots([0, 1, 2]);
+            hand.hire();
+            farming.mulchList[MulchType.Freeze_Mulch](1000);
+            const layout = enableLayout(farming, Object.fromEntries([0, 1, 2].map(index => [index, {
+                role: 'keep', berry: BerryType.Chesto, mulch: MulchType.Freeze_Mulch,
+            }])));
+            [0, 1, 2].forEach(index => ripe(0, index, BerryType.Chesto));
+            const plot = farming.getFarmPlots(0)[0];
+            const age = plot.age;
+            expect(layout.work(hand, 1)).toEqual({ actions: 1, experience: 0 });
+            const consumed = 1000 - farming.mulchList[MulchType.Freeze_Mulch]();
+            expect(plot.mulchTimeLeft * duration).toBeGreaterThan(4 * hand.workTick / GameConstants.SECOND);
+            plot.update(4 * hand.workTick / GameConstants.SECOND);
+            expect(plot.mulch).toBe(MulchType.Freeze_Mulch);
+            expect(plot.age).toBe(age);
+            return consumed;
+        };
+        const plain = run(1);
+        const doubled = run(2);
+        expect(doubled).toBeLessThan(plain);
+        expect(Math.abs(plain - 2 * doubled)).toBeLessThanOrEqual(1);
+    });
+
+    it('全田托管但 Alex 仅负责一格时，冻结肥料开销与单格方案相同', () => {
+        const run = (managedCount: number) => {
+            const { farming, unlockFirst, ripe, app } = setup();
+            unlockFirst();
+            const hand = farming.farmHands.list[0];
+            hand.plots([0]);
+            hand.hire();
+            farming.mulchList[MulchType.Freeze_Mulch](1000);
+            const layout = enableLayout(farming, Object.fromEntries(Array.from({ length: managedCount }, (_, index) => [index, {
+                role: 'keep', berry: BerryType.Chesto, mulch: MulchType.Freeze_Mulch,
+            }])));
+            Array.from({ length: managedCount }, (_, index) => ripe(0, index, BerryType.Chesto));
+            expect(layout.work(hand, 50)).toEqual({ actions: 1, experience: 0 });
+            const consumed = 1000 - farming.mulchList[MulchType.Freeze_Mulch]();
+            expect(consumed).toBeGreaterThan(0);
+            expect(app.game.statistics.totalMulchesUsed()).toBe(consumed);
+            expect(farming.getFarmPlots(0)[0].mulchTimeLeft).toBe(consumed * GameConstants.MULCH_USE_TIME);
+            expect(farming.getFarmPlots(0).slice(1).every(plot => plot.mulch === MulchType.None)).toBe(true);
+            return consumed;
+        };
+        expect(run(25)).toBe(run(1));
+    });
+
+    it('保留株成熟后不再新施或续 Boost 与 Amaze，未成熟时仍正常施肥', () => {
+        for (const mulch of [MulchType.Boost_Mulch, MulchType.Amaze_Mulch]) {
+            const { farming, unlockFirst, ripe } = setup();
+            unlockFirst();
+            const hand = farming.farmHands.list[0];
+            hand.plots([0]);
+            hand.hire();
+            farming.mulchList[mulch](1000);
+            const plot = ripe(0, 0, BerryType.Passho);
+            const age = plot.age;
+            const layout = enableLayout(farming, { 0: { role: 'keep', berry: BerryType.Passho, mulch } });
+            expect(layout.work(hand, 1)).toEqual({ actions: 0, experience: 0 });
+            expect(plot.mulch).toBe(MulchType.None);
+            expect(farming.mulchList[mulch]()).toBe(1000);
+            plot.mulch = mulch;
+            plot.mulchTimeLeft = 0.001;
+            expect(layout.work(hand, 1)).toEqual({ actions: 0, experience: 0 });
+            expect(plot.mulchTimeLeft).toBe(0.001);
+            expect(plot.age).toBe(age);
+            expect(farming.mulchList[mulch]()).toBe(1000);
+            plot.plant(BerryType.Passho);
+            plot.clearMulch();
+            expect(layout.work(hand, 1)).toEqual({ actions: 1, experience: 0 });
+            expect(plot.mulch).toBe(mulch);
+            expect(plot.age).toBe(0);
+            expect(farming.mulchList[mulch]()).toBeLessThan(1000);
+        }
+    });
+
+    it('仅第一个已雇用且允许该格的助手负责布局，其他助手不能普通补种托管空位', () => {
+        const { farming, unlockFirst } = setup();
+        unlockFirst();
+        const [first, second] = farming.farmHands.list;
+        first.plots([0]);
+        second.plots([0]);
+        [first, second].forEach(hand => {
+            hand.hire();
+            hand.focus(BerryType.Cheri);
+            hand.shouldHarvest(true);
+        });
+        enableLayout(farming, { 0: { role: 'keep', berry: BerryType.Chesto } });
+        second.work();
+        expect(farming.getFarmPlots(0)[0].isEmpty()).toBe(true);
+        first.work();
+        expect(farming.getFarmPlots(0)[0].berry).toBe(BerryType.Chesto);
+        farming.getFarmPlots(0)[0].berry = BerryType.None;
+        first.plots([]);
+        second.work();
+        expect(farming.getFarmPlots(0)[0].berry).toBe(BerryType.Chesto);
+    });
+
+    it('未雇用或未分配格子的助手不能执行布局，缺种时不耗动作或凭空增加种子', () => {
+        const { farming, unlockFirst } = setup();
+        unlockFirst();
+        const hand = farming.farmHands.list[0];
+        hand.plots([0]);
+        const layout = enableLayout(farming, { 0: { role: 'keep', berry: BerryType.Chesto } });
+        expect(layout.work(hand, 1).actions).toBe(0);
+        expect(farming.getFarmPlots(0)[0].isEmpty()).toBe(true);
+        hand.hire();
+        hand.plots([]);
+        expect(layout.work(hand, 1).actions).toBe(0);
+        hand.plots([0]);
+        farming.berryInventory[BerryType.Chesto](0);
+        const before = hand.experience();
+        hand.work();
+        expect(farming.getFarmPlots(0)[0].isEmpty()).toBe(true);
+        expect(farming.berryInventory[BerryType.Chesto]()).toBe(0);
+        expect(hand.experience()).toBe(before);
+    });
+
+    it('布局按田保存并仅操作助手所属田，读档不收费且旧档默认停用', () => {
+        const first = setup();
+        first.addFarm();
+        const hand = first.farming.farms()[1].hands.list[0];
+        hand.hire();
+        hand.plots([0]);
+        enableLayout(first.farming, { 0: { role: 'keep', berry: BerryType.Chesto } }, 1);
+        first.farming.selectedFarm(0);
+        hand.work();
+        expect(first.farming.getFarmPlots(0)[0].isEmpty()).toBe(true);
+        expect(first.farming.getFarmPlots(1)[0].berry).toBe(BerryType.Chesto);
+        const saved = JSON.parse(JSON.stringify(first.farming.toJSON()));
+        const second = setup();
+        second.farming.fromJSON(saved);
+        expect(second.wallet.loseAmount).not.toHaveBeenCalled();
+        expect(second.farming.farms()[0].layout.enabled()).toBe(false);
+        expect(second.farming.farms()[1].layout.enabled()).toBe(true);
+        expect(second.farming.farms()[1].layout.plan()).toEqual(first.farming.farms()[1].layout.plan());
+        expect(JSON.parse(JSON.stringify(second.farming.toJSON()))).toEqual(saved);
+        const legacy = setup();
+        legacy.farming.fromJSON({ plotList: [], farmHands: [] });
+        expect(legacy.farming.farms()[0].layout.enabled()).toBe(false);
+    });
+
+    it('非法或未补全布局不能启用，也不会改变真实作物和库存', () => {
+        const { farming, unlockFirst, ripe } = setup();
+        unlockFirst();
+        const layout = farming.farms()[0].layout;
+        const plot = ripe(0, 0, BerryType.Liechi);
+        const before = farming.berryInventory.map(berry => berry());
+        layout.setPlan(layoutPlan({ 0: { role: 'evolve', berry: BerryType.Passho, targetBerry: BerryType.None } }));
+        expect(layout.validation().length).toBeGreaterThan(0);
+        layout.toggle();
+        expect(layout.enabled()).toBe(false);
+        expect(plot.berry).toBe(BerryType.Liechi);
+        expect(farming.berryInventory.map(berry => berry())).toEqual(before);
+    });
+
+    it('单田损坏布局安全停用，不阻止其他田的计划与真实作物读档', () => {
+        const first = setup();
+        first.addFarm();
+        first.ripe(0, 0, BerryType.Liechi);
+        enableLayout(first.farming, { 0: { role: 'keep', berry: BerryType.Chesto } }, 1);
+        const saved = JSON.parse(JSON.stringify(first.farming.toJSON()));
+        saved.farms[0].layout = { enabled: true, plan: { version: 1, cells: '损坏数据' } };
+        const second = setup();
+        expect(() => second.farming.fromJSON(saved)).not.toThrow();
+        expect(second.farming.getFarmPlots(0)[0].berry).toBe(BerryType.Liechi);
+        expect(second.farming.farms()[0].layout.enabled()).toBe(false);
+        expect(second.farming.farms()[1].layout.enabled()).toBe(true);
+        expect(second.farming.farms()[1].layout.plan()).toEqual(first.farming.farms()[1].layout.plan());
+        expect(second.wallet.loseAmount).not.toHaveBeenCalled();
+    });
+});
 
 describe('树果收获时间预览', () => {
     it('将全局生长加成应用到实际预览绑定', () => {
