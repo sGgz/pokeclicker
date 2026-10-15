@@ -37,6 +37,7 @@ function setup() {
     const feeRate = ko.observable(0.01);
     const optimized = ko.observable(false);
     const chestPriority = ko.observable<string>(undefined);
+    const clearEnemies = ko.observable(false);
     const planner = { walk: vi.fn(() => true), reset: vi.fn() };
     const wallet = {
         hasAmount: vi.fn<(amount: Amount) => boolean>().mockReturnValue(true),
@@ -56,7 +57,7 @@ function setup() {
         ko,
         GameConstants,
         Amount,
-        PrivateGameplay: { guideFeeRate: feeRate, optimizedPathfinding: optimized, drakeChestPriority: chestPriority },
+        PrivateGameplay: { guideFeeRate: feeRate, optimizedPathfinding: optimized, drakeChestPriority: chestPriority, drakeClearEnemies: clearEnemies },
         DungeonGuidePlanner: planner,
         DungeonRunner: runner,
         SeededRand: { seed: vi.fn(), intBetween: () => 1 },
@@ -74,7 +75,7 @@ function setup() {
         console,
     };
     const guides = runInNewContext(`${compiled}\nDungeonGuides;`, context) as TestGuides;
-    return { guides, feeRate, optimized, chestPriority, planner, wallet, runner, tileType };
+    return { guides, feeRate, optimized, chestPriority, clearEnemies, planner, wallet, runner, tileType };
 }
 
 function currencyAmounts(costs: Amount[]): Record<string, number> {
@@ -251,6 +252,68 @@ describe('private dungeon guide planner integration', () => {
         expect(drake.walk).toHaveBeenCalledTimes(mode ? 0 : 1);
     });
 
+    it.each([false, true])('uses Drake enemy clearing with optimization %s and restores the selected mode when disabled', (mode) => {
+        const { guides, optimized, clearEnemies, planner, tileType, runner } = setup();
+        const drake = guides.list.find(guide => guide.name === 'Drake');
+        drake.walk = vi.fn();
+        optimized(mode);
+        clearEnemies(true);
+        tileType(GameConstants.DungeonTileType.boss);
+        drake.ticks = drake.interval - GameConstants.DUNGEON_TICK;
+        drake.tick();
+        expect(planner.walk).toHaveBeenCalledExactlyOnceWith('Drake');
+        expect(drake.walk).not.toHaveBeenCalled();
+        expect(runner.handleInteraction).toHaveBeenCalledExactlyOnceWith(GameConstants.DungeonInteractionSource.DungeonGuide);
+
+        clearEnemies(false);
+        drake.ticks = drake.interval - GameConstants.DUNGEON_TICK;
+        drake.tick();
+        expect(planner.walk).toHaveBeenCalledTimes(mode ? 2 : 1);
+        expect(planner.reset).toHaveBeenCalledTimes(mode ? 0 : 1);
+        expect(drake.walk).toHaveBeenCalledTimes(mode ? 0 : 1);
+    });
+
+    it('keeps Drake on the planner until both chest priority and enemy clearing are disabled', () => {
+        const { guides, chestPriority, clearEnemies, planner } = setup();
+        const drake = guides.list.find(guide => guide.name === 'Drake');
+        drake.walk = vi.fn();
+        chestPriority('rare');
+        clearEnemies(true);
+        drake.ticks = drake.interval - GameConstants.DUNGEON_TICK;
+        drake.tick();
+
+        chestPriority(undefined);
+        drake.ticks = drake.interval - GameConstants.DUNGEON_TICK;
+        drake.tick();
+        expect(planner.walk).toHaveBeenCalledTimes(2);
+        expect(drake.walk).not.toHaveBeenCalled();
+
+        clearEnemies(false);
+        drake.ticks = drake.interval - GameConstants.DUNGEON_TICK;
+        drake.tick();
+        expect(planner.walk).toHaveBeenCalledTimes(2);
+        expect(planner.reset).toHaveBeenCalledOnce();
+        expect(drake.walk).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+        { mode: false, type: GameConstants.DungeonTileType.boss },
+        { mode: false, type: GameConstants.DungeonTileType.ladder },
+        { mode: true, type: GameConstants.DungeonTileType.boss },
+        { mode: true, type: GameConstants.DungeonTileType.ladder },
+    ])('does not interact with exit tile $type en route to an enemy with optimization $mode', ({ mode, type }) => {
+        const { guides, optimized, clearEnemies, planner, runner, tileType } = setup();
+        const drake = guides.list.find(guide => guide.name === 'Drake');
+        optimized(mode);
+        clearEnemies(true);
+        planner.walk.mockReturnValue(false);
+        tileType(type);
+        drake.ticks = drake.interval - GameConstants.DUNGEON_TICK;
+        drake.tick();
+        expect(planner.walk).toHaveBeenCalledExactlyOnceWith('Drake');
+        expect(runner.handleInteraction).not.toHaveBeenCalled();
+    });
+
     it.each([GameConstants.DungeonTileType.boss, GameConstants.DungeonTileType.ladder])('does not interact with exit tile %s en route to a chest', (type) => {
         const { guides, chestPriority, planner, runner, tileType } = setup();
         const drake = guides.list.find(guide => guide.name === 'Drake');
@@ -273,5 +336,25 @@ describe('private dungeon guide planner integration', () => {
             expect(guide.walk).toHaveBeenCalledOnce();
         });
         expect(planner.walk).not.toHaveBeenCalled();
+    });
+
+    it.each([false, true])('preserves other guide paths with optimization %s when Drake enemy clearing is enabled', (mode) => {
+        const { guides, optimized, clearEnemies, planner } = setup();
+        optimized(mode);
+        clearEnemies(true);
+        const otherGuides = guides.list.filter(guide => guide.name !== 'Drake');
+        otherGuides.forEach(guide => {
+            guide.walk = vi.fn();
+            guide.ticks = guide.interval - GameConstants.DUNGEON_TICK;
+            guide.tick();
+            if (mode) {
+                expect(planner.walk).toHaveBeenLastCalledWith(guide.name);
+                expect(guide.walk).not.toHaveBeenCalled();
+            } else {
+                expect(guide.walk).toHaveBeenCalledOnce();
+            }
+        });
+        expect(planner.walk).toHaveBeenCalledTimes(mode ? otherGuides.length : 0);
+        expect(planner.reset).toHaveBeenCalledTimes(mode ? 0 : otherGuides.length);
     });
 });

@@ -23,7 +23,15 @@
                                 options: Settings.getSetting('ggzz.private.drakeChestPriority').options,
                                 optionsText: 'text', optionsValue: 'value',
                                 value: Settings.getSetting('ggzz.private.drakeChestPriority').observableValue"></select>
-                            <p class="small mb-0 mt-1">仅对 Drake 生效：逐层打开所选品质及以上的宝箱，再下楼或挑战 BOSS。可随时在设置的「自用玩法」中调整；关闭后优先通关，路过的宝箱仍会打开。</p>
+                            <p class="small mb-0 mt-1">仅对 Drake 生效：先打开所选品质及以上的宝箱，再执行清怪设置，最后下楼或挑战 BOSS。关闭宝箱优先后，路过的宝箱仍会打开。</p>
+                        </div>
+                        <div class="m-2">
+                            <label for="drake-clear-enemies">Drake 清怪</label>
+                            <select id="drake-clear-enemies" class="form-control" data-bind="
+                                options: Settings.getSetting('ggzz.private.drakeClearEnemies').options,
+                                optionsText: 'text', optionsValue: 'value',
+                                value: Settings.getSetting('ggzz.private.drakeClearEnemies').observableValue"></select>
+                            <p class="small mb-0 mt-1">开启后，Drake 优先按上述品质设置开宝箱，再清理本层普通怪，最后下楼或挑战 BOSS。剩余时间不足 10 秒时停止主动清怪，为 BOSS 预留时间。官方和优化寻路均生效，不影响其他助手；可随时在设置的「自用玩法」中调整。</p>
                         </div>
                         <div class="row m-0 justify-content-center d-flex p-1" data-bind="foreach: DungeonGuides.available()" style="max-width: 100%;">
                             <div class="card text-left col-lg-6 col-md-12 p-1 border-0 align-items-stretch">

@@ -1,4 +1,4 @@
-import { DungeonTileType } from '../GameConstants';
+import { DungeonTileType, SECOND } from '../GameConstants';
 import Notifier from '../notifications/Notifier';
 import NotificationOption from '../notifications/NotificationOption';
 import PrivateGameplay, { dungeonChestTiers } from './settings';
@@ -25,6 +25,8 @@ export interface GuidePlanInput {
     waiting?: boolean;
     random?: () => number;
     chestPriority?: DungeonChestTier;
+    clearEnemies?: boolean;
+    timeLeft?: number;
 }
 
 export type GuideAction =
@@ -172,6 +174,13 @@ export function planGuideMove(input: GuidePlanInput): GuideAction {
             return chest ? moveToward(search, chest) : { type: 'no-route' };
         }
     }
+    if (guide === 'Drake' && input.clearEnemies && input.timeLeft >= 10 * SECOND) {
+        const search = searchFloor(input);
+        const enemy = nearestTarget(input, search, (tile) => tile.type === DungeonTileType.enemy);
+        if (enemy) {
+            return moveToward(search, enemy);
+        }
+    }
     if ([DungeonTileType.boss, DungeonTileType.ladder].includes(current.type)) {
         return { type: 'interact' };
     }
@@ -228,6 +237,7 @@ interface RuntimeRunner {
     map?: RuntimeMap;
     fighting(): boolean;
     dungeonFinished(): boolean;
+    timeLeft(): number;
 }
 declare const DungeonBattle: { catching(): boolean };
 
@@ -235,6 +245,7 @@ interface PlannerMemory {
     map: RuntimeMap;
     guide: string;
     chestPriority?: DungeonChestTier;
+    clearEnemies: boolean;
     expected: GuidePosition;
     previous?: GuidePosition;
     target?: GuidePosition;
@@ -289,8 +300,10 @@ export default class DungeonGuidePlanner {
         }
         const memory = this.memory;
         const chestPriority = guide === 'Drake' ? PrivateGameplay.drakeChestPriority() : undefined;
-        if (!memory || memory.map !== map || memory.guide !== guide || memory.chestPriority !== chestPriority || !samePosition(memory.expected, position)) {
-            this.memory = { map, guide, chestPriority, expected: { ...position } };
+        const clearEnemies = guide === 'Drake' && PrivateGameplay.drakeClearEnemies();
+        if (!memory || memory.map !== map || memory.guide !== guide || memory.chestPriority !== chestPriority
+            || memory.clearEnemies !== clearEnemies || !samePosition(memory.expected, position)) {
+            this.memory = { map, guide, chestPriority, clearEnemies, expected: { ...position } };
         }
         const action = planGuideMove({
             guide,
@@ -299,6 +312,8 @@ export default class DungeonGuidePlanner {
                 type: tile.type(), visited: tile.isVisited, chestTier: chestPriority ? tile.metadata?.tier : undefined,
             }))),
             chestPriority,
+            clearEnemies,
+            timeLeft: clearEnemies ? runner.timeLeft() : undefined,
             previous: this.memory.previous,
             target: this.memory.target,
         });
@@ -312,8 +327,8 @@ export default class DungeonGuidePlanner {
             throw new Error('Dungeon guide planned a non-adjacent step');
         }
         if (map.moveToTile(next)) {
-            this.memory = { map, guide, chestPriority, expected: { ...next }, previous: { ...position }, target: action.target };
-            // Bosses and ladders may be intermediate steps on the way to a chest.
+            this.memory = { map, guide, chestPriority, clearEnemies, expected: { ...next }, previous: { ...position }, target: action.target };
+            // 前往宝箱或普通怪途中可以经过首领和楼梯，但不能提前触发交互。
             const nextType = floor[next.y][next.x].type();
             return ![DungeonTileType.boss, DungeonTileType.ladder].includes(nextType) || samePosition(next, action.target);
         }

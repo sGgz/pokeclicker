@@ -31,7 +31,8 @@ class DungeonGuide {
             this.ticks = 0;
             try {
                 let interact = true;
-                if (PrivateGameplay.optimizedPathfinding() || (this.name === 'Drake' && PrivateGameplay.drakeChestPriority())) {
+                if (PrivateGameplay.optimizedPathfinding() || (this.name === 'Drake'
+                    && (PrivateGameplay.drakeChestPriority() || PrivateGameplay.drakeClearEnemies()))) {
                     interact = DungeonGuidePlanner.walk(this.name);
                 } else {
                     DungeonGuidePlanner.reset();

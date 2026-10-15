@@ -14,6 +14,7 @@ const names = {
     vitamins: 'ggzz.private.fixedVitaminPurchased',
     pathfinding: 'ggzz.private.guidePathfinding',
     drakeChestPriority: 'ggzz.private.drakeChestPriority',
+    drakeClearEnemies: 'ggzz.private.drakeClearEnemies',
     guideFee: 'ggzz.private.guideFeeRate',
     // Retain the released save key so existing enabled/disabled preferences survive.
     autoFillHatcheryQueue: 'ggzz.private.autoFillEggSlots',
@@ -86,6 +87,10 @@ export default class PrivateGameplay {
             new SettingOption('传说及以上（legendary）', 'legendary'),
             new SettingOption('神话（mythic）', 'mythic'),
         ], 'off', undefined, false));
+        Settings.add(new PrivateSetting(names.drakeClearEnemies, 'Drake 清怪', [
+            new SettingOption('关闭', false),
+            new SettingOption('开启', true),
+        ], false, undefined, false));
         Settings.add(new PrivateSetting(names.guideFee, '地牢助手服务费', [
             new SettingOption('原价的 1%（门票原价）', 0.01),
             new SettingOption('官方原价', 1),
@@ -139,6 +144,10 @@ export default class PrivateGameplay {
     static drakeChestPriority(): DungeonChestTier | undefined {
         const value = Settings.getSetting(names.drakeChestPriority)?.observableValue();
         return dungeonChestTiers.find(tier => tier === value);
+    }
+
+    static drakeClearEnemies(): boolean {
+        return Settings.getSetting(names.drakeClearEnemies)?.observableValue() === true;
     }
 
     static guideIsHired(): boolean {

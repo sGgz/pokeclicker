@@ -228,6 +228,58 @@ describe('dungeon guide next-step policy', () => {
     });
 });
 
+describe('Drake 清怪优先级', () => {
+    it('先打开符合品质的宝箱，再逐个清怪，最后返回首领', () => {
+        const plan = { ...input(['B.C.E.E'], 'Drake', point(1, 0)), chestPriority: 'rare' as const, clearEnemies: true, timeLeft: 60_000 };
+        plan.tiles[0][2].chestTier = 'epic';
+        expect(planGuideMove(plan)).toMatchObject({ target: point(2, 0) });
+        plan.tiles[0][2].type = Tile.empty;
+        expect(planGuideMove(plan)).toMatchObject({ target: point(4, 0) });
+        plan.tiles[0][4].type = Tile.empty;
+        expect(planGuideMove(plan)).toMatchObject({ target: point(6, 0) });
+        plan.tiles[0][6].type = Tile.empty;
+        expect(planGuideMove(plan)).toMatchObject({ target: point(0, 0) });
+    });
+
+    it('剩余不足十秒只停止清怪，仍遵守宝箱品质优先', () => {
+        const plan = { ...input(['B.C.E'], 'Drake', point(1, 0)), chestPriority: 'rare' as const, clearEnemies: true, timeLeft: 9_999 };
+        plan.tiles[0][2].chestTier = 'epic';
+        expect(planGuideMove(plan)).toMatchObject({ target: point(2, 0) });
+        plan.tiles[0][2].type = Tile.empty;
+        expect(planGuideMove(plan)).toMatchObject({ target: point(0, 0) });
+    });
+
+    it.each([
+        [10_001, 2], [10_000, 2], [9_999, 0], [0, 0], [-1, 0], [undefined, 0],
+    ])('剩余 %s 毫秒时选择横坐标 %s 的目标', (timeLeft, targetX) => {
+        const plan = { ...input(['B.E'], 'Drake', point(1, 0)), clearEnemies: true, timeLeft };
+        expect(planGuideMove(plan)).toMatchObject({ target: point(targetX, 0) });
+    });
+
+    it.each(['B', 'L'])('清怪完成或时间不足前不触发当前出口 %s', (kind) => {
+        const plan = { ...input([`${kind}.E`]), clearEnemies: true, timeLeft: 10_000 };
+        expect(planGuideMove(plan)).toMatchObject({ position: point(1, 0), target: point(2, 0) });
+        expect(planGuideMove({ ...plan, timeLeft: 9_999 })).toEqual({ type: 'interact' });
+        plan.tiles[0][2].type = Tile.empty;
+        expect(planGuideMove(plan)).toEqual({ type: 'interact' });
+    });
+
+    it('关闭清怪后立即放弃旧怪物目标', () => {
+        const plan = { ...input(['B.E'], 'Drake', point(1, 0)), target: point(2, 0), clearEnemies: false, timeLeft: 60_000 };
+        expect(planGuideMove(plan)).toMatchObject({ target: point(0, 0) });
+    });
+
+    it('清怪设置不改变其他助手的出口策略', () => {
+        expect(planGuideMove({ ...input(['B.E'], 'Georgia', point(1, 0)), clearEnemies: true, timeLeft: 60_000 }))
+            .toMatchObject({ target: point(0, 0) });
+    });
+
+    it('不可达的怪物不会阻止前往可达首领', () => {
+        expect(planGuideMove({ ...input(['B.#E'], 'Drake', point(1, 0)), clearEnemies: true, timeLeft: 60_000 }))
+            .toMatchObject({ target: point(0, 0) });
+    });
+});
+
 function runtime(plan: GuidePlanInput) {
     let position = { ...plan.position };
     const tiles: { isVisited: boolean; metadata?: { tier: GuideTile['chestTier'] }; type(): Tile }[][] = plan.tiles.map((row) => row.map((tile) => tile && ({
@@ -240,7 +292,7 @@ function runtime(plan: GuidePlanInput) {
         playerPosition: vi.fn(() => position),
         moveToTile: vi.fn((next: GuidePosition) => { position = next; return true; }),
     };
-    const runner = { map, fighting: vi.fn(() => false), dungeonFinished: vi.fn(() => false) };
+    const runner = { map, fighting: vi.fn(() => false), dungeonFinished: vi.fn(() => false), timeLeft: vi.fn(() => plan.timeLeft ?? 60_000) };
     const battle = { catching: vi.fn(() => false) };
     vi.stubGlobal('DungeonRunner', runner);
     vi.stubGlobal('DungeonBattle', battle);
@@ -251,6 +303,68 @@ describe('dungeon guide runtime adapter', () => {
     beforeEach(() => {
         DungeonGuidePlanner.reset();
         vi.clearAllMocks();
+    });
+
+    it.each(['B', 'L'])('穿过出口 %s 清怪时不交互，并等待战斗和捕捉结束后返回', (kind) => {
+        vi.spyOn(PrivateGameplay, 'drakeClearEnemies').mockReturnValue(true);
+        const plan = input([`.${kind}.E`]);
+        const game = runtime(plan);
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(false);
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(1, 0));
+        DungeonGuidePlanner.walk('Drake');
+        DungeonGuidePlanner.walk('Drake');
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(3, 0));
+        game.runner.fighting.mockReturnValue(true);
+        game.map.moveToTile.mockClear();
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(false);
+        expect(game.map.moveToTile).not.toHaveBeenCalled();
+        game.runner.fighting.mockReturnValue(false);
+        plan.tiles[0][3].type = Tile.empty;
+        game.battle.catching.mockReturnValue(true);
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(false);
+        expect(game.map.moveToTile).not.toHaveBeenCalled();
+        game.battle.catching.mockReturnValue(false);
+        DungeonGuidePlanner.walk('Drake');
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(true);
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(1, 0));
+    });
+
+    it('实时读取剩余时间，跌破十秒后放弃正在接近的怪物', () => {
+        vi.spyOn(PrivateGameplay, 'drakeClearEnemies').mockReturnValue(true);
+        const game = runtime(input(['B...E'], 'Drake', point(1, 0)));
+        DungeonGuidePlanner.walk('Drake');
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(2, 0));
+        game.runner.timeLeft.mockReturnValue(9_999);
+        DungeonGuidePlanner.walk('Drake');
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(1, 0));
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(true);
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(0, 0));
+    });
+
+    it('清怪开关在下一次行动生效', () => {
+        const clearEnemies = vi.spyOn(PrivateGameplay, 'drakeClearEnemies').mockReturnValue(true);
+        const game = runtime(input(['B...E'], 'Drake', point(1, 0)));
+        DungeonGuidePlanner.walk('Drake');
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(2, 0));
+        clearEnemies.mockReturnValue(false);
+        DungeonGuidePlanner.walk('Drake');
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(1, 0));
+        clearEnemies.mockReturnValue(true);
+        DungeonGuidePlanner.walk('Drake');
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(2, 0));
+    });
+
+    it('下楼后重新查找新楼层的普通怪', () => {
+        vi.spyOn(PrivateGameplay, 'drakeClearEnemies').mockReturnValue(true);
+        const game = runtime(input(['.L']));
+        expect(DungeonGuidePlanner.walk('Drake')).toBe(true);
+        game.map.board().push([
+            [{ type: () => Tile.empty, isVisited: true }, { type: () => Tile.boss, isVisited: false }],
+            [{ type: () => Tile.enemy, isVisited: false }, { type: () => Tile.empty, isVisited: false }],
+        ]);
+        game.reposition(point(0, 0, 1));
+        DungeonGuidePlanner.walk('Drake');
+        expect(game.map.moveToTile).toHaveBeenLastCalledWith(point(0, 1, 1));
     });
 
     it.each(['B', 'L'])('crosses exit %s without interacting, opens the chest, then returns to the exit', (kind) => {
