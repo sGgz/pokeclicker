@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as knockout from 'knockout';
 import Settings from '../settings/Settings';
@@ -187,6 +188,34 @@ describe('private gameplay save settings', () => {
         expect(Notifier.notify).not.toHaveBeenCalled();
         subscription.dispose();
         clearing.dispose();
+    });
+
+    it.each([
+        ['src/components/settingsModal.html', '#private-drake-clear-enemies'],
+        ['src/components/dungeonGuidesModal.html', '#drake-clear-enemies'],
+    ])('真实控件 %s 双向传递布尔清怪设置', (file, selector) => {
+        const source = new DOMParser().parseFromString(readFileSync(file, 'utf8'), 'text/html');
+        const select = source.querySelector<HTMLSelectElement>(selector).cloneNode(true) as HTMLSelectElement;
+        const container = document.createElement('div');
+        container.appendChild(select);
+        document.body.appendChild(container);
+        try {
+            knockout.applyBindings({ Settings }, container);
+            expect(select.selectedIndex).toBe(0);
+            select.selectedIndex = 1;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            expect(PrivateGameplay.drakeClearEnemies()).toBe(true);
+            expect(Settings.getSetting(`${prefix}drakeClearEnemies`).value).toBe(true);
+            select.selectedIndex = 0;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            expect(PrivateGameplay.drakeClearEnemies()).toBe(false);
+            Settings.setSettingByName(`${prefix}drakeClearEnemies`, true);
+            knockout.tasks.runEarly();
+            expect(select.selectedIndex).toBe(1);
+        } finally {
+            knockout.cleanNode(container);
+            container.remove();
+        }
     });
 
     it.each(['true', 1, null, {}, []])('disables Drake clearing when importing an invalid value: %j', (value) => {
