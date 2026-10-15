@@ -93,6 +93,7 @@ async function run() {
     const progressTimer = setInterval(() => console.log(`验收进度：已完成 ${checks.length} 项，已用时 ${Math.floor((Date.now() - startedAt) / 1000)} 秒。`), 15000);
     const desktopVersion = JSON.parse(await fs.readFile(path.join(root, 'desktop/package.json'), 'utf8')).version;
     const errors = [];
+    let farmLayoutSnapshot;
     let browser;
     let lastPage;
     async function launch(profile) {
@@ -172,6 +173,179 @@ async function run() {
             else if (options.active) window.minimize();
             else window.restore();
         }, { hidden: backgroundTest, active });
+    }
+    async function verifyFarmLayouts(app, page) {
+        // 只使用本轮临时档案，暂停自然生长以便快速验证真实界面与助手工作。
+        await page.evaluate(() => {
+            const farming = App.game.farming;
+            window.layoutAcceptance = { update: farming.update };
+            farming.update = () => {};
+            farming.unlockedBerries.forEach(berry => berry(true));
+            farming.berryInventory.forEach(berry => berry(1000));
+            farming.getFarmPlots(0).forEach(plot => { plot.isUnlocked = true; plot.isSafeLocked = false; });
+            farming.berryInventory[BerryType.Liechi](1);
+            if (!farming.plant(0, BerryType.Liechi, 0)) throw new Error('Unable to plant the isolated Liechi fixture');
+            farming.getFarmPlots(0)[0].age = 17;
+            App.game.wallet.currencies[GameConstants.Currency.farmPoint](20_000_000);
+            FarmController.openFarmModal();
+        });
+        const modal = page.locator('#farmModal');
+        const layout = page.locator('#farmLayoutView');
+        await modal.locator('a[href="#farmLayoutView"]').click();
+        assert.equal(await layout.locator('.farm-layout-cell').count(), 25);
+        await layout.locator('#farmLayoutPreset').selectOption('lum-mutation');
+        await layout.getByRole('button', { name: '生成预览', exact: true }).click();
+        assert.equal(await layout.locator('[data-role="mutation"]').count(), 4);
+        assert.deepEqual(await page.evaluate(() => ({ enabled: App.game.farming.farms()[0].layout.enabled(),
+            berry: App.game.farming.getFarmPlots(0)[0].berry === BerryType.Liechi,
+            age: App.game.farming.getFarmPlots(0)[0].age, seeds: App.game.farming.berryInventory[BerryType.Liechi]() })),
+        { enabled: false, berry: true, age: 17, seeds: 0 });
+        assert.equal(await layout.locator('.farm-layout-cell').first().evaluate(element => element.classList.contains('farm-layout-blocked')), true);
+        checks.push('农场布局在实际 EXE 显示 5×5 预览和 Lum 四个突变位；生成预设保留唯一 Liechi、年龄与种子，并标记现有作物冲突。');
+
+        const ids = await page.evaluate(() => ({ passho: BerryType.Passho, yache: BerryType.Yache, liechi: BerryType.Liechi }));
+        await layout.locator('.farm-layout-cell').nth(6).click();
+        await layout.locator('#farmLayoutRole').selectOption('evolve');
+        await layout.locator('#farmLayoutBerry').selectOption(String(ids.passho));
+        await layout.locator('#farmLayoutTargetBerry').selectOption(String(ids.yache));
+        assert.deepEqual(await page.evaluate(() => {
+            const cell = App.game.farming.farms()[0].layout.plan().cells[6];
+            return { role: cell.role, berry: cell.berry === BerryType.Passho, target: cell.targetBerry === BerryType.Yache, type: typeof cell.berry };
+        }), { role: 'evolve', berry: true, target: true, type: 'number' });
+        await layout.getByRole('button', { name: '启用布局', exact: true }).click();
+        assert.equal(await page.evaluate(() => App.game.farming.farms()[0].layout.enabled()), true);
+        await layout.locator('#farmLayoutMulch').selectOption('-1');
+        assert.equal(await page.evaluate(() => App.game.farming.farms()[0].layout.enabled()), false);
+        assert.equal(JSON.parse(await layout.locator('#farmLayoutExport').inputValue()).cells[6].targetBerry, ids.yache);
+        checks.push('农场布局逐格编辑保留数字类型的树果与进化目标；启用按钮生效，编辑后自动暂停，导出保留角色。');
+
+        // 固定读取单元测试中的官方分享码，避免用实现自产的布局冒充外部兼容样本。
+        const source = await fs.readFile(path.join(root, 'src/modules/farming/FarmLayoutPlan.test.ts'), 'utf8');
+        const wikiCode = source.match(/const WIKI_LUM = '([^']+)';/)?.[1];
+        assert.ok(wikiCode, 'Missing official Lum simulator fixture');
+        await layout.getByText('从 Wiki 模拟器代码或助手布局导入', { exact: true }).click();
+        await layout.locator('#farmLayoutImport').fill(wikiCode);
+        await layout.getByRole('button', { name: '导入为预览', exact: true }).click();
+        assert.equal(await layout.locator('[data-role="mutation"]').count(), 4);
+        assert.equal(await layout.locator('[data-role="keep"]').count(), 21);
+        assert.equal(await page.evaluate(() => App.game.farming.getFarmPlots(0)[0].age), 17);
+        await layout.locator('#farmLayoutImport').fill('invalid-base64!');
+        await layout.getByRole('button', { name: '导入为预览', exact: true }).click();
+        assert.equal(await layout.locator('.alert-danger').isVisible(), true);
+        assert.equal(await layout.locator('[data-role="mutation"]').count(), 4);
+        await captureWindow(app, page, 'farm-layout-import.png');
+        checks.push('农场布局兼容官方 Wiki 真实 Lum Base64，导入为 21 原料和 4 突变格，不写入模拟年龄；非法导入显示错误并保留已有布局。');
+
+        await modal.getByRole('button', { name: /购买下一块田/ }).click();
+        assert.equal(await page.evaluate(() => App.game.farming.selectedFarm()), 1);
+        assert.equal(await page.evaluate(() => App.game.farming.farms()[1].layout.plan().cells.every(cell => cell.role === 'ignore')), true);
+        await layout.locator('#farmLayoutPreset').selectOption('enigma-directions');
+        await layout.getByRole('button', { name: '生成预览', exact: true }).click();
+        assert.equal(await page.evaluate(() => {
+            const cells = App.game.farming.farms()[1].layout.plan().cells;
+            const requirements = EnigmaMutation.getReqs();
+            return [6, 18].every(index => [index - 5, index - 1, index + 1, index + 5].every((position, direction) => cells[position].berry === requirements[direction]));
+        }), true);
+        await layout.locator('#farmLayoutPreset').selectOption('passho-ring');
+        await layout.locator('#farmLayoutProductionBerry').selectOption(String(ids.liechi));
+        await layout.getByRole('button', { name: '生成预览', exact: true }).click();
+        assert.deepEqual(await page.evaluate(() => {
+            const cell = App.game.farming.farms()[1].layout.plan().cells[12];
+            return { role: cell.role, berry: cell.berry === BerryType.Liechi, type: typeof cell.berry };
+        }), { role: 'cycle', berry: true, type: 'number' });
+        await modal.locator('#activeFarm').selectOption('0');
+        assert.equal(await layout.locator('[data-role="mutation"]').count(), 4);
+        checks.push('农场布局在新田独立且默认停用；Enigma 预设读取当前存档四向需求，生产下拉框保留数字树果，切田恢复各自布局。');
+
+        const runtime = await page.evaluate(() => {
+            const farming = App.game.farming;
+            const saved = JSON.parse(JSON.stringify(farming.toJSON()));
+            try {
+                const farm = farming.farms()[0];
+                const plots = farming.getFarmPlots(0);
+                farm.hands.list.forEach(hand => hand.hired(false));
+                const hand = farm.hands.list.find(candidate => candidate.name === 'Alex');
+                hand.experience(0);
+                hand.plots([0, 1, 2, 3]);
+                hand.focus(BerryType.Cheri);
+                hand.shouldHarvest(true);
+                hand.shouldCatch(false);
+                hand.hire();
+                hand.energy(10);
+                plots.forEach(plot => { plot.berry = BerryType.None; plot.age = 0; plot.mulch = MulchType.None; plot.mulchTimeLeft = 0; plot.isSafeLocked = false; plot.isUnlocked = true; });
+                const plan = FarmLayoutPlan.blank();
+                plan.cells.forEach(cell => { cell.role = 'empty'; });
+                plan.cells[0] = { role: 'cycle', berry: BerryType.Liechi, targetBerry: BerryType.None, mulch: MulchType.Rich_Mulch, freezeStage: PlotStage.Berry };
+                plan.cells[1] = { role: 'keep', berry: BerryType.Passho, targetBerry: BerryType.None, mulch: MulchType.None, freezeStage: PlotStage.Berry };
+                plan.cells[3] = { role: 'evolve', berry: BerryType.Passho, targetBerry: BerryType.Yache, mulch: MulchType.None, freezeStage: PlotStage.Berry };
+                farm.layout.setPlan(plan);
+                farm.layout.toggle();
+                plots[0].plant(BerryType.Liechi);
+                plots[1].plant(BerryType.Passho);
+                plots[1].age = BerryList[BerryType.Passho].growthTime[PlotStage.Bloom];
+                plots[3].plant(BerryType.Passho);
+                plots[3].age = BerryList[BerryType.Passho].growthTime[PlotStage.Bloom];
+                farming.berryInventory[BerryType.Liechi](0);
+                farming.mulchList[MulchType.Rich_Mulch](10);
+                const otherFarm = JSON.stringify(farming.farms()[1].plots.map(plot => plot.toJSON()));
+                farming.selectedFarm(1);
+                const immatureXP = hand.experience();
+                hand.work();
+                const immature = { rich: farming.mulchList[MulchType.Rich_Mulch](), xp: hand.experience() - immatureXP,
+                    sourceKept: plots[1].berry === BerryType.Passho && plots[3].berry === BerryType.Passho, emptyKept: plots[2].isEmpty() };
+                plots[0].age = BerryList[BerryType.Liechi].growthTime[PlotStage.Bloom];
+                hand.energy(10);
+                hand.work();
+                const prepared = { rich: farming.mulchList[MulchType.Rich_Mulch](), berry: plots[0].berry === BerryType.Liechi,
+                    mulch: plots[0].mulch === MulchType.Rich_Mulch, energy: hand.energy(), efficiency: hand.efficiency, seeds: farming.berryInventory[BerryType.Liechi]() };
+                const amount = plots[0].harvestAmount();
+                hand.work();
+                const harvested = { rich: farming.mulchList[MulchType.Rich_Mulch](), empty: plots[0].isEmpty(),
+                    seeds: farming.berryInventory[BerryType.Liechi](), amount, energy: hand.energy() };
+                hand.plots([3]);
+                plots[3].berry = BerryType.Yache;
+                plots[3].age = BerryList[BerryType.Yache].growthTime[PlotStage.Bloom];
+                const yacheBefore = farming.berryInventory[BerryType.Yache]();
+                const passhoBefore = farming.berryInventory[BerryType.Passho]();
+                hand.work();
+                const evolvedHarvested = plots[3].isEmpty() && farming.berryInventory[BerryType.Yache]() > yacheBefore;
+                hand.work();
+                const replantedSource = plots[3].berry === BerryType.Passho && plots[3].age === 0 && farming.berryInventory[BerryType.Passho]() === passhoBefore - 1;
+                return { immature, prepared, harvested, evolvedHarvested, replantedSource,
+                    crossFarmSafe: otherFarm === JSON.stringify(farming.farms()[1].plots.map(plot => plot.toJSON())) };
+            } finally {
+                farming.fromJSON(saved);
+            }
+        });
+        assert.deepEqual(runtime.immature, { rich: 10, xp: 0, sourceKept: true, emptyKept: true });
+        assert.deepEqual(runtime.prepared, { rich: 9, berry: true, mulch: true, energy: 9, efficiency: 1, seeds: 0 });
+        assert.equal(runtime.harvested.rich, 9);
+        assert.equal(runtime.harvested.empty, true);
+        assert.equal(runtime.harvested.seeds, runtime.harvested.amount);
+        assert.equal(runtime.harvested.energy, 8);
+        assert.equal(runtime.evolvedHarvested, true);
+        assert.equal(runtime.replantedSource, true);
+        assert.equal(runtime.crossFarmSafe, true);
+        checks.push('农场布局助手生长期不耗 Rich，成熟后只施一份并占一次操作，下一轮采收；保留原株与隔离格不被普通种收覆盖，进化目标采收后补种原株，切到另一田仍正确执行原田。');
+
+        farmLayoutSnapshot = await page.evaluate(() => {
+            const farming = App.game.farming;
+            farming.selectedFarm(0);
+            farming.farms()[0].layout.toggle();
+            farming.farms().forEach(farm => farm.plots.forEach(plot => { plot.isSafeLocked = true; }));
+            Save.store(player);
+            const saved = JSON.parse(localStorage.getItem('save' + Save.key)).farming;
+            const result = { layouts: farming.farms().map(farm => JSON.parse(JSON.stringify(farm.layout.toJSON()))), berry: BerryType.Liechi };
+            if (JSON.stringify(saved.farms.map(farm => farm.layout)) !== JSON.stringify(result.layouts)) throw new Error('Layout fields missing from Save.store');
+            farming.update = window.layoutAcceptance.update;
+            delete window.layoutAcceptance;
+            return result;
+        });
+        assert.equal(farmLayoutSnapshot.layouts[0].enabled, true);
+        assert.equal(farmLayoutSnapshot.layouts[1].enabled, false);
+        await captureWindow(app, page, 'farm-layout-managed.png');
+        await page.evaluate(() => new Promise(resolve => $('#farmModal').one('hidden.bs.modal', () => resolve()).modal('hide')));
+        checks.push('农场布局通过 Save.store 写入真实本地快照，保留两田布局、独立启用状态和唯一 Liechi，作为后续 EXE 重启及桌面到网页同步的验证数据。');
     }
     try {
         online = false;
@@ -634,7 +808,7 @@ async function run() {
         assert.equal(await farmModal.locator('#activeFarm option').count(), 16);
         await farmModal.getByRole('link', { name: 'Farm', exact: true }).click();
         await pageA.waitForFunction(() => getComputedStyle(document.getElementById('berryFarmView')).opacity === '1');
-        await farmModal.locator('summary').click();
+        await farmModal.locator('summary').filter({ hasText: /^农田总览$/ }).click();
         await farmModal.getByRole('button', { name: '查看', exact: true }).first().click();
         assert.equal(await pageA.evaluate(() => App.game.farming.selectedFarm()), 0);
         await farmModal.screenshot({ path: path.join(output, 'multi-farm-overview.png') });
@@ -653,6 +827,7 @@ async function run() {
         checks.push('Mulch hotkey applies to the selected farm scope; berry and mulch buttons and hotkeys follow the visible tab.');
         checks.push('Each farm retains its own search and seed through switching and save round-trip; lower plant, harvest and mulch controls affect only the current farm even with all farms selected.');
         checks.push('Level 50 Alex displays 25 actions/cycle; Riley stays at 25 until reaching level 50, then jumps to 50 in every farm; Jessie stays at 50 and action caps survive save round-trip.');
+        await verifyFarmLayouts(a, pageA);
         await pageA.evaluate(() => {
             window.mineSmoke = JSON.parse(JSON.stringify(App.game.underground.toJSON()));
             App.game.keyItems.gainKeyItem(KeyItemType.Explorer_kit, true);
@@ -1097,6 +1272,10 @@ async function run() {
         checks.push('Auto click enabled state and chosen frequency remain in the saved profile after a desktop restart.');
         assert.equal(await pageA.evaluate(key => JSON.parse(localStorage.getItem('settings' + key))['ggzz.private.drakeClearEnemies'], keyA), true);
         checks.push('Drake 清怪开关在隔离桌面实例关闭并重启后仍然保存。');
+        const restartedFarm = await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key)).farming, keyA);
+        assert.deepEqual(restartedFarm.farms.map(farm => farm.layout), farmLayoutSnapshot.layouts);
+        assert.equal(restartedFarm.farms[0].plotList[0].berry, farmLayoutSnapshot.berry);
+        checks.push('农场布局在实际 EXE 关闭并重启后保留逐格配置、两田独立启用状态和唯一 Liechi。');
         assert.equal(await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key)).profile.name, keyA), 'Desktop fixture A');
         const restoredOrbs = await pageA.evaluate(key => JSON.parse(localStorage.getItem('save' + key))['dream-orbs'], keyA);
         assert.equal(restoredOrbs.orbs.find(orb => orb.color === 'Pink').amount, 9);
@@ -1142,6 +1321,9 @@ async function run() {
         assert.equal(remote.envelope.payload.settings['ggzz.private.drakeClearEnemies'], true);
         assert.equal(remote.envelope.payload.settings['ggzz.private.guideFeeRate'], 0.01);
         assert.equal(remote.envelope.payload.settings['ggzz.private.fixedVitaminPurchased'], true);
+        assert.deepEqual(remote.envelope.payload.save.farming.farms.map(farm => farm.layout), farmLayoutSnapshot.layouts);
+        assert.equal(remote.envelope.payload.save.farming.farms[0].plotList[0].berry, farmLayoutSnapshot.berry);
+        checks.push('农场布局完整进入真实 Worker 上传快照，逐格角色、分田启停与已有植物均未被丢弃。');
         checks.push('Desktop uploads a real game snapshot through the unchanged Worker protocol and receives a revision/SHA receipt.');
         await quit(a);
         ({ app: a, page: pageA } = await launch(profiles[0]));
@@ -1158,6 +1340,10 @@ async function run() {
         const keyB = await pageB.evaluate(() => Object.keys(localStorage).find(key => key.startsWith('save')).slice(4));
         assert.equal(await pageB.evaluate(key => JSON.parse(localStorage.getItem('save' + key)).profile.name, keyB), 'Desktop fixture A');
         assert.notEqual(keyB, keyA);
+        const downloadedFarm = await pageB.evaluate(key => JSON.parse(localStorage.getItem('save' + key)).farming, keyB);
+        assert.deepEqual(downloadedFarm.farms.map(farm => farm.layout), farmLayoutSnapshot.layouts);
+        assert.equal(downloadedFarm.farms[0].plotList[0].berry, farmLayoutSnapshot.berry);
+        checks.push('农场布局通过云档下载到第二个隔离桌面档案后，恢复相同布局、独立启停与唯一 Liechi。');
         checks.push('A second independent desktop profile downloads and transactionally restores the same cloud save.');
 
         // Browser fixture uses the same real Worker handler and the production website build.
@@ -1187,6 +1373,9 @@ async function run() {
         assert.equal(restoredSettings.partyDisplayValue, 2);
         assert.deepEqual(restoredSettings.vitaminCategoryFilter, [1]);
         const restoredGame = await web.evaluate(key => JSON.parse(localStorage.getItem('save' + key)), webKey);
+        assert.deepEqual(restoredGame.farming.farms.map(farm => farm.layout), farmLayoutSnapshot.layouts);
+        assert.equal(restoredGame.farming.farms[0].plotList[0].berry, farmLayoutSnapshot.berry);
+        checks.push('农场布局完成实际桌面到生产网页的云档恢复，逐格配置、分田启停与唯一 Liechi 保持一致。');
         assert.equal(restoredGame.battleFrontier.checkpoint, 1903);
         assert.equal(restoredGame.battleFrontier.runStartStage, 1901);
         checks.push('The same paused Battle Frontier run retains its starting stage and checkpoint through desktop-to-web cloud restoration.');
@@ -1285,14 +1474,18 @@ async function run() {
         assert.ok((await help.locator('body').innerText()).includes('同步后换设备'));
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('原价的 1%'));
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('Battle Frontier 快速挑战与主动结算'));
+        assert.equal(await help.locator('#farm-layout-handbook').innerText(), '农场布局导入与助手托管');
+        assert.ok((await help.locator('#private-gameplay').innerText()).includes('Rich 只在准备收获时施一份'));
+        assert.ok((await help.locator('#private-gameplay').innerText()).includes('暂停布局会恢复普通助手规则'));
         assert.ok((await help.locator('.meta').innerText()).includes('桌面程序 ' + desktopVersion));
         await help.locator('#private-gameplay').evaluate(element => element.scrollIntoView());
         await captureWindow(b, help, 'private-gameplay-manual.png');
         checks.push('The Chinese operation manual, including private gameplay instructions, opens locally while offline.');
+        checks.push('农场布局离线手册包含九种预设、暂停恢复普通策略和成熟前不铺满 Rich 的操作说明。');
         await quit(b); await quit(a);
         assert.deepEqual(errors, []);
         checks.push('No uncaught renderer errors during the desktop acceptance flow.');
-        await fs.writeFile(path.join(output, 'smoke-report.json'), JSON.stringify({ passed: true, executable, desktopVersion, packaged: !dev, backgroundTest, checks, elapsedSeconds: (Date.now() - startedAt) / 1000, requests: requests.filter(item => item.path.startsWith('/api/') || item.path.startsWith('/auth/')), note: 'Isolated fixtures only; this does not replace the user’s real two-device acceptance.' }, null, 2));
+        await fs.writeFile(path.join(output, 'smoke-report.json'), JSON.stringify({ passed: true, executable, desktopVersion, gameVersion, packaged: !dev, backgroundTest, checks, elapsedSeconds: (Date.now() - startedAt) / 1000, requests: requests.filter(item => item.path.startsWith('/api/') || item.path.startsWith('/auth/')), note: 'Isolated fixtures only; this does not replace the user’s real two-device acceptance.' }, null, 2));
         console.log(JSON.stringify({ passed: true, checks }, null, 2));
     } catch (error) {
         console.error('SMOKE FAILED:', error.message);
