@@ -205,6 +205,13 @@ async function run() {
 
         const ids = await page.evaluate(() => ({ passho: BerryType.Passho, yache: BerryType.Yache, liechi: BerryType.Liechi }));
         await layout.locator('.farm-layout-cell').nth(6).click();
+        await layout.locator('#farmLayoutTargetBerry').selectOption(String(ids.passho));
+        assert.deepEqual(await page.evaluate(() => {
+            const cell = App.game.farming.farms()[0].layout.plan().cells[6];
+            return { role: cell.role, target: cell.targetBerry === BerryType.Passho, type: typeof cell.targetBerry };
+        }), { role: 'mutation', target: true, type: 'number' });
+        assert.equal(JSON.parse(await layout.locator('#farmLayoutExport').inputValue()).cells[6].targetBerry, ids.passho);
+        checks.push('农场空位突变目标通过实际下拉框修改后保持数字类型，导出保存所选目标。');
         await layout.locator('#farmLayoutRole').selectOption('evolve');
         await layout.locator('#farmLayoutBerry').selectOption(String(ids.passho));
         await layout.locator('#farmLayoutTargetBerry').selectOption(String(ids.yache));
@@ -327,6 +334,85 @@ async function run() {
         assert.equal(runtime.replantedSource, true);
         assert.equal(runtime.crossFarmSafe, true);
         checks.push('农场布局助手生长期不耗 Rich，成熟后只施一份并占一次操作，下一轮采收；保留原株与隔离格不被普通种收覆盖，进化目标采收后补种原株，切到另一田仍正确执行原田。');
+
+        const timing = await page.evaluate(() => {
+            const farming = App.game.farming;
+            const saved = JSON.parse(JSON.stringify(farming.toJSON()));
+            const originalPlant = farming.plant;
+            const originalAddMulch = farming.addMulch;
+            try {
+                const farm = farming.farms()[0];
+                const plots = farming.getFarmPlots(0);
+                farm.hands.list.forEach(hand => hand.hired(false));
+                plots.forEach(plot => { plot.berry = BerryType.None; plot.age = 0; plot.mulch = MulchType.None; plot.mulchTimeLeft = 0; plot.isSafeLocked = false; plot.isUnlocked = true; });
+                const hand = farm.hands.list.find(candidate => candidate.name === 'Jessie');
+                hand.gainExperience(122_500);
+                hand.plots(plots.map((_, index) => index));
+                hand.focus(BerryType.None);
+                hand.shouldHarvest(false);
+                hand.shouldCatch(false);
+                hand.energy(hand.maxEnergy);
+                hand.hire();
+                if (!hand.hired()) throw new Error('Unable to hire Jessie for the isolated timing fixture');
+                const plan = FarmLayoutPlan.createPreset('lum-mutation');
+                farm.layout.setPlan(plan);
+                farm.layout.toggle();
+                farming.mulchList[MulchType.Freeze_Mulch](10_000);
+                farming.mulchList[MulchType.Surprise_Mulch](10_000);
+                const targets = [6, 8, 16, 18];
+                const rule = farming.mutations.find(mutation => mutation.mutatedBerry === BerryType.Lum).forFarm(0);
+                const planted = [];
+                const fertilized = [];
+                let elapsed = 0;
+                farming.plant = function (index, berry, farmId) {
+                    const result = originalPlant.call(this, index, berry, farmId);
+                    if (result) planted.push({ index, berry, elapsed });
+                    return result;
+                };
+                farming.addMulch = function (index, type, amount, farmId) {
+                    if (type === MulchType.Surprise_Mulch) {
+                        if (!rule.unlocked || !rule.getMutationPlots().includes(index) || !(rule.getTotalMutationChance(index) > 0)) {
+                            throw new Error('Surprise mulch applied before the real Lum recipe became eligible');
+                        }
+                        fertilized.push({ index, elapsed });
+                    }
+                    return originalAddMulch.call(this, index, type, amount, farmId);
+                };
+                const tick = GameConstants.TICK_TIME / GameConstants.SECOND;
+                const advance = () => {
+                    plots.forEach(plot => plot.update(tick));
+                    farm.hands.tick();
+                    elapsed += tick;
+                };
+                advance();
+                const initial = { plants: planted.length, onlySitrus: planted.every(plant => plant.berry === BerryType.Sitrus),
+                    cheriEmpty: plots[12].isEmpty(), surprise: farming.mulchList[MulchType.Surprise_Mulch]() };
+                const horizon = 750 / farming.getGrowthMultiplier() + hand.workTick * 2 / GameConstants.SECOND;
+                while (elapsed < horizon && !targets.every(index => plots[index].mulch === MulchType.Surprise_Mulch)) advance();
+                const firstSitrus = planted.find(plant => plant.berry === BerryType.Sitrus);
+                const firstCheri = planted.find(plant => plant.berry === BerryType.Cheri);
+                return { initial, plantCount: planted.length,
+                    shortPlantedLater: !!firstCheri && firstCheri.elapsed > firstSitrus.elapsed,
+                    allSourcesMatureAndFrozen: plan.cells.every((cell, index) => cell.role !== 'keep'
+                        || (plots[index].berry === cell.berry && plots[index].stage() === PlotStage.Berry && plots[index].mulch === MulchType.Freeze_Mulch)),
+                    allTargetsEligible: targets.every(index => rule.getMutationPlots().includes(index) && rule.getTotalMutationChance(index) > 0),
+                    allTargetsFertilized: targets.every(index => plots[index].isEmpty() && plots[index].mulch === MulchType.Surprise_Mulch),
+                    fertilizedCount: fertilized.length, surpriseUsed: farming.mulchList[MulchType.Surprise_Mulch]() < 10_000 };
+            } finally {
+                farming.plant = originalPlant;
+                farming.addMulch = originalAddMulch;
+                farming.fromJSON(saved);
+            }
+        });
+        assert.deepEqual(timing.initial, { plants: 4, onlySitrus: true, cheriEmpty: true, surprise: 10_000 });
+        assert.equal(timing.plantCount, 21);
+        assert.equal(timing.shortPlantedLater, true);
+        assert.equal(timing.allSourcesMatureAndFrozen, true);
+        assert.equal(timing.allTargetsEligible, true);
+        assert.equal(timing.allTargetsFertilized, true);
+        assert.equal(timing.fertilizedCount, 4);
+        assert.equal(timing.surpriseUsed, true);
+        checks.push('实际 EXE 的 Lum 布局从空田逐帧自然生长：首轮只种 4 株 Sitrus、短周期 Cheri 错峰补种，等待阶段不耗 Surprise；21 母株成熟冻结后，4 个空位具备真实目标配方资格才施肥，全程没有母株枯死重播。');
 
         farmLayoutSnapshot = await page.evaluate(() => {
             const farming = App.game.farming;
