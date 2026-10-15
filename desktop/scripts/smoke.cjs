@@ -213,8 +213,8 @@ async function run() {
         assert.equal(JSON.parse(await layout.locator('#farmLayoutExport').inputValue()).cells[6].targetBerry, ids.passho);
         checks.push('农场空位突变目标通过实际下拉框修改后保持数字类型，导出保存所选目标。');
         await layout.locator('#farmLayoutRole').selectOption('evolve');
-        await layout.locator('#farmLayoutBerry').selectOption(String(ids.passho));
         await layout.locator('#farmLayoutTargetBerry').selectOption(String(ids.yache));
+        await layout.locator('#farmLayoutBerry').selectOption(String(ids.passho));
         assert.deepEqual(await page.evaluate(() => {
             const cell = App.game.farming.farms()[0].layout.plan().cells[6];
             return { role: cell.role, berry: cell.berry === BerryType.Passho, target: cell.targetBerry === BerryType.Yache, type: typeof cell.berry };
