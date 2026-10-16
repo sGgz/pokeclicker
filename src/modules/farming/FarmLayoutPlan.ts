@@ -28,6 +28,7 @@ const SURPRISE = MulchType.Surprise_Mulch;
 const RICH = MulchType.Rich_Mulch;
 const BOOST = MulchType.Boost_Mulch;
 const UNKNOWN_MUTATION_TARGET_NOTE = '分享码不包含明确的突变目标；未识别的突变格需先选择目标树果，助手才会追加 Surprise 或 Amaze。Enigma 请按本存档重新生成个人配方或手动确认目标。';
+const UNKNOWN_EVOLVE_TARGET_NOTE = '已种植物上的突变肥料按进化格导入；请为每个进化格选择明确的目标树果后再启用。';
 
 function record(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -117,7 +118,7 @@ function wikiPlan(value: Record<string, unknown>): LayoutPlan {
         notes.push('原布局含未成熟或空格冻结：当前助手只支持等作物成熟后冻结，早期冻结时序需手动管理。');
     }
     if (pendingEvolve) {
-        notes.push('已种植物上的突变肥料按进化格导入；请为每个进化格选择明确的目标树果后再启用。');
+        notes.push(UNKNOWN_EVOLVE_TARGET_NOTE);
     }
     if (pendingProduction) {
         notes.push('带生产辅助肥料的空格按循环生产格导入；请先选择要种植的树果。');
@@ -152,6 +153,7 @@ export default class FarmLayoutPlan {
         { id: 'lum-mutation', name: 'Lum：八种原料四点突变', description: '21 格原料成熟后冻结，4 个空位使用 Surprise。', source: 'https://wiki.pokeclicker.com/#!Berries/Lum' },
         { id: 'passho-mutation', name: 'Passho：四种原料列阵', description: 'Chesto、Oran 成熟后冻结，Kelpsy、Coba 保留，10 个空位尝试突变。', source: 'https://wiki.pokeclicker.com/#!Berries/Passho' },
         { id: 'liechi-mutation', name: 'Liechi：23 株 Passho', description: '保留 23 株成熟 Passho，中央两个空位等待 Liechi；仍需满足任务解锁。', source: 'https://wiki.pokeclicker.com/#!Berries/Liechi' },
+        { id: 'rabuta-mutation', name: 'Rabuta：四株 Aguav 原株进化阵', description: '保留 4 株 Aguav，21 株 Aspear 等待进化为 Rabuta；邻接 Aguav 成熟后才追加 Surprise。', source: 'https://wiki.pokeclicker.com/#!Berries/Rabuta' },
         { id: 'yache-mutation', name: 'Yache：九株隔离 Passho', description: '隔离种植 9 株 Passho，保留原株直到进化为 Yache。', source: 'https://wiki.pokeclicker.com/#!Berries/Yache' },
         { id: 'watmel-mutation', name: 'Watmel：Magost 风味进化', description: '外围 16 株 Magost 保留，中央 9 株等待进化为 Watmel。', source: 'https://wiki.pokeclicker.com/#!Berries/Watmel' },
         { id: 'passho-rows', name: 'Passho：双行循环量产', description: '15 株 Passho 光环，10 格循环种植所选树果，收获前施 Rich。', source: 'https://wiki.pokeclicker.com/#!Farm/Setups' },
@@ -166,9 +168,9 @@ export default class FarmLayoutPlan {
 
     static normalize(value: unknown): LayoutPlan {
         const plan = this.normalizePlan(value);
-        if (plan.cells.some(item => item.role === 'mutation' && item.targetBerry === NONE)) {
-            // 旧版没有保存空位的突变目标，只按完整布局识别固定预设，不能根据名称或当前可突变产物猜测。
-            const known = ['lum-mutation', 'passho-mutation', 'liechi-mutation']
+        if (plan.cells.some(item => ['mutation', 'evolve'].includes(item.role) && item.targetBerry === NONE)) {
+            // 旧版可能缺失突变或进化目标，只按完整布局识别固定预设，不能根据名称或当前可突变产物猜测。
+            const known = ['lum-mutation', 'passho-mutation', 'liechi-mutation', 'rabuta-mutation']
                 .map(id => this.createPreset(id))
                 .find(preset => preset.cells.every((item, index) => {
                     const actual = plan.cells[index];
@@ -176,15 +178,18 @@ export default class FarmLayoutPlan {
                 }));
             if (known) {
                 plan.cells.forEach((item, index) => {
-                    if (item.role === 'mutation' && item.targetBerry === NONE) {
+                    if (['mutation', 'evolve'].includes(item.role) && item.targetBerry === NONE) {
                         item.targetBerry = known.cells[index].targetBerry;
                     }
                 });
             }
         }
-        const notes = plan.notes?.filter(note => note !== UNKNOWN_MUTATION_TARGET_NOTE) ?? [];
+        const notes = plan.notes?.filter(note => note !== UNKNOWN_MUTATION_TARGET_NOTE && note !== UNKNOWN_EVOLVE_TARGET_NOTE) ?? [];
         if (notes.length < 20 && plan.cells.some(item => item.role === 'mutation' && item.targetBerry === NONE)) {
             notes.push(UNKNOWN_MUTATION_TARGET_NOTE);
+        }
+        if (notes.length < 20 && plan.cells.some(item => item.role === 'evolve' && item.targetBerry === NONE)) {
+            notes.push(UNKNOWN_EVOLVE_TARGET_NOTE);
         }
         if (notes.length || plan.notes !== undefined) {
             plan.notes = notes;
@@ -290,6 +295,13 @@ export default class FarmLayoutPlan {
                 if ([12, 13].includes(index)) { mutation(index, BerryType.Liechi); } else { keep(index, BerryType.Passho); }
             });
             plan.notes = ['需要完成 Land vs. Water 任务线；23 株 Passho 必须同时成熟。'];
+        } else if (id === 'rabuta-mutation') {
+            plan.cells.forEach((_, index) => {
+                plan.cells[index] = [6, 9, 21, 24].includes(index)
+                    ? cell('keep', BerryType.Aguav)
+                    : cell('evolve', BerryType.Aspear, SURPRISE, BerryType.Rabuta);
+            });
+            plan.notes = ['Aguav 必须成熟后才能使相邻 Aspear 进化；目标 Rabuta 成熟后收获，再补种 Aspear 继续尝试。'];
         } else if (id === 'yache-mutation') {
             [0, 2, 4, 10, 12, 14, 20, 22, 24].forEach(index => { plan.cells[index] = cell('evolve', BerryType.Passho, SURPRISE, BerryType.Yache); });
         } else if (id === 'watmel-mutation') {

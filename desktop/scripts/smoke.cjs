@@ -193,6 +193,8 @@ async function run() {
         const layout = page.locator('#farmLayoutView');
         await modal.locator('a[href="#farmLayoutView"]').click();
         assert.equal(await layout.locator('.farm-layout-cell').count(), 25);
+        assert.equal(await layout.locator('#farmLayoutPreset option').count(), 10);
+        assert.equal(await layout.locator('#farmLayoutPreset option[value="rabuta-mutation"]').count(), 1);
         await layout.locator('#farmLayoutPreset').selectOption('lum-mutation');
         await layout.getByRole('button', { name: '生成预览', exact: true }).click();
         assert.equal(await layout.locator('[data-role="mutation"]').count(), 4);
@@ -333,7 +335,7 @@ async function run() {
         assert.equal(runtime.evolvedHarvested, true);
         assert.equal(runtime.replantedSource, true);
         assert.equal(runtime.crossFarmSafe, true);
-        checks.push('农场布局助手生长期不耗 Rich，成熟后只施一份并占一次操作，下一轮采收；保留原株与隔离格不被普通种收覆盖，进化目标采收后补种原株，切到另一田仍正确执行原田。');
+        checks.push('农场布局助手生长期不耗 Rich，成熟后只施一份并占一次操作，下一轮采收；保留原株不被普通收获覆盖，隔离格不被普通播种覆盖，进化目标采收后补种原株，切到另一田仍正确执行原田。');
 
         const timing = await page.evaluate(() => {
             const farming = App.game.farming;
@@ -1563,11 +1565,13 @@ async function run() {
         assert.equal(await help.locator('#farm-layout-handbook').innerText(), '农场布局导入与助手托管');
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('Rich 只在准备收获时施一份'));
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('暂停布局会恢复普通助手规则'));
+        assert.ok((await help.locator('#private-gameplay').innerText()).includes('十种预设'));
+        assert.ok((await help.locator('#private-gameplay').innerText()).includes('Rabuta'));
         assert.ok((await help.locator('.meta').innerText()).includes('桌面程序 ' + desktopVersion));
         await help.locator('#private-gameplay').evaluate(element => element.scrollIntoView());
         await captureWindow(b, help, 'private-gameplay-manual.png');
         checks.push('The Chinese operation manual, including private gameplay instructions, opens locally while offline.');
-        checks.push('农场布局离线手册包含九种预设、暂停恢复普通策略和成熟前不铺满 Rich 的操作说明。');
+        checks.push('农场布局离线手册包含十种预设、Rabuta、暂停恢复普通策略和成熟前不铺满 Rich 的操作说明。');
         await quit(b); await quit(a);
         assert.deepEqual(errors, []);
         checks.push('No uncaught renderer errors during the desktop acceptance flow.');

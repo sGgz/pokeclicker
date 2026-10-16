@@ -582,7 +582,7 @@
                         <a class="small" target="_blank" rel="noopener noreferrer" data-bind="visible: !!FarmLayoutController.preset()?.source, attr: { href: FarmLayoutController.preset()?.source }">查看 Wiki 配方依据 ↗</a>
                     </div>
 
-                    <p class="small mt-2 mb-0">突变阵先种长周期原料，再错峰补种短周期原料，每轮按实际生长倍率重新计算。以成熟窗口重叠为目标，不能保证同秒成熟或随机突变成功。</p>
+                    <p class="small mt-2 mb-0">突变阵先种长周期原料，再错峰补种短周期原料；量产阵按生产株剩余成熟时间安排增产光环，短周期生产株也会等慢辅助株。关键种子未回收或原料受阻时先等待，每轮按现场年龄和生长倍率重新计算。</p>
 
                     <details class="mt-3">
                         <summary class="clickable">从 Wiki 模拟器代码或助手布局导入</summary>
@@ -592,6 +592,7 @@
                             <button type="button" class="btn btn-outline-primary btn-sm" data-bind="click: () => FarmLayoutController.importPlan(), enable: FarmLayoutController.importText().trim().length > 0">导入为预览</button>
                             <span class="small text-muted">只读取布局意图；不会增加库存、解锁格子或覆盖植物年龄。</span>
                         </div>
+                        <p class="small text-muted mt-2 mb-0">完整 Rabuta 模板可识别为 Aspear → Rabuta，并保留四株 Aguav。未知或改过结构的模板仍需补选目标，手工指定的目标不会被覆盖。</p>
                     </details>
 
                     <div class="alert mt-3 mb-2 py-2 small" role="status" aria-live="polite" data-bind="visible: FarmLayoutController.feedback().length > 0, text: FarmLayoutController.feedback, css: { 'alert-danger': FarmLayoutController.hasError(), 'alert-info': !FarmLayoutController.hasError() }"></div>
@@ -642,9 +643,9 @@
                                 <label for="farmLayoutMulch" class="small mb-1">肥料安排</label>
                                 <select id="farmLayoutMulch" class="custom-select custom-select-sm mb-2" data-bind="options: FarmLayoutController.mulches, optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.mulch"></select>
                             </div>
-                            <p class="small text-muted mb-0">每次编辑都会暂停布局。当前不同品种的作物会保留；需要换种时，请先手动处理该格。</p>
+                            <p class="small text-muted mb-0">每次编辑都会暂停布局。启用后，托管格里不匹配的幼株先保留到成熟，再收种并按计划恢复；不托管、安全锁和未解锁格不接管。</p>
                             <p class="small mt-2 mb-0" data-bind="visible: FarmLayoutController.role() === 'mutation'">突变格保持空位，出现任何成熟产物后收获，再留空等待下一次突变。</p>
-                            <p class="small mt-2 mb-0" data-bind="visible: FarmLayoutController.role() === 'empty'">隔离空位不种植、不收获已有作物，用于满足孤立等条件。</p>
+                            <p class="small mt-2 mb-0" data-bind="visible: FarmLayoutController.role() === 'empty'">隔离空位不播种；已有作物成熟后收获回收种子，再保持留空，用于满足孤立等条件。</p>
                         </div>
                     </div>
 
@@ -654,9 +655,11 @@
                         <summary class="clickable">执行规则与格子角色</summary>
                         <ul class="mt-2 mb-2 pl-3">
                             <li>由当前田已雇用助手在 Allowed Plots 范围内执行，照常消耗种子、肥料、工资、体力和工作次数。</li>
-                            <li>原料保留：种好指定树果后保留，不自动收获；循环生产：等待所有保留原料及光环株成熟后收获，再重种；原株进化：种好原株，等指定目标进化成熟后收获。</li>
-                            <li>突变阵按现场作物年龄、肥料和生长倍率重算播种顺序，长周期先种、短周期后种；安排 Freeze 的原料成熟后优先冻结。生产光环阵不会因此延后种植光环株。</li>
+                            <li>原料保留：按计划保留指定原料和光环，临近枯萎时优先收种再补；循环生产：等待所有保留原料及光环株成熟后收获，再重种，生产株等不到辅助成熟且即将枯萎时先收种；原株进化：种好原株，等指定目标进化成熟后收获。</li>
+                            <li>突变阵按现场年龄、肥料和生长倍率重算播种顺序，长周期先种、短周期后种；安排 Freeze 的原料成熟后优先冻结。量产阵按生产株剩余成熟时间错峰补增产光环，短周期生产株会等慢辅助株，生长光环尽早播种。</li>
+                            <li>关键种子未回收、原料不足或辅助格受阻时，依赖这些格子的播种先等待；恢复后按现场剩余成熟时间重新安排，不能保证同秒成熟或随机突变成功。</li>
                             <li>突变空位和原株进化格仅在指定目标当前可突变且概率大于零时追加 Surprise／Amaze；条件不满足、目标未指定或产物已长出时停止追加。已有肥料会继续消耗，不自动铲除。</li>
+                            <li>错种、寄生或非目标突变占据托管格时，等待成熟后收种，再恢复原计划；不会铲幼株或直接搬迁植物。Kasib 可能在作物自然枯萎后出现，成熟后同样回收并恢复布局。</li>
                             <li>不托管的格子沿用助手普通规则。暂停布局后，整田恢复普通规则，请留意助手是否会收获原料。</li>
                             <li>安全锁和未解锁格会跳过；突变原料有错种、被冻结的幼苗、缺种或未分配助手时，会暂缓同阵原料补种，并显示原因。</li>
                             <li>Freeze 仅在成熟后施加，会关闭光环；Rich 仅在收获前施加。助手按工作周期提前续肥；现有异种肥料会等耗尽，不会自动铲除。</li>

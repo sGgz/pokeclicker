@@ -125,6 +125,58 @@ class FarmLayout {
             && this.plan().cells.some(candidate => candidate.role === 'mutation' || candidate.role === 'evolve');
     }
 
+    private isProductionSupport(cell: FarmLayoutCell): boolean {
+        return cell.role === 'keep' && this.plan().cells.some(candidate => candidate.role === 'cycle');
+    }
+
+    private seedWaitReason(berry: number): string {
+        const locations = App.game.farming.getFarmPlots(this.farmId).flatMap((plot, index) => {
+            if (plot.berry !== berry) {
+                return [];
+            }
+            const position = `${Math.floor(index / 5) + 1} 行 ${index % 5 + 1} 列`;
+            if (plot.isSafeLocked || this.plan().cells[index].role === 'ignore') {
+                return [`${position} 有原株，但安全锁或不托管使其需要手动采收`];
+            }
+            return this.needsRecovery(this.plan().cells[index], plot) ? [`${position} 有错位原株，等待成熟采收回收`] : [];
+        });
+        return `缺少 ${BerryType[berry]} 种子${locations.length ? `；${locations.join('；')}` : '，等待补充'}`;
+    }
+
+    private seedShortage(): string | undefined {
+        const farming = App.game.farming;
+        const plots = farming.getFarmPlots(this.farmId);
+        const needed = new Map<number, number>();
+        this.plan().cells.forEach((cell, index) => {
+            if ((this.isTimingSource(cell) || this.isProductionSupport(cell)) && cell.berry >= 0
+                && plots[index]?.berry !== cell.berry && !(cell.role === 'evolve' && plots[index]?.berry === cell.targetBerry)) {
+                needed.set(cell.berry, (needed.get(cell.berry) ?? 0) + 1);
+            }
+        });
+        for (const [berry, count] of needed) {
+            if (!farming.unlockedBerries[berry]?.() || farming.berryInventory[berry]() < count) {
+                return `${BerryType[berry]} 原料种子不足（需 ${count}，现有 ${farming.berryInventory[berry]()}），等待回收或补充后再播种`;
+            }
+        }
+        return undefined;
+    }
+
+    private productionSeconds(): number {
+        const farming = App.game.farming;
+        const plots = farming.getFarmPlots(this.farmId);
+        const times = this.plan().cells.map((cell, index) => {
+            if (cell.role !== 'cycle' || !plots[index]?.isUnlocked || plots[index].isSafeLocked || !this.owner(index)
+                || !this.matches(cell, plots[index]) || cell.berry < 0) {
+                return Infinity;
+            }
+            if (plots[index].berry === BerryType.None && !farming.hasBerry(cell.berry)) {
+                return Infinity;
+            }
+            return this.maturitySeconds(index, cell);
+        });
+        return Math.min(...times);
+    }
+
     private maturitySeconds(index: number, cell: FarmLayoutCell): number {
         const farming = App.game.farming;
         const plot = farming.getFarmPlots(this.farmId)[index];
@@ -149,12 +201,38 @@ class FarmLayout {
     }
 
     private plantingSchedule(index: number, cell: FarmLayoutCell): { wait: number; growSeconds: number; reason?: string } {
-        if (!this.isTimingSource(cell)) {
+        const productionSupport = this.isProductionSupport(cell);
+        if (!this.isTimingSource(cell) && !productionSupport && cell.role !== 'cycle') {
             return { wait: 0, growSeconds: 0 };
         }
         const growSeconds = this.maturitySeconds(index, cell);
         if (!Number.isFinite(growSeconds)) {
             return { wait: Infinity, growSeconds, reason: '原料格无法生长或播种，检查冻结肥料、锁定、种子和助手' };
+        }
+        const shortage = this.seedShortage();
+        if (shortage) {
+            return { wait: Infinity, growSeconds, reason: shortage };
+        }
+        if (productionSupport) {
+            const production = this.productionSeconds();
+            if (!Number.isFinite(production)) {
+                return { wait: Infinity, growSeconds, reason: '缺少可生长的生产株，等待关键种子回收、补种或解除生产格阻塞后再播光环株' };
+            }
+            // 生长光环要尽早发挥作用，增产光环才按收获窗口安排。
+            const growthAura = BerryList[cell.berry].aura?.auraType === AuraType.Growth
+                || (BerryList[cell.berry].aura?.auraType === AuraType.Boost && Plot.findNearPlots(index)
+                    .some(position => BerryList[this.plan().cells[position].berry]?.aura?.auraType === AuraType.Growth));
+            if (growthAura) {
+                return { wait: 0, growSeconds };
+            }
+            return { wait: Math.max(0, production - growSeconds), growSeconds };
+        }
+        if (cell.role === 'cycle') {
+            const supportTimes = this.plan().cells.map((support, position) => support.role === 'keep' ? this.maturitySeconds(position, support) : 0);
+            if (supportTimes.some(time => !Number.isFinite(time))) {
+                return { wait: Infinity, growSeconds, reason: '生产辅助格存在冲突、锁定或无法生长，等待恢复后再播生产株' };
+            }
+            return { wait: Math.max(0, Math.max(...supportTimes) - growSeconds), growSeconds };
         }
         const sourceTimes = this.plan().cells.map((source, position) => this.isTimingSource(source) ? this.maturitySeconds(position, source) : 0);
         if (sourceTimes.some(time => !Number.isFinite(time))) {
@@ -226,11 +304,45 @@ class FarmLayout {
         return decay > 0 ? Math.max(0, BerryList[plot.berry].growthTime[PlotStage.Berry] - plot.age) / decay : Infinity;
     }
 
+    private needsRecovery(cell: FarmLayoutCell, plot: Plot): boolean {
+        return plot.berry !== BerryType.None && (cell.role === 'empty' || !this.matches(cell, plot));
+    }
+
+    private witherSeconds(plot: Plot): number {
+        if (plot.berry !== BerryType.Petaya && App.game.farming.berryInFarm(BerryType.Petaya, PlotStage.Berry, true, this.farmId)) {
+            return Infinity;
+        }
+        const frozen = plot.mulch === MulchType.Freeze_Mulch;
+        const speed = App.game.farming.getGrowthMultiplier() * plot.getGrowthMultiplier(PlotStage.Berry, frozen ? MulchType.None : plot.mulch);
+        const freezeLeft = frozen ? plot.mulchTimeLeft * App.game.farming.getMulchDurationMultiplier() : 0;
+        return speed > 0 ? freezeLeft + Math.max(0, BerryList[plot.berry].growthTime[PlotStage.Berry] - plot.age) / speed : Infinity;
+    }
+
+    private shouldRescue(cell: FarmLayoutCell, plot: Plot, hand: FarmHand): boolean {
+        if (plot.berry === BerryType.None || plot.stage() !== PlotStage.Berry || !['keep', 'evolve', 'cycle'].includes(cell.role)) {
+            return false;
+        }
+        // 刚成熟时至少保留本轮突变窗口，不能因助手周期长就立刻收走整阵母株。
+        if (plot.age <= BerryList[plot.berry].growthTime[PlotStage.Bloom]) {
+            return false;
+        }
+        const cycle = Math.ceil(hand.workTick / GameConstants.TICK_TIME) * GameConstants.TICK_TIME / GameConstants.SECOND;
+        const nextWork = hand.energy() + hand.recovery <= FarmHand.WORK_ENERGY_COST ? cycle * 2 : cycle;
+        return this.witherSeconds(plot) <= nextWork + GameConstants.TICK_TIME / GameConstants.SECOND;
+    }
+
     private nextAction(index: number, hand: FarmHand): FarmLayoutAction | undefined {
         const farming = App.game.farming;
         const plot = farming.getFarmPlots(this.farmId)[index];
         const cell = this.plan().cells[index];
-        if (!plot?.isUnlocked || plot.isSafeLocked || !this.isManaged(index) || cell.role === 'empty' || this.owner(index) !== hand || !this.matches(cell, plot)) {
+        if (!plot?.isUnlocked || plot.isSafeLocked || !this.isManaged(index) || this.owner(index) !== hand) {
+            return undefined;
+        }
+        // 托管冲突只在成熟后采收回收种子，不铲幼株，也不免费搬迁作物或年龄。
+        if (this.needsRecovery(cell, plot)) {
+            return plot.stage() === PlotStage.Berry ? { index, kind: 'harvest', priority: 1, deadlineSeconds: this.witherSeconds(plot) } : undefined;
+        }
+        if (cell.role === 'empty') {
             return undefined;
         }
         if (plot.berry === BerryType.None && ['keep', 'cycle', 'evolve'].includes(cell.role)) {
@@ -245,9 +357,13 @@ class FarmLayout {
         }
         const harvest = this.shouldHarvest(cell, plot);
         if (harvest && cell.role === 'cycle' && !this.supportsReady()) {
-            return undefined;
+            return this.shouldRescue(cell, plot, hand) ? { index, kind: 'harvest', priority: 1, deadlineSeconds: this.witherSeconds(plot) } : undefined;
         }
         const mulch = this.desiredMulch(cell, plot, index);
+        const canFreeze = mulch === MulchType.Freeze_Mulch && (plot.mulch === MulchType.None || plot.mulch === mulch) && farming.hasMulch(mulch);
+        if (this.shouldRescue(cell, plot, hand) && !canFreeze) {
+            return { index, kind: 'harvest', priority: 1, deadlineSeconds: this.witherSeconds(plot) };
+        }
         if (mulch !== MulchType.None) {
             const compatible = plot.mulch === MulchType.None || plot.mulch === mulch;
             const duration = farming.getMulchDurationMultiplier();
@@ -321,11 +437,15 @@ class FarmLayout {
         if (plot.isSafeLocked) {
             return '安全锁开启，助手不会操作';
         }
-        if (cell.role === 'empty') {
-            return plot.berry === BerryType.None ? '隔离留空，不种植' : `隔离格已有 ${BerryType[plot.berry]}，保留现场，请手动处理`;
+        if (this.needsRecovery(cell, plot)) {
+            const prefix = plot.berry === BerryType.Kasib ? 'Kasib 可能来自自然枯萎后的突变；' : '';
+            if (!this.owner(index)) {
+                return `${prefix}已有 ${BerryType[plot.berry]} 与布局不符，需分配已雇用助手后才能成熟采收回收`;
+            }
+            return `${prefix}已有 ${BerryType[plot.berry]} 与布局不符，${!this.enabled() ? '启用后' : ''}${plot.stage() === PlotStage.Berry ? '等待助手采收回收种子后恢复布局' : '保留生长进度，等待成熟采收后恢复布局'}`;
         }
-        if (!this.matches(cell, plot)) {
-            return `已有 ${BerryType[plot.berry]} 与布局不符，保留现场，请手动处理`;
+        if (cell.role === 'empty') {
+            return '隔离留空，不种植';
         }
         if (['keep', 'cycle', 'evolve'].includes(cell.role) && cell.berry < 0) {
             return '尚未指定种植树果';
@@ -342,7 +462,7 @@ class FarmLayout {
                 return `${BerryType[cell.berry]} 尚未解锁`;
             }
             if (!farming.hasBerry(cell.berry)) {
-                return `缺少 ${BerryType[cell.berry]} 种子`;
+                return this.seedWaitReason(cell.berry);
             }
             const freezeBlock = this.freezeTimingBlock(index, cell, hand);
             if (freezeBlock) {
@@ -356,6 +476,11 @@ class FarmLayout {
                 return `错峰播种：约 ${GameConstants.formatSecondsToTime(Math.ceil(schedule.wait))} 后进入种植窗口，等待长周期原料`;
             }
             return `等待 ${hand.name} 播种`;
+        }
+        const canFreeze = cell.mulch === MulchType.Freeze_Mulch
+            && (plot.mulch === MulchType.None || plot.mulch === cell.mulch) && farming.hasMulch(cell.mulch);
+        if (this.shouldRescue(cell, plot, hand) && !canFreeze) {
+            return '作物临近枯萎，等待助手先采收回收种子，再按现场成熟时间补种';
         }
         if ((cell.role === 'mutation' && plot.berry === BerryType.None) || (cell.role === 'evolve' && plot.berry === cell.berry)) {
             const opportunity = this.mutationOpportunity(index, cell);
@@ -380,7 +505,8 @@ class FarmLayout {
         }
         if (this.shouldHarvest(cell, plot)) {
             if (cell.role === 'cycle' && !this.supportsReady()) {
-                return '等待布局中的原料或光环株全部成熟后再收获';
+                return this.shouldRescue(cell, plot, hand) ? '生产株临近枯萎，先采收回收种子，再等待辅助株成熟窗口补种'
+                    : '等待布局中的原料或光环株全部成熟后再收获';
             }
             return `等待 ${hand.name} 收获${mulch === MulchType.Rich_Mulch ? '（先施 Rich）' : ''}`;
         }

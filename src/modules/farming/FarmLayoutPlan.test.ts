@@ -12,6 +12,17 @@ function encoded(value: unknown): string {
     return btoa(unescape(encodeURIComponent(JSON.stringify(value))));
 }
 
+// 用户提供的 Wiki Rabuta 模板：四株 Aguav 与二十一株施 Surprise 的 Aspear。
+const WIKI_RABUTA = encoded({
+    save: {
+        farming: {
+            plotList: Array.from({ length: 25 }, (_, index) => [6, 9, 21, 24].includes(index)
+                ? { berry: BerryType.Aguav, age: 700, mulch: MulchType.None }
+                : { berry: BerryType.Aspear, age: 240, mulch: MulchType.Surprise_Mulch }),
+        },
+    },
+});
+
 function simulator(first: Record<string, unknown> = {}) {
     return {
         save: {
@@ -37,6 +48,46 @@ describe('农场布局分享码与持久化意图', () => {
         });
         expect(plan.cells.every(cell => !('age' in cell) && cell.freezeStage === PlotStage.Berry)).toBe(true);
         expect(plan.notes).toHaveLength(1);
+    });
+
+    it('完整 Wiki Rabuta 模板为 Aspear 绑定 Rabuta 进化目标并保留 Aguav 原料', () => {
+        const plan = FarmLayoutPlan.parse(WIKI_RABUTA);
+        expect(plan.cells.filter(cell => cell.role === 'evolve')).toHaveLength(21);
+        plan.cells.forEach((cell, index) => {
+            if ([6, 9, 21, 24].includes(index)) {
+                expect(cell).toMatchObject({ role: 'keep', berry: BerryType.Aguav, targetBerry: BerryType.None, mulch: MulchType.None });
+            } else {
+                expect(cell).toMatchObject({ role: 'evolve', berry: BerryType.Aspear, targetBerry: BerryType.Rabuta, mulch: MulchType.Surprise_Mulch });
+                expect(adjacent(index).some(i => plan.cells[i].berry === BerryType.Aguav)).toBe(true);
+            }
+            expect(cell).not.toHaveProperty('age');
+        });
+        expect(FarmLayoutPlan.parse(JSON.stringify(plan))).toEqual(plan);
+        expect(plan.notes.some(note => note.includes('选择明确的目标'))).toBe(false);
+    });
+
+    it('已知 Rabuta 拓扑补全旧版缺失目标时保留手工指定的目标', () => {
+        const legacy = FarmLayoutPlan.parse(WIKI_RABUTA);
+        legacy.name = '改过名称的原株阵';
+        legacy.notes = ['已种植物上的突变肥料按进化格导入；请为每个进化格选择明确的目标树果后再启用。'];
+        legacy.cells.filter(cell => cell.role === 'evolve').forEach(cell => { cell.targetBerry = BerryType.None; });
+        legacy.cells[0].targetBerry = BerryType.Tamato;
+        const normalized = FarmLayoutPlan.normalize(legacy);
+        expect(normalized.cells[0].targetBerry).toBe(BerryType.Tamato);
+        expect(normalized.cells.filter(cell => cell.role === 'evolve').slice(1).every(cell => cell.targetBerry === BerryType.Rabuta)).toBe(true);
+        expect(normalized.notes).toEqual([]);
+        expect(FarmLayoutPlan.normalize(normalized)).toEqual(normalized);
+    });
+
+    it.each(['role', 'berry', 'mulch'])('改过 Rabuta 的%s后不按预设猜测进化目标', field => {
+        const imported = FarmLayoutPlan.parse(WIKI_RABUTA);
+        imported.cells.filter(cell => cell.role === 'evolve').forEach(cell => { cell.targetBerry = BerryType.None; });
+        if (field === 'role') { imported.cells[6].role = 'cycle'; }
+        if (field === 'berry') { imported.cells[6].berry = BerryType.Figy; }
+        if (field === 'mulch') { imported.cells[6].mulch = MulchType.Freeze_Mulch; }
+        const plan = FarmLayoutPlan.normalize(imported);
+        expect(plan.cells.filter(cell => cell.role === 'evolve').every(cell => cell.targetBerry === BerryType.None)).toBe(true);
+        expect(plan.notes.some(note => note.includes('选择明确的目标'))).toBe(true);
     });
 
     it('原生 JSON 和含中文名称的 Base64 均保留明确的角色意图', () => {
@@ -247,6 +298,19 @@ describe('Wiki 布局预设结构', () => {
 
     it('Lum 预设与真实 Wiki 分享码的布局一致', () => {
         expect(FarmLayoutPlan.createPreset('lum-mutation').cells).toEqual(FarmLayoutPlan.parse(WIKI_LUM).cells);
+    });
+
+    it('Rabuta 预设与用户 Wiki 分享码一致，21 个进化位均邻接 Aguav', () => {
+        const preset = FarmLayoutPlan.createPreset('rabuta-mutation');
+        expect(preset.cells).toEqual(FarmLayoutPlan.parse(WIKI_RABUTA).cells);
+        expect(preset.cells.filter(cell => cell.role === 'keep')).toHaveLength(4);
+        expect(preset.cells.filter(cell => cell.role === 'evolve')).toHaveLength(21);
+        preset.cells.forEach((cell, index) => {
+            if (cell.role === 'evolve') {
+                expect(cell).toMatchObject({ berry: BerryType.Aspear, targetBerry: BerryType.Rabuta, mulch: MulchType.Surprise_Mulch });
+                expect(adjacent(index).some(i => preset.cells[i].berry === BerryType.Aguav)).toBe(true);
+            }
+        });
     });
 
     it('Passho 每个突变格都邻接四种指定原料', () => {

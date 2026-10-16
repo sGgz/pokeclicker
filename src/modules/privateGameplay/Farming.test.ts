@@ -636,7 +636,7 @@ describe('农场布局助手真实作业', () => {
         expect(source.age).toBe(0);
     });
 
-    it('空突变位采收任意成熟副产物后仍留空，纯隔离位保留已有植物', () => {
+    it('空突变位和隔离位采收成熟副产物后仍留空，不被普通补种覆盖', () => {
         const { farming, unlockFirst, ripe } = setup();
         unlockFirst();
         const hand = farming.farmHands.list.find(candidate => candidate.name === 'Logan');
@@ -651,15 +651,16 @@ describe('农场布局助手真实作业', () => {
         ripe(0, 0, BerryType.Persim);
         const isolated = ripe(0, 1, BerryType.Liechi);
         const before = farming.berryInventory[BerryType.Liechi]();
+        const amount = isolated.harvestAmount();
         hand.work();
         expect(farming.getFarmPlots(0)[0].isEmpty()).toBe(true);
-        expect(isolated.berry).toBe(BerryType.Liechi);
-        expect(farming.berryInventory[BerryType.Liechi]()).toBe(before);
+        expect(isolated.isEmpty()).toBe(true);
+        expect(farming.berryInventory[BerryType.Liechi]()).toBe(before + amount);
         hand.work();
         expect(farming.getFarmPlots(0)[0].isEmpty()).toBe(true);
     });
 
-    it('安全锁和错种冲突逐格阻塞，绝不铲除唯一 Liechi 或消耗铲子', () => {
+    it('成熟错种采收回收种子后恢复布局，安全锁和两类铲子保持不变', () => {
         const { farming, unlockFirst, ripe } = setup();
         unlockFirst();
         const hand = farming.farmHands.list.find(candidate => candidate.name === 'Logan');
@@ -677,12 +678,18 @@ describe('农场布局助手真实作业', () => {
             1: { role: 'cycle', berry: BerryType.Chesto },
             2: { role: 'keep', berry: BerryType.Pecha },
         });
-        const age = unique.age;
+        const amount = unique.harvestAmount();
+        const before = farming.berryInventory[BerryType.Liechi]();
         hand.work();
-        expect(unique.berry).toBe(BerryType.Liechi);
-        expect(unique.age).toBe(age);
+        expect(unique.isEmpty()).toBe(true);
+        expect(unique.age).toBe(0);
+        expect(farming.berryInventory[BerryType.Liechi]()).toBe(before + amount);
         expect(locked.stage()).toBe(PlotStage.Berry);
         expect(farming.getFarmPlots(0)[2].berry).toBe(BerryType.Pecha);
+        farming.getFarmPlots(0)[2].update(BerryList[BerryType.Pecha].growthTime[PlotStage.Bloom] - BerryList[BerryType.Cheri].growthTime[PlotStage.Bloom]);
+        hand.work();
+        expect(unique.berry).toBe(BerryType.Cheri);
+        expect(unique.age).toBe(0);
         expect(farming.shovelAmt()).toBe(9);
         expect(farming.mulchShovelAmt()).toBe(8);
         expect(layout.status(0)).toBeTruthy();

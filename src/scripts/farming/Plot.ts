@@ -483,14 +483,14 @@ class Plot implements Saveable {
     }
 
     /**
-     * 获取格子的生长倍率；预览新种作物时可指定生长阶段。
+     * 获取格子的生长倍率；预览新种或肥料到期后的速度时可指定阶段与肥料，不改变现场。
      */
-    getGrowthMultiplier(stage = this.stage()): number {
+    getGrowthMultiplier(stage = this.stage(), mulch = this.mulch): number {
         let multiplier = {
             [MulchType.Boost_Mulch]: GameConstants.BOOST_MULCH_MULTIPLIER,
             [MulchType.Amaze_Mulch]: GameConstants.AMAZE_MULCH_GROWTH_MULTIPLIER,
             [MulchType.Freeze_Mulch]: GameConstants.FREEZE_MULCH_MULTIPLIER,
-        }[this.mulch] ?? 1;
+        }[mulch] ?? 1;
 
         if (stage !== PlotStage.Berry) {
             multiplier *= this.auraGrowth();
