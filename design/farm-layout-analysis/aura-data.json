@@ -1,0 +1,7536 @@
+{
+  "version": 1,
+  "title": "农场各种光环的成熟峰值与可复制布局",
+  "calculatedFrom": "当前工作区源码；游戏版本 0.10.27；2026-10-18",
+  "verification": {
+    "plansChecked": 26,
+    "nativeImportParser": "全部方案使用真实 FarmLayoutPlan.parse() 完整往返，输出与原始布局逐字段一致。",
+    "actualPlotCalculation": "全部方案以真实 Plot 类构造成熟作物，独立读取光环接收值或全局发射株乘积，与报告倍率逐一相符。",
+    "rateLimitTreatment": "静态验证关闭 Knockout 的 50 毫秒通知延迟，以免同步计算读取陈旧通知；光环计算公式与真实 Plot 源码保持一致。",
+    "coverageBoundary": "验证成熟静态倍率及导入结构；未将其表述为从空田启动的长期挂机平均收益。",
+    "maintenanceTemplates": "七种正全局光环另列固定 Petaya 成熟保活窗口模板；保活模板独立核对成熟倍率，不声称所有动态维护方案的全局最优。"
+  },
+  "scope": "单块 5×5 农田，25 格解锁；助手按 Lv.50 调度另行配置。结果为全部所需光环株成熟时的静态峰值，不是从空田起步的长期平均值。",
+  "importInstructions": [
+    "每条方案的 layout 是可直接粘贴到农场 → 布局 → 导入的完整 JSON 对象，不能将整个 aura-data.json 当一条布局导入。",
+    "导入后布局暂停，需要雇用助手、分配 Allowed Plots 覆盖托管格，再启用布局；布局 JSON 不含助手雇佣、等级和分工。",
+    "成熟峰值不是永久峰值。keep 在临枯时会自动采收救种并重种；种子、现有肥料、锁定和真实突变均继续生效。",
+    "任何提供光环或 Petaya 保活效果的植物都不能施 Freeze。"
+  ],
+  "dataSource": [
+    {
+      "berry": 19,
+      "berryName": "Lum",
+      "auraType": 8,
+      "auraName": "Boost",
+      "matureMultiplier": 1.03
+    },
+    {
+      "berry": 37,
+      "berryName": "Passho",
+      "auraType": 3,
+      "auraName": "Harvest",
+      "matureMultiplier": 1.3
+    },
+    {
+      "berry": 38,
+      "berryName": "Wacan",
+      "auraType": 0,
+      "auraName": "Growth",
+      "matureMultiplier": 1.3
+    },
+    {
+      "berry": 39,
+      "berryName": "Rindo",
+      "auraType": 13,
+      "auraName": "Pickup",
+      "matureMultiplier": 1.015
+    },
+    {
+      "berry": 40,
+      "berryName": "Yache",
+      "auraType": 11,
+      "auraName": "Decay",
+      "matureMultiplier": 0.7
+    },
+    {
+      "berry": 41,
+      "berryName": "Chople",
+      "auraType": 4,
+      "auraName": "Egg",
+      "matureMultiplier": 1.03
+    },
+    {
+      "berry": 42,
+      "berryName": "Kebia",
+      "auraType": 2,
+      "auraName": "Mutation",
+      "matureMultiplier": 1.6
+    },
+    {
+      "berry": 43,
+      "berryName": "Shuca",
+      "auraType": 1,
+      "auraName": "Replant",
+      "matureMultiplier": 1.03
+    },
+    {
+      "berry": 45,
+      "berryName": "Payapa",
+      "auraType": 2,
+      "auraName": "Mutation",
+      "matureMultiplier": 1.3
+    },
+    {
+      "berry": 46,
+      "berryName": "Tanga",
+      "auraType": 3,
+      "auraName": "Harvest",
+      "matureMultiplier": 0.7
+    },
+    {
+      "berry": 47,
+      "berryName": "Charti",
+      "auraType": 1,
+      "auraName": "Replant",
+      "matureMultiplier": 0.97
+    },
+    {
+      "berry": 48,
+      "berryName": "Kasib",
+      "auraType": 7,
+      "auraName": "Death",
+      "matureMultiplier": 2
+    },
+    {
+      "berry": 49,
+      "berryName": "Haban",
+      "auraType": 11,
+      "auraName": "Decay",
+      "matureMultiplier": 0.5
+    },
+    {
+      "berry": 51,
+      "berryName": "Babiri",
+      "auraType": 2,
+      "auraName": "Mutation",
+      "matureMultiplier": 0
+    },
+    {
+      "berry": 52,
+      "berryName": "Chilan",
+      "auraType": 4,
+      "auraName": "Egg",
+      "matureMultiplier": 0.97
+    },
+    {
+      "berry": 53,
+      "berryName": "Roseli",
+      "auraType": 5,
+      "auraName": "Attract",
+      "matureMultiplier": 1.07
+    },
+    {
+      "berry": 55,
+      "berryName": "Micle",
+      "auraType": 5,
+      "auraName": "Attract",
+      "matureMultiplier": 0.95
+    },
+    {
+      "berry": 56,
+      "berryName": "Custap",
+      "auraType": 12,
+      "auraName": "Xp",
+      "matureMultiplier": 1.015
+    },
+    {
+      "berry": 57,
+      "berryName": "Jaboca",
+      "auraType": 9,
+      "auraName": "Roaming",
+      "matureMultiplier": 1.03
+    },
+    {
+      "berry": 58,
+      "berryName": "Rowap",
+      "auraType": 10,
+      "auraName": "Ev",
+      "matureMultiplier": 1.015
+    },
+    {
+      "berry": 67,
+      "berryName": "Starf",
+      "auraType": 6,
+      "auraName": "Shiny",
+      "matureMultiplier": 1.015
+    }
+  ],
+  "globalEnumeration": {
+    "allSubsetsEvaluated": 245506,
+    "counts": [
+      {
+        "lumCount": 0,
+        "combinations": 1,
+        "boostedEmitters": 0,
+        "lumIndices": []
+      },
+      {
+        "lumCount": 1,
+        "combinations": 25,
+        "boostedEmitters": 8,
+        "lumIndices": [
+          6
+        ]
+      },
+      {
+        "lumCount": 2,
+        "combinations": 300,
+        "boostedEmitters": 15,
+        "lumIndices": [
+          6,
+          18
+        ]
+      },
+      {
+        "lumCount": 3,
+        "combinations": 2300,
+        "boostedEmitters": 18,
+        "lumIndices": [
+          0,
+          8,
+          16
+        ]
+      },
+      {
+        "lumCount": 4,
+        "combinations": 12650,
+        "boostedEmitters": 21,
+        "lumIndices": [
+          6,
+          8,
+          16,
+          18
+        ]
+      },
+      {
+        "lumCount": 5,
+        "combinations": 53130,
+        "boostedEmitters": 20,
+        "lumIndices": [
+          0,
+          1,
+          3,
+          15,
+          18
+        ]
+      },
+      {
+        "lumCount": 6,
+        "combinations": 177100,
+        "boostedEmitters": 19,
+        "lumIndices": [
+          0,
+          1,
+          2,
+          3,
+          15,
+          18
+        ]
+      }
+    ],
+    "lumMatureBoost": 1.03,
+    "algorithm": "对 k=0..6 递归枚举 25 格中每一种 k 元子集；将各 Lum 八邻格按位或，排除 Lum 本身，popcount 得到受增强的发射株数量；每个固定 k 只需保留最大覆盖数。所有正全局光环共享该几何枚举，再按各自成熟值计算乘积。k>=7 用全部剩余株均被增强的乐观上界证明不可能超过已找到最优值。"
+  },
+  "sourceReferences": [
+    {
+      "file": "src/scripts/farming/Plot.ts",
+      "line": 64,
+      "note": "Taller 起可发射；Freeze 关闭光环；正值乘 Lum，负值除 Lum。"
+    },
+    {
+      "file": "src/scripts/farming/Plot.ts",
+      "line": 151,
+      "note": "Death 与 Boost 取相邻最大值；Kasib 对 Death 免疫，Lum 对 Boost 免疫。"
+    },
+    {
+      "file": "src/scripts/farming/Plot.ts",
+      "line": 556,
+      "note": "一般局部光环在相邻八格连乘。"
+    },
+    {
+      "file": "src/scripts/farming/Farming.ts",
+      "line": 865,
+      "note": "全局光环各田分别连乘，之后取最大值，最低为 1。"
+    },
+    {
+      "file": "src/scripts/farming/Farming.ts",
+      "line": 531,
+      "note": "Chople 相邻至少三株同类时可原株进化为 Chilan。"
+    },
+    {
+      "file": "src/scripts/farming/mutation/mutationTypes/EvolveMutation.ts",
+      "line": 35,
+      "note": "Babiri 自身不能原株进化。"
+    },
+    {
+      "file": "src/scripts/farming/FarmLayout.ts",
+      "line": 78,
+      "note": "cycle 采收等待全部 keep 正确且成熟。"
+    },
+    {
+      "file": "src/scripts/farming/FarmLayout.ts",
+      "line": 321,
+      "note": "keep 临枯自动采收救种，故不可将保留理解为永久不采收。"
+    },
+    {
+      "file": "src/scripts/farming/Farming.ts",
+      "line": 1150,
+      "note": "Petaya 保活只查询同田且排除冻结植物。"
+    }
+  ],
+  "mutationAudit": [
+    "全局正光环纯同类加 Lum 阵中，已识别的主要原株自发风险为 Chople → Chilan；另提供成熟 Babiri 全田保护版。",
+    "Kebia 是寄生种，正突变光环最高数字只作瞬时上界；非寄生推荐改用 Payapa。",
+    "Enigma 可令相邻 Passho、Shuca、Coba、Payapa、Chilan、Roseli、Haban 原株进化，所有本文件方案均不种 Enigma。",
+    "Babiri 保护以其成熟时的零突变光环为准；未成熟、枯萎、被冻结或被移除时保护会变化。",
+    "空田冷启动、助手救种及种子不足会出现空位，原生空位突变仍按游戏规则判断；不宣称绝对无随机变化。"
+  ],
+  "auras": [
+    {
+      "auraType": 0,
+      "auraName": "Growth",
+      "chineseName": "生长加速",
+      "scope": "局部：相邻八格，仅同田生效",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 38,
+          "berryName": "Wacan",
+          "auraType": 0,
+          "auraName": "Growth",
+          "matureMultiplier": 1.3
+        }
+      ],
+      "emitter": "Wacan",
+      "targetIndex": 12,
+      "targetBerry": "Cheri",
+      "multiplier": 10.3334327183155,
+      "grid": [
+        [
+          "Petaya",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Wacan",
+          "Wacan",
+          "Wacan",
+          "Babiri"
+        ],
+        [
+          "Lum",
+          "Wacan",
+          "Cheri",
+          "Wacan",
+          "Lum"
+        ],
+        [
+          "Babiri",
+          "Wacan",
+          "Wacan",
+          "Wacan",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "生长加速中心单格成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 64,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 38,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 38,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 38,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 38,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "cycle",
+            "berry": 0,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 38,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 38,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 38,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 38,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。",
+          "中心 Cheri 为演示目标；循环收获需要所有 keep 格均正确且成熟。Petaya 只保护同田非 Petaya，自己仍会衰败。"
+        ]
+      },
+      "proof": [
+        "中心最多接收相邻八格，各格使用本类型所需方向最优的成熟发射株。",
+        "外围 Lum 于 2、10、14、22，覆盖全部八个光环发射格；发射株只吃最强一株 Lum。",
+        "正光环每株为 v×1.03，负光环每株为 v÷1.03，中心将八株连乘。",
+        "中心目标不占用光环发射格，故达到本类型中心单格成熟峰值。"
+      ],
+      "limitations": [
+        "中心 Cheri 是可操作示例，不表示 Cheri 的综合产量最佳。",
+        "cycle 采收必须等待每一格 keep 作物成熟，包含外围保护树果和 Petaya；冷启动等待是实际执行行为。",
+        "Petaya 任意位置成熟且未 Freeze 时可保护同田非 Petaya；Petaya 自己不受其他 Petaya 保护，补种期间不保证峰值。"
+      ]
+    },
+    {
+      "auraType": 1,
+      "auraName": "Replant",
+      "chineseName": "自然枯萎后重种",
+      "scope": "局部：相邻八格，仅同田生效",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 43,
+          "berryName": "Shuca",
+          "auraType": 1,
+          "auraName": "Replant",
+          "matureMultiplier": 1.03
+        },
+        {
+          "berry": 47,
+          "berryName": "Charti",
+          "auraType": 1,
+          "auraName": "Replant",
+          "matureMultiplier": 0.97
+        }
+      ],
+      "emitter": "Shuca",
+      "targetIndex": 12,
+      "targetBerry": "Cheri",
+      "multiplier": 1.6047064390987869,
+      "grid": [
+        [
+          "Petaya",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Shuca",
+          "Shuca",
+          "Shuca",
+          "Babiri"
+        ],
+        [
+          "Lum",
+          "Shuca",
+          "Cheri",
+          "Shuca",
+          "Lum"
+        ],
+        [
+          "Babiri",
+          "Shuca",
+          "Shuca",
+          "Shuca",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "自然枯萎后重种中心单格成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 64,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 43,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 43,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 43,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 43,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "cycle",
+            "berry": 0,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 43,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 43,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 43,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 43,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。",
+          "中心 Cheri 为演示目标；循环收获需要所有 keep 格均正确且成熟。Petaya 只保护同田非 Petaya，自己仍会衰败。",
+          "该光环只作用于自然枯萎重种概率；助手成熟采收的 cycle 不会触发自然重种判定。"
+        ]
+      },
+      "proof": [
+        "中心最多接收相邻八格，各格使用本类型所需方向最优的成熟发射株。",
+        "外围 Lum 于 2、10、14、22，覆盖全部八个光环发射格；发射株只吃最强一株 Lum。",
+        "正光环每株为 v×1.03，负光环每株为 v÷1.03，中心将八株连乘。",
+        "中心目标不占用光环发射格，故达到本类型中心单格成熟峰值。"
+      ],
+      "limitations": [
+        "中心 Cheri 是可操作示例，不表示 Cheri 的综合产量最佳。",
+        "cycle 采收必须等待每一格 keep 作物成熟，包含外围保护树果和 Petaya；冷启动等待是实际执行行为。",
+        "Petaya 任意位置成熟且未 Freeze 时可保护同田非 Petaya；Petaya 自己不受其他 Petaya 保护，补种期间不保证峰值。",
+        "该光环只作用于自然枯萎重种概率；助手成熟采收的 cycle 不会触发自然重种判定。"
+      ],
+      "negativeVariant": {
+        "objective": "最小化倍率，仅作负面效果展示",
+        "emitter": "Charti",
+        "multiplier": 0.6186942452723428,
+        "grid": [
+          [
+            "Petaya",
+            "Babiri",
+            "Lum",
+            "Babiri",
+            "Babiri"
+          ],
+          [
+            "Babiri",
+            "Charti",
+            "Charti",
+            "Charti",
+            "Babiri"
+          ],
+          [
+            "Lum",
+            "Charti",
+            "Cheri",
+            "Charti",
+            "Lum"
+          ],
+          [
+            "Babiri",
+            "Charti",
+            "Charti",
+            "Charti",
+            "Babiri"
+          ],
+          [
+            "Babiri",
+            "Babiri",
+            "Lum",
+            "Babiri",
+            "Babiri"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "自然枯萎后重种负光环最小值演示",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 47,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 47,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 47,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 47,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "cycle",
+              "berry": 0,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 47,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 47,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 47,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 47,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+            "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+            "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。",
+            "中心 Cheri 为演示目标；循环收获需要所有 keep 格均正确且成熟。Petaya 只保护同田非 Petaya，自己仍会衰败。"
+          ]
+        },
+        "note": "降低收益的负光环；通常不应主动用于树果量产。"
+      }
+    },
+    {
+      "auraType": 2,
+      "auraName": "Mutation",
+      "chineseName": "突变概率",
+      "scope": "局部：相邻八格，仅同田生效",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 42,
+          "berryName": "Kebia",
+          "auraType": 2,
+          "auraName": "Mutation",
+          "matureMultiplier": 1.6
+        },
+        {
+          "berry": 45,
+          "berryName": "Payapa",
+          "auraType": 2,
+          "auraName": "Mutation",
+          "matureMultiplier": 1.3
+        },
+        {
+          "berry": 51,
+          "berryName": "Babiri",
+          "auraType": 2,
+          "auraName": "Mutation",
+          "matureMultiplier": 0
+        }
+      ],
+      "emitter": "Kebia",
+      "targetIndex": 12,
+      "targetBerry": "Cheri",
+      "multiplier": 54.40736071111073,
+      "grid": [
+        [
+          "Petaya",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Kebia",
+          "Kebia",
+          "Kebia",
+          "Babiri"
+        ],
+        [
+          "Lum",
+          "Kebia",
+          "Cheri",
+          "Kebia",
+          "Lum"
+        ],
+        [
+          "Babiri",
+          "Kebia",
+          "Kebia",
+          "Kebia",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "突变概率中心单格成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 64,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 42,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 42,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 42,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 42,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "cycle",
+            "berry": 0,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 42,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 42,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 42,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 42,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。",
+          "中心 Cheri 为演示目标；循环收获需要所有 keep 格均正确且成熟。Petaya 只保护同田非 Petaya，自己仍会衰败。",
+          "Kebia 是寄生树果，可侵占中心 Cheri；Babiri 保护中心会同时把突变概率压到零，故此只作瞬时理论上界。"
+        ]
+      },
+      "proof": [
+        "中心最多接收相邻八格，各格使用本类型所需方向最优的成熟发射株。",
+        "外围 Lum 于 2、10、14、22，覆盖全部八个光环发射格；发射株只吃最强一株 Lum。",
+        "正光环每株为 v×1.03，负光环每株为 v÷1.03，中心将八株连乘。",
+        "中心目标不占用光环发射格，故达到本类型中心单格成熟峰值。"
+      ],
+      "limitations": [
+        "中心 Cheri 是可操作示例，不表示 Cheri 的综合产量最佳。",
+        "cycle 采收必须等待每一格 keep 作物成熟，包含外围保护树果和 Petaya；冷启动等待是实际执行行为。",
+        "Petaya 任意位置成熟且未 Freeze 时可保护同田非 Petaya；Petaya 自己不受其他 Petaya 保护，补种期间不保证峰值。",
+        "Kebia 是寄生树果，可侵占中心 Cheri；Babiri 保护中心会同时把突变概率压到零，故此只作瞬时理论上界。"
+      ],
+      "nonParasiticRecommendation": {
+        "emitter": "Payapa",
+        "multiplier": 10.333432718315485,
+        "grid": [
+          [
+            "Petaya",
+            "Babiri",
+            "Lum",
+            "Babiri",
+            "Babiri"
+          ],
+          [
+            "Babiri",
+            "Payapa",
+            "Payapa",
+            "Payapa",
+            "Babiri"
+          ],
+          [
+            "Lum",
+            "Payapa",
+            "Cheri",
+            "Payapa",
+            "Lum"
+          ],
+          [
+            "Babiri",
+            "Payapa",
+            "Payapa",
+            "Payapa",
+            "Babiri"
+          ],
+          [
+            "Babiri",
+            "Babiri",
+            "Lum",
+            "Babiri",
+            "Babiri"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "突变光环 Payapa 非寄生推荐",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 45,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 45,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 45,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 45,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "cycle",
+              "berry": 0,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 45,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 45,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 45,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 45,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+            "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+            "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。",
+            "中心 Cheri 为演示目标；循环收获需要所有 keep 格均正确且成熟。Petaya 只保护同田非 Petaya，自己仍会衰败。",
+            "采用无寄生扩散的 Payapa，中心不邻接 Babiri，以免突变概率归零；外围 Babiri 抑制外围意外突变。"
+          ]
+        },
+        "note": "此方案最大化非寄生发射株条件下中心突变光环；中心示例 Cheri 仅用于展示，实际突变布局需换成原株或空位及明确 targetBerry。"
+      },
+      "suppressionRecommendation": {
+        "objective": "最小化突变率",
+        "multiplier": 0,
+        "grid": [
+          [
+            "Petaya",
+            "Babiri",
+            "Babiri",
+            "Babiri",
+            "Babiri"
+          ],
+          [
+            "Babiri",
+            "Babiri",
+            "Babiri",
+            "Babiri",
+            "Babiri"
+          ],
+          [
+            "Babiri",
+            "Babiri",
+            "Cheri",
+            "Babiri",
+            "Babiri"
+          ],
+          [
+            "Babiri",
+            "Babiri",
+            "Babiri",
+            "Babiri",
+            "Babiri"
+          ],
+          [
+            "Babiri",
+            "Babiri",
+            "Babiri",
+            "Babiri",
+            "Babiri"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "中心突变概率归零",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "cycle",
+              "berry": 0,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+            "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+            "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。"
+          ]
+        },
+        "note": "一株相邻成熟且未冻结的 Babiri 已足以令目标格突变率为零；满铺示例保证外圈保护，仍需等待成熟。"
+      }
+    },
+    {
+      "auraType": 3,
+      "auraName": "Harvest",
+      "chineseName": "树果收获数量",
+      "scope": "局部：相邻八格，仅同田生效",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 37,
+          "berryName": "Passho",
+          "auraType": 3,
+          "auraName": "Harvest",
+          "matureMultiplier": 1.3
+        },
+        {
+          "berry": 46,
+          "berryName": "Tanga",
+          "auraType": 3,
+          "auraName": "Harvest",
+          "matureMultiplier": 0.7
+        }
+      ],
+      "emitter": "Passho",
+      "targetIndex": 12,
+      "targetBerry": "Cheri",
+      "multiplier": 10.3334327183155,
+      "grid": [
+        [
+          "Petaya",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Passho",
+          "Passho",
+          "Passho",
+          "Babiri"
+        ],
+        [
+          "Lum",
+          "Passho",
+          "Cheri",
+          "Passho",
+          "Lum"
+        ],
+        [
+          "Babiri",
+          "Passho",
+          "Passho",
+          "Passho",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "树果收获数量中心单格成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 64,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 37,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 37,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 37,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 37,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "cycle",
+            "berry": 0,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 37,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 37,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 37,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 37,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。",
+          "中心 Cheri 为演示目标；循环收获需要所有 keep 格均正确且成熟。Petaya 只保护同田非 Petaya，自己仍会衰败。"
+        ]
+      },
+      "proof": [
+        "中心最多接收相邻八格，各格使用本类型所需方向最优的成熟发射株。",
+        "外围 Lum 于 2、10、14、22，覆盖全部八个光环发射格；发射株只吃最强一株 Lum。",
+        "正光环每株为 v×1.03，负光环每株为 v÷1.03，中心将八株连乘。",
+        "中心目标不占用光环发射格，故达到本类型中心单格成熟峰值。"
+      ],
+      "limitations": [
+        "中心 Cheri 是可操作示例，不表示 Cheri 的综合产量最佳。",
+        "cycle 采收必须等待每一格 keep 作物成熟，包含外围保护树果和 Petaya；冷启动等待是实际执行行为。",
+        "Petaya 任意位置成熟且未 Freeze 时可保护同田非 Petaya；Petaya 自己不受其他 Petaya 保护，补种期间不保证峰值。"
+      ],
+      "negativeVariant": {
+        "objective": "最小化倍率，仅作负面效果展示",
+        "emitter": "Tanga",
+        "multiplier": 0.04550787143382207,
+        "grid": [
+          [
+            "Petaya",
+            "Babiri",
+            "Lum",
+            "Babiri",
+            "Babiri"
+          ],
+          [
+            "Babiri",
+            "Tanga",
+            "Tanga",
+            "Tanga",
+            "Babiri"
+          ],
+          [
+            "Lum",
+            "Tanga",
+            "Cheri",
+            "Tanga",
+            "Lum"
+          ],
+          [
+            "Babiri",
+            "Tanga",
+            "Tanga",
+            "Tanga",
+            "Babiri"
+          ],
+          [
+            "Babiri",
+            "Babiri",
+            "Lum",
+            "Babiri",
+            "Babiri"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "树果收获数量负光环最小值演示",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 46,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 46,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 46,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 46,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "cycle",
+              "berry": 0,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 46,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 46,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 46,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 46,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+            "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+            "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。",
+            "中心 Cheri 为演示目标；循环收获需要所有 keep 格均正确且成熟。Petaya 只保护同田非 Petaya，自己仍会衰败。"
+          ]
+        },
+        "note": "降低收益的负光环；通常不应主动用于树果量产。"
+      }
+    },
+    {
+      "auraType": 4,
+      "auraName": "Egg",
+      "chineseName": "孵蛋速度",
+      "scope": "全局：每田先连乘，再取全部田中最大值，最低为 1",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 41,
+          "berryName": "Chople",
+          "auraType": 4,
+          "auraName": "Egg",
+          "matureMultiplier": 1.03
+        },
+        {
+          "berry": 52,
+          "berryName": "Chilan",
+          "auraType": 4,
+          "auraName": "Egg",
+          "matureMultiplier": 0.97
+        }
+      ],
+      "emitter": "Chople",
+      "multiplier": 3.4606958935318217,
+      "lumCount": 4,
+      "emitterCount": 21,
+      "lumIndices": [
+        6,
+        8,
+        16,
+        18
+      ],
+      "grid": [
+        [
+          "Chople",
+          "Chople",
+          "Chople",
+          "Chople",
+          "Chople"
+        ],
+        [
+          "Chople",
+          "Lum",
+          "Chople",
+          "Lum",
+          "Chople"
+        ],
+        [
+          "Chople",
+          "Chople",
+          "Chople",
+          "Chople",
+          "Chople"
+        ],
+        [
+          "Chople",
+          "Lum",
+          "Chople",
+          "Lum",
+          "Chople"
+        ],
+        [
+          "Chople",
+          "Chople",
+          "Chople",
+          "Chople",
+          "Chople"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "孵蛋速度成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 41,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。"
+        ]
+      },
+      "enumeration": [
+        {
+          "lumCount": 0,
+          "combinations": 1,
+          "boostedEmitters": 0,
+          "lumIndices": [],
+          "emitterCount": 25,
+          "multiplier": 2.093777929654216
+        },
+        {
+          "lumCount": 1,
+          "combinations": 25,
+          "boostedEmitters": 8,
+          "lumIndices": [
+            6
+          ],
+          "emitterCount": 24,
+          "multiplier": 2.575082755685113
+        },
+        {
+          "lumCount": 2,
+          "combinations": 300,
+          "boostedEmitters": 15,
+          "lumIndices": [
+            6,
+            18
+          ],
+          "emitterCount": 23,
+          "multiplier": 3.074783478178035
+        },
+        {
+          "lumCount": 3,
+          "combinations": 2300,
+          "boostedEmitters": 18,
+          "lumIndices": [
+            0,
+            8,
+            16
+          ],
+          "emitterCount": 22,
+          "multiplier": 3.262037791999078
+        },
+        {
+          "lumCount": 4,
+          "combinations": 12650,
+          "boostedEmitters": 21,
+          "lumIndices": [
+            6,
+            8,
+            16,
+            18
+          ],
+          "emitterCount": 21,
+          "multiplier": 3.4606958935318217
+        },
+        {
+          "lumCount": 5,
+          "combinations": 53130,
+          "boostedEmitters": 20,
+          "lumIndices": [
+            0,
+            1,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 20,
+          "multiplier": 3.262037791999078
+        },
+        {
+          "lumCount": 6,
+          "combinations": 177100,
+          "boostedEmitters": 19,
+          "lumIndices": [
+            0,
+            1,
+            2,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 19,
+          "multiplier": 3.074783478178035
+        }
+      ],
+      "proof": [
+        "固定 Lum 数 k，任意非 Lum 格都用本类型成熟正光环最大的一种。",
+        "每个被一株或多株 Lum 邻接覆盖的发射株只增强一次 1.03，因此乘积为 v^(25-k) × 1.03^covered。",
+        "完整枚举 k=0..6 的全部 Lum 子集，逐一计算覆盖数并取最高乘积。",
+        "k≥7 时，即便剩余全部发射株都被 Lum 覆盖，乘积也至多 (v×1.03)^18；该上界不超过已找到方案，因此同时排除 k=7..25。"
+      ],
+      "excludedLumCountLowerBound": 7,
+      "excludedLumCountUpperBoundMultiplier": 2.898278328002667,
+      "limitations": [
+        "该倍率为成熟静态峰值；重种、成熟阶段差、助手救种、自然枯萎会改变实时倍率。",
+        "多田相同光环不叠加；无需在多块田重复堆同种全局光环来追求连乘。",
+        "同类负光环只会降低该田乘积，不用于最大化；单独种负光环时全局结果会被下限 1 截住。",
+        "Chople 相邻至少 3 株 Chople 时可原株进化为 Chilan；无保护数学峰值可能被随机突变破坏。不要将它当作可稳定挂机方案。"
+      ],
+      "protectedRecommendation": {
+        "multiplier": 2.652335238355666,
+        "lumCount": 4,
+        "emitterCount": 17,
+        "lumIndices": [
+          1,
+          9,
+          15,
+          23
+        ],
+        "babiriIndices": [
+          6,
+          8,
+          16,
+          18
+        ],
+        "grid": [
+          [
+            "Chople",
+            "Lum",
+            "Chople",
+            "Chople",
+            "Chople"
+          ],
+          [
+            "Chople",
+            "Babiri",
+            "Chople",
+            "Babiri",
+            "Lum"
+          ],
+          [
+            "Chople",
+            "Chople",
+            "Chople",
+            "Chople",
+            "Chople"
+          ],
+          [
+            "Lum",
+            "Babiri",
+            "Chople",
+            "Babiri",
+            "Chople"
+          ],
+          [
+            "Chople",
+            "Chople",
+            "Chople",
+            "Lum",
+            "Chople"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "孵蛋光环四株 Babiri 保护版",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+            "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+            "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。"
+          ]
+        },
+        "enumeration": [
+          {
+            "lumCount": 0,
+            "combinations": 1,
+            "boostedEmitters": 0,
+            "lumIndices": [],
+            "emitterCount": 21,
+            "multiplier": 1.8602945717094972
+          },
+          {
+            "lumCount": 1,
+            "combinations": 21,
+            "boostedEmitters": 6,
+            "lumIndices": [
+              7
+            ],
+            "emitterCount": 20,
+            "multiplier": 2.156591267543843
+          },
+          {
+            "lumCount": 2,
+            "combinations": 210,
+            "boostedEmitters": 10,
+            "lumIndices": [
+              1,
+              17
+            ],
+            "emitterCount": 19,
+            "multiplier": 2.3565655060093804
+          },
+          {
+            "lumCount": 3,
+            "combinations": 1330,
+            "boostedEmitters": 13,
+            "lumIndices": [
+              1,
+              9,
+              17
+            ],
+            "emitterCount": 18,
+            "multiplier": 2.5000803453253524
+          },
+          {
+            "lumCount": 4,
+            "combinations": 5985,
+            "boostedEmitters": 16,
+            "lumIndices": [
+              1,
+              9,
+              15,
+              23
+            ],
+            "emitterCount": 17,
+            "multiplier": 2.652335238355666
+          },
+          {
+            "lumCount": 5,
+            "combinations": 20349,
+            "boostedEmitters": 16,
+            "lumIndices": [
+              0,
+              3,
+              11,
+              19,
+              21
+            ],
+            "emitterCount": 16,
+            "multiplier": 2.575082755685113
+          },
+          {
+            "lumCount": 6,
+            "combinations": 54264,
+            "boostedEmitters": 15,
+            "lumIndices": [
+              0,
+              1,
+              3,
+              11,
+              19,
+              21
+            ],
+            "emitterCount": 15,
+            "multiplier": 2.4272624711896618
+          }
+        ],
+        "excludedLumCountLowerBound": 7,
+        "excludedLumCountUpperBoundMultiplier": 2.2879276757372597,
+        "proof": [
+          "固定 Babiri 于 6、8、16、18，覆盖每个其他格，Babiri 自身不能原株进化。",
+          "在这个固定保护模板下完整枚举其余 21 格的 Lum 子集 k=0..6；k≥7 即使剩余 14 株全部增强也低于所选方案，故达到保护模板内最高成熟乘积。",
+          "未声称这是所有安全 Chople 布局的全局最优；它为可直接导入的保护推荐。",
+          "Babiri 必须成熟才将邻格突变率归零；成长与补种窗口仍可能发生突变，全部成熟后可抑制 Chople → Chilan。"
+        ]
+      },
+      "maintenanceRecommendation": {
+        "emitter": "Chople",
+        "objective": "在指定成熟保护模板中提高全局光环，并保留 Petaya 的有效保活窗口",
+        "multiplier": 2.5000803453253524,
+        "emitterCount": 16,
+        "boostedEmitters": 15,
+        "lumCount": 4,
+        "lumIndices": [
+          1,
+          9,
+          15,
+          23
+        ],
+        "petayaIndices": [
+          0
+        ],
+        "grid": [
+          [
+            "Petaya",
+            "Lum",
+            "Chople",
+            "Chople",
+            "Chople"
+          ],
+          [
+            "Chople",
+            "Babiri",
+            "Chople",
+            "Babiri",
+            "Lum"
+          ],
+          [
+            "Chople",
+            "Chople",
+            "Chople",
+            "Chople",
+            "Chople"
+          ],
+          [
+            "Lum",
+            "Babiri",
+            "Chople",
+            "Babiri",
+            "Chople"
+          ],
+          [
+            "Chople",
+            "Chople",
+            "Chople",
+            "Lum",
+            "Chople"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "孵蛋速度 Petaya 成熟保活窗口",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 51,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 41,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "固定模板的成熟保活窗口推荐，不是全部动态维护布局的全局最优证明。",
+            "Petaya 成熟且不冻时保护同田非 Petaya；Petaya 自己仍会衰败，临枯收获补种期间不能保证峰值。",
+            "保留全部光环株，不使用 Freeze；导入不会改变现场作物年龄。"
+          ]
+        },
+        "note": "沿用四株 Babiri 的成熟全田保护模板，将 0 号 Chople 替换为 Petaya；Babiri 与 Petaya 均需成熟，补种和建阵窗口仍需观察。",
+        "limitations": [
+          "该方案通过占用一格放入 Petaya，换取其成熟期间对其他植物的保活；倍率与无 Petaya 的数学峰值不同。",
+          "单株 Petaya 不能永久保护自身，其他 Petaya 也不能保护 Petaya；本方案没有承诺永久无缝维护。",
+          "布局只保存角色、树果和肥料，助手与负责范围必须另行设置。"
+        ]
+      }
+    },
+    {
+      "auraType": 5,
+      "auraName": "Attract",
+      "chineseName": "农场游荡出现",
+      "scope": "全局：每田先连乘，再取全部田中最大值，最低为 1",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 53,
+          "berryName": "Roseli",
+          "auraType": 5,
+          "auraName": "Attract",
+          "matureMultiplier": 1.07
+        },
+        {
+          "berry": 55,
+          "berryName": "Micle",
+          "auraType": 5,
+          "auraName": "Attract",
+          "matureMultiplier": 0.95
+        }
+      ],
+      "emitter": "Roseli",
+      "multiplier": 7.702665709777046,
+      "lumCount": 4,
+      "emitterCount": 21,
+      "lumIndices": [
+        6,
+        8,
+        16,
+        18
+      ],
+      "grid": [
+        [
+          "Roseli",
+          "Roseli",
+          "Roseli",
+          "Roseli",
+          "Roseli"
+        ],
+        [
+          "Roseli",
+          "Lum",
+          "Roseli",
+          "Lum",
+          "Roseli"
+        ],
+        [
+          "Roseli",
+          "Roseli",
+          "Roseli",
+          "Roseli",
+          "Roseli"
+        ],
+        [
+          "Roseli",
+          "Lum",
+          "Roseli",
+          "Lum",
+          "Roseli"
+        ],
+        [
+          "Roseli",
+          "Roseli",
+          "Roseli",
+          "Roseli",
+          "Roseli"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "农场游荡出现成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 53,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。"
+        ]
+      },
+      "enumeration": [
+        {
+          "lumCount": 0,
+          "combinations": 1,
+          "boostedEmitters": 0,
+          "lumIndices": [],
+          "emitterCount": 25,
+          "multiplier": 5.427432640122897
+        },
+        {
+          "lumCount": 1,
+          "combinations": 25,
+          "boostedEmitters": 8,
+          "lumIndices": [
+            6
+          ],
+          "emitterCount": 24,
+          "multiplier": 6.425522698368494
+        },
+        {
+          "lumCount": 2,
+          "combinations": 300,
+          "boostedEmitters": 15,
+          "lumIndices": [
+            6,
+            18
+          ],
+          "emitterCount": 23,
+          "multiplier": 7.385591063941776
+        },
+        {
+          "lumCount": 3,
+          "combinations": 2300,
+          "boostedEmitters": 18,
+          "lumIndices": [
+            0,
+            8,
+            16
+          ],
+          "emitterCount": 22,
+          "multiplier": 7.542462398624212
+        },
+        {
+          "lumCount": 4,
+          "combinations": 12650,
+          "boostedEmitters": 21,
+          "lumIndices": [
+            6,
+            8,
+            16,
+            18
+          ],
+          "emitterCount": 21,
+          "multiplier": 7.702665709777046
+        },
+        {
+          "lumCount": 5,
+          "combinations": 53130,
+          "boostedEmitters": 20,
+          "lumIndices": [
+            0,
+            1,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 20,
+          "multiplier": 6.9890805823219715
+        },
+        {
+          "lumCount": 6,
+          "combinations": 177100,
+          "boostedEmitters": 19,
+          "lumIndices": [
+            0,
+            1,
+            2,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 19,
+          "multiplier": 6.341602923801807
+        }
+      ],
+      "proof": [
+        "固定 Lum 数 k，任意非 Lum 格都用本类型成熟正光环最大的一种。",
+        "每个被一株或多株 Lum 邻接覆盖的发射株只增强一次 1.03，因此乘积为 v^(25-k) × 1.03^covered。",
+        "完整枚举 k=0..6 的全部 Lum 子集，逐一计算覆盖数并取最高乘积。",
+        "k≥7 时，即便剩余全部发射株都被 Lum 覆盖，乘积也至多 (v×1.03)^18；该上界不超过已找到方案，因此同时排除 k=7..25。"
+      ],
+      "excludedLumCountLowerBound": 7,
+      "excludedLumCountUpperBoundMultiplier": 5.754108450958901,
+      "limitations": [
+        "该倍率为成熟静态峰值；重种、成熟阶段差、助手救种、自然枯萎会改变实时倍率。",
+        "多田相同光环不叠加；无需在多块田重复堆同种全局光环来追求连乘。",
+        "同类负光环只会降低该田乘积，不用于最大化；单独种负光环时全局结果会被下限 1 截住。"
+      ],
+      "maintenanceRecommendation": {
+        "emitter": "Roseli",
+        "objective": "在指定成熟保护模板中提高全局光环，并保留 Petaya 的有效保活窗口",
+        "multiplier": 7.049030279088049,
+        "emitterCount": 21,
+        "boostedEmitters": 18,
+        "lumCount": 3,
+        "lumIndices": [
+          0,
+          8,
+          16
+        ],
+        "petayaIndices": [
+          18
+        ],
+        "grid": [
+          [
+            "Lum",
+            "Roseli",
+            "Roseli",
+            "Roseli",
+            "Roseli"
+          ],
+          [
+            "Roseli",
+            "Roseli",
+            "Roseli",
+            "Lum",
+            "Roseli"
+          ],
+          [
+            "Roseli",
+            "Roseli",
+            "Roseli",
+            "Roseli",
+            "Roseli"
+          ],
+          [
+            "Roseli",
+            "Lum",
+            "Roseli",
+            "Petaya",
+            "Roseli"
+          ],
+          [
+            "Roseli",
+            "Roseli",
+            "Roseli",
+            "Roseli",
+            "Roseli"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "农场游荡出现 Petaya 成熟保活窗口",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 53,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "固定模板的成熟保活窗口推荐，不是全部动态维护布局的全局最优证明。",
+            "Petaya 成熟且不冻时保护同田非 Petaya；Petaya 自己仍会衰败，临枯收获补种期间不能保证峰值。",
+            "保留全部光环株，不使用 Freeze；导入不会改变现场作物年龄。"
+          ]
+        },
+        "note": "固定模板为 Lum 0、8、16，Petaya 18，另 21 株 Roseli，其中 18 株接受 Lum 增强；仅比较成熟时的该模板。",
+        "limitations": [
+          "该方案通过占用一格放入 Petaya，换取其成熟期间对其他植物的保活；倍率与无 Petaya 的数学峰值不同。",
+          "单株 Petaya 不能永久保护自身，其他 Petaya 也不能保护 Petaya；本方案没有承诺永久无缝维护。",
+          "布局只保存角色、树果和肥料，助手与负责范围必须另行设置。"
+        ]
+      }
+    },
+    {
+      "auraType": 6,
+      "auraName": "Shiny",
+      "chineseName": "闪光概率",
+      "scope": "全局：每田先连乘，再取全部田中最大值，最低为 1",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 67,
+          "berryName": "Starf",
+          "auraType": 6,
+          "auraName": "Shiny",
+          "matureMultiplier": 1.015
+        }
+      ],
+      "emitter": "Starf",
+      "multiplier": 2.5431302634282957,
+      "lumCount": 4,
+      "emitterCount": 21,
+      "lumIndices": [
+        6,
+        8,
+        16,
+        18
+      ],
+      "grid": [
+        [
+          "Starf",
+          "Starf",
+          "Starf",
+          "Starf",
+          "Starf"
+        ],
+        [
+          "Starf",
+          "Lum",
+          "Starf",
+          "Lum",
+          "Starf"
+        ],
+        [
+          "Starf",
+          "Starf",
+          "Starf",
+          "Starf",
+          "Starf"
+        ],
+        [
+          "Starf",
+          "Lum",
+          "Starf",
+          "Lum",
+          "Starf"
+        ],
+        [
+          "Starf",
+          "Starf",
+          "Starf",
+          "Starf",
+          "Starf"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "闪光概率成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 67,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。"
+        ]
+      },
+      "enumeration": [
+        {
+          "lumCount": 0,
+          "combinations": 1,
+          "boostedEmitters": 0,
+          "lumIndices": [],
+          "emitterCount": 25,
+          "multiplier": 1.4509453541079569
+        },
+        {
+          "lumCount": 1,
+          "combinations": 25,
+          "boostedEmitters": 8,
+          "lumIndices": [
+            6
+          ],
+          "emitterCount": 24,
+          "multiplier": 1.8108513934111534
+        },
+        {
+          "lumCount": 2,
+          "combinations": 300,
+          "boostedEmitters": 15,
+          "lumIndices": [
+            6,
+            18
+          ],
+          "emitterCount": 23,
+          "multiplier": 2.1942057171670815
+        },
+        {
+          "lumCount": 3,
+          "combinations": 2300,
+          "boostedEmitters": 18,
+          "lumIndices": [
+            0,
+            8,
+            16
+          ],
+          "emitterCount": 22,
+          "multiplier": 2.3622343159633834
+        },
+        {
+          "lumCount": 4,
+          "combinations": 12650,
+          "boostedEmitters": 21,
+          "lumIndices": [
+            6,
+            8,
+            16,
+            18
+          ],
+          "emitterCount": 21,
+          "multiplier": 2.5431302634282957
+        },
+        {
+          "lumCount": 5,
+          "combinations": 53130,
+          "boostedEmitters": 20,
+          "lumIndices": [
+            0,
+            1,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 20,
+          "multiplier": 2.4325699588008
+        },
+        {
+          "lumCount": 6,
+          "combinations": 177100,
+          "boostedEmitters": 19,
+          "lumIndices": [
+            0,
+            1,
+            2,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 19,
+          "multiplier": 2.326816164140609
+        }
+      ],
+      "proof": [
+        "固定 Lum 数 k，任意非 Lum 格都用本类型成熟正光环最大的一种。",
+        "每个被一株或多株 Lum 邻接覆盖的发射株只增强一次 1.03，因此乘积为 v^(25-k) × 1.03^covered。",
+        "完整枚举 k=0..6 的全部 Lum 子集，逐一计算覆盖数并取最高乘积。",
+        "k≥7 时，即便剩余全部发射株都被 Lum 覆盖，乘积也至多 (v×1.03)^18；该上界不超过已找到方案，因此同时排除 k=7..25。"
+      ],
+      "excludedLumCountLowerBound": 7,
+      "excludedLumCountUpperBoundMultiplier": 2.2256599207428494,
+      "limitations": [
+        "该倍率为成熟静态峰值；重种、成熟阶段差、助手救种、自然枯萎会改变实时倍率。",
+        "多田相同光环不叠加；无需在多块田重复堆同种全局光环来追求连乘。"
+      ],
+      "maintenanceRecommendation": {
+        "emitter": "Starf",
+        "objective": "在指定成熟保护模板中提高全局光环，并保留 Petaya 的有效保活窗口",
+        "multiplier": 2.4325699588007996,
+        "emitterCount": 20,
+        "boostedEmitters": 20,
+        "lumCount": 4,
+        "lumIndices": [
+          6,
+          8,
+          16,
+          18
+        ],
+        "petayaIndices": [
+          0
+        ],
+        "grid": [
+          [
+            "Petaya",
+            "Starf",
+            "Starf",
+            "Starf",
+            "Starf"
+          ],
+          [
+            "Starf",
+            "Lum",
+            "Starf",
+            "Lum",
+            "Starf"
+          ],
+          [
+            "Starf",
+            "Starf",
+            "Starf",
+            "Starf",
+            "Starf"
+          ],
+          [
+            "Starf",
+            "Lum",
+            "Starf",
+            "Lum",
+            "Starf"
+          ],
+          [
+            "Starf",
+            "Starf",
+            "Starf",
+            "Starf",
+            "Starf"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "闪光概率 Petaya 成熟保活窗口",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 67,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "固定模板的成熟保活窗口推荐，不是全部动态维护布局的全局最优证明。",
+            "Petaya 成熟且不冻时保护同田非 Petaya；Petaya 自己仍会衰败，临枯收获补种期间不能保证峰值。",
+            "保留全部光环株，不使用 Freeze；导入不会改变现场作物年龄。"
+          ]
+        },
+        "note": "固定模板为 Lum 6、8、16、18，Petaya 0，另 20 株光环发射株全部接受 Lum 增强；仅比较成熟时的该模板。",
+        "limitations": [
+          "该方案通过占用一格放入 Petaya，换取其成熟期间对其他植物的保活；倍率与无 Petaya 的数学峰值不同。",
+          "单株 Petaya 不能永久保护自身，其他 Petaya 也不能保护 Petaya；本方案没有承诺永久无缝维护。",
+          "布局只保存角色、树果和肥料，助手与负责范围必须另行设置。"
+        ]
+      }
+    },
+    {
+      "auraType": 7,
+      "auraName": "Death",
+      "chineseName": "成熟后衰败加速",
+      "scope": "局部：相邻八格，仅同田生效",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 48,
+          "berryName": "Kasib",
+          "auraType": 7,
+          "auraName": "Death",
+          "matureMultiplier": 2
+        }
+      ],
+      "emitter": "Kasib",
+      "targetIndex": 12,
+      "targetBerry": "Cheri",
+      "multiplier": 2.06,
+      "grid": [
+        [
+          "Petaya",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Kasib",
+          "Kasib",
+          "Kasib",
+          "Babiri"
+        ],
+        [
+          "Lum",
+          "Kasib",
+          "Cheri",
+          "Kasib",
+          "Lum"
+        ],
+        [
+          "Babiri",
+          "Kasib",
+          "Kasib",
+          "Kasib",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "成熟后衰败加速中心单格成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 64,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 48,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 48,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 48,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 48,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "cycle",
+            "berry": 0,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 48,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 48,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 48,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 48,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。",
+          "中心 Cheri 为演示目标；循环收获需要所有 keep 格均正确且成熟。Petaya 只保护同田非 Petaya，自己仍会衰败。",
+          "Death 对目标取相邻最强值，八株不连乘；Kasib 本身不吃 Death，中心用 Cheri 演示。"
+        ]
+      },
+      "proof": [
+        "源码对该种接收效果取相邻最大值，多个发射株不连乘。",
+        "Kasib 成熟值 2，得到一株成熟 Lum 增强后为 2×1.03=2.06。"
+      ],
+      "limitations": [
+        "中心 Cheri 是可操作示例，不表示 Cheri 的综合产量最佳。",
+        "cycle 采收必须等待每一格 keep 作物成熟，包含外围保护树果和 Petaya；冷启动等待是实际执行行为。",
+        "Petaya 任意位置成熟且未 Freeze 时可保护同田非 Petaya；Petaya 自己不受其他 Petaya 保护，补种期间不保证峰值。",
+        "Death 对目标取相邻最强值，八株不连乘；Kasib 本身不吃 Death，中心用 Cheri 演示。"
+      ]
+    },
+    {
+      "auraType": 8,
+      "auraName": "Boost",
+      "chineseName": "相邻光环增强",
+      "scope": "局部：相邻八格，仅同田生效",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 19,
+          "berryName": "Lum",
+          "auraType": 8,
+          "auraName": "Boost",
+          "matureMultiplier": 1.03
+        }
+      ],
+      "emitter": "Lum",
+      "targetIndex": 12,
+      "targetBerry": "Cheri",
+      "multiplier": 1.03,
+      "grid": [
+        [
+          "Petaya",
+          "Babiri",
+          "Babiri",
+          "Babiri",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Lum",
+          "Lum",
+          "Lum",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Lum",
+          "Cheri",
+          "Lum",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Lum",
+          "Lum",
+          "Lum",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Babiri",
+          "Babiri",
+          "Babiri",
+          "Babiri"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "相邻光环增强中心单格成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 64,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "cycle",
+            "berry": 0,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。",
+          "中心 Cheri 为演示目标；循环收获需要所有 keep 格均正确且成熟。Petaya 只保护同田非 Petaya，自己仍会衰败。",
+          "目标只取最强相邻 Lum 的 1.03，多个 Lum 不连乘；Lum 自身不接受 Lum 增强。"
+        ]
+      },
+      "proof": [
+        "源码对该种接收效果取相邻最大值，多个发射株不连乘。",
+        "Lum 成熟值 1.03，且 Lum 自身不接受 Lum，因此最大为 1.03。"
+      ],
+      "limitations": [
+        "中心 Cheri 是可操作示例，不表示 Cheri 的综合产量最佳。",
+        "cycle 采收必须等待每一格 keep 作物成熟，包含外围保护树果和 Petaya；冷启动等待是实际执行行为。",
+        "Petaya 任意位置成熟且未 Freeze 时可保护同田非 Petaya；Petaya 自己不受其他 Petaya 保护，补种期间不保证峰值。",
+        "目标只取最强相邻 Lum 的 1.03，多个 Lum 不连乘；Lum 自身不接受 Lum 增强。"
+      ]
+    },
+    {
+      "auraType": 9,
+      "auraName": "Roaming",
+      "chineseName": "游荡宝可梦概率",
+      "scope": "全局：每田先连乘，再取全部田中最大值，最低为 1",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 57,
+          "berryName": "Jaboca",
+          "auraType": 9,
+          "auraName": "Roaming",
+          "matureMultiplier": 1.03
+        }
+      ],
+      "emitter": "Jaboca",
+      "multiplier": 3.4606958935318217,
+      "lumCount": 4,
+      "emitterCount": 21,
+      "lumIndices": [
+        6,
+        8,
+        16,
+        18
+      ],
+      "grid": [
+        [
+          "Jaboca",
+          "Jaboca",
+          "Jaboca",
+          "Jaboca",
+          "Jaboca"
+        ],
+        [
+          "Jaboca",
+          "Lum",
+          "Jaboca",
+          "Lum",
+          "Jaboca"
+        ],
+        [
+          "Jaboca",
+          "Jaboca",
+          "Jaboca",
+          "Jaboca",
+          "Jaboca"
+        ],
+        [
+          "Jaboca",
+          "Lum",
+          "Jaboca",
+          "Lum",
+          "Jaboca"
+        ],
+        [
+          "Jaboca",
+          "Jaboca",
+          "Jaboca",
+          "Jaboca",
+          "Jaboca"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "游荡宝可梦概率成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 57,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。"
+        ]
+      },
+      "enumeration": [
+        {
+          "lumCount": 0,
+          "combinations": 1,
+          "boostedEmitters": 0,
+          "lumIndices": [],
+          "emitterCount": 25,
+          "multiplier": 2.093777929654216
+        },
+        {
+          "lumCount": 1,
+          "combinations": 25,
+          "boostedEmitters": 8,
+          "lumIndices": [
+            6
+          ],
+          "emitterCount": 24,
+          "multiplier": 2.575082755685113
+        },
+        {
+          "lumCount": 2,
+          "combinations": 300,
+          "boostedEmitters": 15,
+          "lumIndices": [
+            6,
+            18
+          ],
+          "emitterCount": 23,
+          "multiplier": 3.074783478178035
+        },
+        {
+          "lumCount": 3,
+          "combinations": 2300,
+          "boostedEmitters": 18,
+          "lumIndices": [
+            0,
+            8,
+            16
+          ],
+          "emitterCount": 22,
+          "multiplier": 3.262037791999078
+        },
+        {
+          "lumCount": 4,
+          "combinations": 12650,
+          "boostedEmitters": 21,
+          "lumIndices": [
+            6,
+            8,
+            16,
+            18
+          ],
+          "emitterCount": 21,
+          "multiplier": 3.4606958935318217
+        },
+        {
+          "lumCount": 5,
+          "combinations": 53130,
+          "boostedEmitters": 20,
+          "lumIndices": [
+            0,
+            1,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 20,
+          "multiplier": 3.262037791999078
+        },
+        {
+          "lumCount": 6,
+          "combinations": 177100,
+          "boostedEmitters": 19,
+          "lumIndices": [
+            0,
+            1,
+            2,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 19,
+          "multiplier": 3.074783478178035
+        }
+      ],
+      "proof": [
+        "固定 Lum 数 k，任意非 Lum 格都用本类型成熟正光环最大的一种。",
+        "每个被一株或多株 Lum 邻接覆盖的发射株只增强一次 1.03，因此乘积为 v^(25-k) × 1.03^covered。",
+        "完整枚举 k=0..6 的全部 Lum 子集，逐一计算覆盖数并取最高乘积。",
+        "k≥7 时，即便剩余全部发射株都被 Lum 覆盖，乘积也至多 (v×1.03)^18；该上界不超过已找到方案，因此同时排除 k=7..25。"
+      ],
+      "excludedLumCountLowerBound": 7,
+      "excludedLumCountUpperBoundMultiplier": 2.898278328002667,
+      "limitations": [
+        "该倍率为成熟静态峰值；重种、成熟阶段差、助手救种、自然枯萎会改变实时倍率。",
+        "多田相同光环不叠加；无需在多块田重复堆同种全局光环来追求连乘。"
+      ],
+      "maintenanceRecommendation": {
+        "emitter": "Jaboca",
+        "objective": "在指定成熟保护模板中提高全局光环，并保留 Petaya 的有效保活窗口",
+        "multiplier": 3.2620377919990777,
+        "emitterCount": 20,
+        "boostedEmitters": 20,
+        "lumCount": 4,
+        "lumIndices": [
+          6,
+          8,
+          16,
+          18
+        ],
+        "petayaIndices": [
+          0
+        ],
+        "grid": [
+          [
+            "Petaya",
+            "Jaboca",
+            "Jaboca",
+            "Jaboca",
+            "Jaboca"
+          ],
+          [
+            "Jaboca",
+            "Lum",
+            "Jaboca",
+            "Lum",
+            "Jaboca"
+          ],
+          [
+            "Jaboca",
+            "Jaboca",
+            "Jaboca",
+            "Jaboca",
+            "Jaboca"
+          ],
+          [
+            "Jaboca",
+            "Lum",
+            "Jaboca",
+            "Lum",
+            "Jaboca"
+          ],
+          [
+            "Jaboca",
+            "Jaboca",
+            "Jaboca",
+            "Jaboca",
+            "Jaboca"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "游荡宝可梦概率 Petaya 成熟保活窗口",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 57,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "固定模板的成熟保活窗口推荐，不是全部动态维护布局的全局最优证明。",
+            "Petaya 成熟且不冻时保护同田非 Petaya；Petaya 自己仍会衰败，临枯收获补种期间不能保证峰值。",
+            "保留全部光环株，不使用 Freeze；导入不会改变现场作物年龄。"
+          ]
+        },
+        "note": "固定模板为 Lum 6、8、16、18，Petaya 0，另 20 株光环发射株全部接受 Lum 增强；仅比较成熟时的该模板。",
+        "limitations": [
+          "该方案通过占用一格放入 Petaya，换取其成熟期间对其他植物的保活；倍率与无 Petaya 的数学峰值不同。",
+          "单株 Petaya 不能永久保护自身，其他 Petaya 也不能保护 Petaya；本方案没有承诺永久无缝维护。",
+          "布局只保存角色、树果和肥料，助手与负责范围必须另行设置。"
+        ]
+      }
+    },
+    {
+      "auraType": 10,
+      "auraName": "Ev",
+      "chineseName": "努力值收益",
+      "scope": "全局：每田先连乘，再取全部田中最大值，最低为 1",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 58,
+          "berryName": "Rowap",
+          "auraType": 10,
+          "auraName": "Ev",
+          "matureMultiplier": 1.015
+        }
+      ],
+      "emitter": "Rowap",
+      "multiplier": 2.5431302634282957,
+      "lumCount": 4,
+      "emitterCount": 21,
+      "lumIndices": [
+        6,
+        8,
+        16,
+        18
+      ],
+      "grid": [
+        [
+          "Rowap",
+          "Rowap",
+          "Rowap",
+          "Rowap",
+          "Rowap"
+        ],
+        [
+          "Rowap",
+          "Lum",
+          "Rowap",
+          "Lum",
+          "Rowap"
+        ],
+        [
+          "Rowap",
+          "Rowap",
+          "Rowap",
+          "Rowap",
+          "Rowap"
+        ],
+        [
+          "Rowap",
+          "Lum",
+          "Rowap",
+          "Lum",
+          "Rowap"
+        ],
+        [
+          "Rowap",
+          "Rowap",
+          "Rowap",
+          "Rowap",
+          "Rowap"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "努力值收益成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 58,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。"
+        ]
+      },
+      "enumeration": [
+        {
+          "lumCount": 0,
+          "combinations": 1,
+          "boostedEmitters": 0,
+          "lumIndices": [],
+          "emitterCount": 25,
+          "multiplier": 1.4509453541079569
+        },
+        {
+          "lumCount": 1,
+          "combinations": 25,
+          "boostedEmitters": 8,
+          "lumIndices": [
+            6
+          ],
+          "emitterCount": 24,
+          "multiplier": 1.8108513934111534
+        },
+        {
+          "lumCount": 2,
+          "combinations": 300,
+          "boostedEmitters": 15,
+          "lumIndices": [
+            6,
+            18
+          ],
+          "emitterCount": 23,
+          "multiplier": 2.1942057171670815
+        },
+        {
+          "lumCount": 3,
+          "combinations": 2300,
+          "boostedEmitters": 18,
+          "lumIndices": [
+            0,
+            8,
+            16
+          ],
+          "emitterCount": 22,
+          "multiplier": 2.3622343159633834
+        },
+        {
+          "lumCount": 4,
+          "combinations": 12650,
+          "boostedEmitters": 21,
+          "lumIndices": [
+            6,
+            8,
+            16,
+            18
+          ],
+          "emitterCount": 21,
+          "multiplier": 2.5431302634282957
+        },
+        {
+          "lumCount": 5,
+          "combinations": 53130,
+          "boostedEmitters": 20,
+          "lumIndices": [
+            0,
+            1,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 20,
+          "multiplier": 2.4325699588008
+        },
+        {
+          "lumCount": 6,
+          "combinations": 177100,
+          "boostedEmitters": 19,
+          "lumIndices": [
+            0,
+            1,
+            2,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 19,
+          "multiplier": 2.326816164140609
+        }
+      ],
+      "proof": [
+        "固定 Lum 数 k，任意非 Lum 格都用本类型成熟正光环最大的一种。",
+        "每个被一株或多株 Lum 邻接覆盖的发射株只增强一次 1.03，因此乘积为 v^(25-k) × 1.03^covered。",
+        "完整枚举 k=0..6 的全部 Lum 子集，逐一计算覆盖数并取最高乘积。",
+        "k≥7 时，即便剩余全部发射株都被 Lum 覆盖，乘积也至多 (v×1.03)^18；该上界不超过已找到方案，因此同时排除 k=7..25。"
+      ],
+      "excludedLumCountLowerBound": 7,
+      "excludedLumCountUpperBoundMultiplier": 2.2256599207428494,
+      "limitations": [
+        "该倍率为成熟静态峰值；重种、成熟阶段差、助手救种、自然枯萎会改变实时倍率。",
+        "多田相同光环不叠加；无需在多块田重复堆同种全局光环来追求连乘。"
+      ],
+      "maintenanceRecommendation": {
+        "emitter": "Rowap",
+        "objective": "在指定成熟保护模板中提高全局光环，并保留 Petaya 的有效保活窗口",
+        "multiplier": 2.4325699588007996,
+        "emitterCount": 20,
+        "boostedEmitters": 20,
+        "lumCount": 4,
+        "lumIndices": [
+          6,
+          8,
+          16,
+          18
+        ],
+        "petayaIndices": [
+          0
+        ],
+        "grid": [
+          [
+            "Petaya",
+            "Rowap",
+            "Rowap",
+            "Rowap",
+            "Rowap"
+          ],
+          [
+            "Rowap",
+            "Lum",
+            "Rowap",
+            "Lum",
+            "Rowap"
+          ],
+          [
+            "Rowap",
+            "Rowap",
+            "Rowap",
+            "Rowap",
+            "Rowap"
+          ],
+          [
+            "Rowap",
+            "Lum",
+            "Rowap",
+            "Lum",
+            "Rowap"
+          ],
+          [
+            "Rowap",
+            "Rowap",
+            "Rowap",
+            "Rowap",
+            "Rowap"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "努力值收益 Petaya 成熟保活窗口",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 58,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "固定模板的成熟保活窗口推荐，不是全部动态维护布局的全局最优证明。",
+            "Petaya 成熟且不冻时保护同田非 Petaya；Petaya 自己仍会衰败，临枯收获补种期间不能保证峰值。",
+            "保留全部光环株，不使用 Freeze；导入不会改变现场作物年龄。"
+          ]
+        },
+        "note": "固定模板为 Lum 6、8、16、18，Petaya 0，另 20 株光环发射株全部接受 Lum 增强；仅比较成熟时的该模板。",
+        "limitations": [
+          "该方案通过占用一格放入 Petaya，换取其成熟期间对其他植物的保活；倍率与无 Petaya 的数学峰值不同。",
+          "单株 Petaya 不能永久保护自身，其他 Petaya 也不能保护 Petaya；本方案没有承诺永久无缝维护。",
+          "布局只保存角色、树果和肥料，助手与负责范围必须另行设置。"
+        ]
+      }
+    },
+    {
+      "auraType": 11,
+      "auraName": "Decay",
+      "chineseName": "成熟后衰败减缓",
+      "scope": "局部：相邻八格，仅同田生效",
+      "objective": "最小化倍率，延长成熟寿命",
+      "emitters": [
+        {
+          "berry": 40,
+          "berryName": "Yache",
+          "auraType": 11,
+          "auraName": "Decay",
+          "matureMultiplier": 0.7
+        },
+        {
+          "berry": 49,
+          "berryName": "Haban",
+          "auraType": 11,
+          "auraName": "Decay",
+          "matureMultiplier": 0.5
+        }
+      ],
+      "emitter": "Haban",
+      "targetIndex": 12,
+      "targetBerry": "Cheri",
+      "multiplier": 0.0030836298215388114,
+      "grid": [
+        [
+          "Petaya",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Haban",
+          "Haban",
+          "Haban",
+          "Babiri"
+        ],
+        [
+          "Lum",
+          "Haban",
+          "Cheri",
+          "Haban",
+          "Lum"
+        ],
+        [
+          "Babiri",
+          "Haban",
+          "Haban",
+          "Haban",
+          "Babiri"
+        ],
+        [
+          "Babiri",
+          "Babiri",
+          "Lum",
+          "Babiri",
+          "Babiri"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "成熟后衰败减缓中心单格成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 64,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 49,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 49,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 49,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 49,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "cycle",
+            "berry": 0,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 49,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 49,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 49,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 49,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 51,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。",
+          "中心 Cheri 为演示目标；循环收获需要所有 keep 格均正确且成熟。Petaya 只保护同田非 Petaya，自己仍会衰败。"
+        ]
+      },
+      "proof": [
+        "中心最多接收相邻八格，各格使用本类型所需方向最优的成熟发射株。",
+        "外围 Lum 于 2、10、14、22，覆盖全部八个光环发射格；发射株只吃最强一株 Lum。",
+        "正光环每株为 v×1.03，负光环每株为 v÷1.03，中心将八株连乘。",
+        "中心目标不占用光环发射格，故达到本类型中心单格成熟峰值。"
+      ],
+      "limitations": [
+        "中心 Cheri 是可操作示例，不表示 Cheri 的综合产量最佳。",
+        "cycle 采收必须等待每一格 keep 作物成熟，包含外围保护树果和 Petaya；冷启动等待是实际执行行为。",
+        "Petaya 任意位置成熟且未 Freeze 时可保护同田非 Petaya；Petaya 自己不受其他 Petaya 保护，补种期间不保证峰值。"
+      ]
+    },
+    {
+      "auraType": 12,
+      "auraName": "Xp",
+      "chineseName": "经验收益",
+      "scope": "全局：每田先连乘，再取全部田中最大值，最低为 1",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 56,
+          "berryName": "Custap",
+          "auraType": 12,
+          "auraName": "Xp",
+          "matureMultiplier": 1.015
+        }
+      ],
+      "emitter": "Custap",
+      "multiplier": 2.5431302634282957,
+      "lumCount": 4,
+      "emitterCount": 21,
+      "lumIndices": [
+        6,
+        8,
+        16,
+        18
+      ],
+      "grid": [
+        [
+          "Custap",
+          "Custap",
+          "Custap",
+          "Custap",
+          "Custap"
+        ],
+        [
+          "Custap",
+          "Lum",
+          "Custap",
+          "Lum",
+          "Custap"
+        ],
+        [
+          "Custap",
+          "Custap",
+          "Custap",
+          "Custap",
+          "Custap"
+        ],
+        [
+          "Custap",
+          "Lum",
+          "Custap",
+          "Lum",
+          "Custap"
+        ],
+        [
+          "Custap",
+          "Custap",
+          "Custap",
+          "Custap",
+          "Custap"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "经验收益成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 56,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。"
+        ]
+      },
+      "enumeration": [
+        {
+          "lumCount": 0,
+          "combinations": 1,
+          "boostedEmitters": 0,
+          "lumIndices": [],
+          "emitterCount": 25,
+          "multiplier": 1.4509453541079569
+        },
+        {
+          "lumCount": 1,
+          "combinations": 25,
+          "boostedEmitters": 8,
+          "lumIndices": [
+            6
+          ],
+          "emitterCount": 24,
+          "multiplier": 1.8108513934111534
+        },
+        {
+          "lumCount": 2,
+          "combinations": 300,
+          "boostedEmitters": 15,
+          "lumIndices": [
+            6,
+            18
+          ],
+          "emitterCount": 23,
+          "multiplier": 2.1942057171670815
+        },
+        {
+          "lumCount": 3,
+          "combinations": 2300,
+          "boostedEmitters": 18,
+          "lumIndices": [
+            0,
+            8,
+            16
+          ],
+          "emitterCount": 22,
+          "multiplier": 2.3622343159633834
+        },
+        {
+          "lumCount": 4,
+          "combinations": 12650,
+          "boostedEmitters": 21,
+          "lumIndices": [
+            6,
+            8,
+            16,
+            18
+          ],
+          "emitterCount": 21,
+          "multiplier": 2.5431302634282957
+        },
+        {
+          "lumCount": 5,
+          "combinations": 53130,
+          "boostedEmitters": 20,
+          "lumIndices": [
+            0,
+            1,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 20,
+          "multiplier": 2.4325699588008
+        },
+        {
+          "lumCount": 6,
+          "combinations": 177100,
+          "boostedEmitters": 19,
+          "lumIndices": [
+            0,
+            1,
+            2,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 19,
+          "multiplier": 2.326816164140609
+        }
+      ],
+      "proof": [
+        "固定 Lum 数 k，任意非 Lum 格都用本类型成熟正光环最大的一种。",
+        "每个被一株或多株 Lum 邻接覆盖的发射株只增强一次 1.03，因此乘积为 v^(25-k) × 1.03^covered。",
+        "完整枚举 k=0..6 的全部 Lum 子集，逐一计算覆盖数并取最高乘积。",
+        "k≥7 时，即便剩余全部发射株都被 Lum 覆盖，乘积也至多 (v×1.03)^18；该上界不超过已找到方案，因此同时排除 k=7..25。"
+      ],
+      "excludedLumCountLowerBound": 7,
+      "excludedLumCountUpperBoundMultiplier": 2.2256599207428494,
+      "limitations": [
+        "该倍率为成熟静态峰值；重种、成熟阶段差、助手救种、自然枯萎会改变实时倍率。",
+        "多田相同光环不叠加；无需在多块田重复堆同种全局光环来追求连乘。"
+      ],
+      "maintenanceRecommendation": {
+        "emitter": "Custap",
+        "objective": "在指定成熟保护模板中提高全局光环，并保留 Petaya 的有效保活窗口",
+        "multiplier": 2.4325699588007996,
+        "emitterCount": 20,
+        "boostedEmitters": 20,
+        "lumCount": 4,
+        "lumIndices": [
+          6,
+          8,
+          16,
+          18
+        ],
+        "petayaIndices": [
+          0
+        ],
+        "grid": [
+          [
+            "Petaya",
+            "Custap",
+            "Custap",
+            "Custap",
+            "Custap"
+          ],
+          [
+            "Custap",
+            "Lum",
+            "Custap",
+            "Lum",
+            "Custap"
+          ],
+          [
+            "Custap",
+            "Custap",
+            "Custap",
+            "Custap",
+            "Custap"
+          ],
+          [
+            "Custap",
+            "Lum",
+            "Custap",
+            "Lum",
+            "Custap"
+          ],
+          [
+            "Custap",
+            "Custap",
+            "Custap",
+            "Custap",
+            "Custap"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "经验收益 Petaya 成熟保活窗口",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 56,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "固定模板的成熟保活窗口推荐，不是全部动态维护布局的全局最优证明。",
+            "Petaya 成熟且不冻时保护同田非 Petaya；Petaya 自己仍会衰败，临枯收获补种期间不能保证峰值。",
+            "保留全部光环株，不使用 Freeze；导入不会改变现场作物年龄。"
+          ]
+        },
+        "note": "固定模板为 Lum 6、8、16、18，Petaya 0，另 20 株光环发射株全部接受 Lum 增强；仅比较成熟时的该模板。",
+        "limitations": [
+          "该方案通过占用一格放入 Petaya，换取其成熟期间对其他植物的保活；倍率与无 Petaya 的数学峰值不同。",
+          "单株 Petaya 不能永久保护自身，其他 Petaya 也不能保护 Petaya；本方案没有承诺永久无缝维护。",
+          "布局只保存角色、树果和肥料，助手与负责范围必须另行设置。"
+        ]
+      }
+    },
+    {
+      "auraType": 13,
+      "auraName": "Pickup",
+      "chineseName": "稀有拾取概率",
+      "scope": "全局：每田先连乘，再取全部田中最大值，最低为 1",
+      "objective": "最大化倍率",
+      "emitters": [
+        {
+          "berry": 39,
+          "berryName": "Rindo",
+          "auraType": 13,
+          "auraName": "Pickup",
+          "matureMultiplier": 1.015
+        }
+      ],
+      "emitter": "Rindo",
+      "multiplier": 2.5431302634282957,
+      "lumCount": 4,
+      "emitterCount": 21,
+      "lumIndices": [
+        6,
+        8,
+        16,
+        18
+      ],
+      "grid": [
+        [
+          "Rindo",
+          "Rindo",
+          "Rindo",
+          "Rindo",
+          "Rindo"
+        ],
+        [
+          "Rindo",
+          "Lum",
+          "Rindo",
+          "Lum",
+          "Rindo"
+        ],
+        [
+          "Rindo",
+          "Rindo",
+          "Rindo",
+          "Rindo",
+          "Rindo"
+        ],
+        [
+          "Rindo",
+          "Lum",
+          "Rindo",
+          "Lum",
+          "Rindo"
+        ],
+        [
+          "Rindo",
+          "Rindo",
+          "Rindo",
+          "Rindo",
+          "Rindo"
+        ]
+      ],
+      "layout": {
+        "version": 1,
+        "name": "稀有拾取概率成熟峰值",
+        "cells": [
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 19,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          },
+          {
+            "role": "keep",
+            "berry": 39,
+            "targetBerry": -1,
+            "mulch": -1,
+            "freezeStage": 4
+          }
+        ],
+        "notes": [
+          "所有光环株使用 keep，不施 Freeze；Freeze 会关闭光环。",
+          "本方案描述全部指定作物成熟时的峰值，导入不会导入年龄或直接变成熟。",
+          "助手临枯会采收 keep 植物后重种，生长期间光环下降；未承诺永久峰值。"
+        ]
+      },
+      "enumeration": [
+        {
+          "lumCount": 0,
+          "combinations": 1,
+          "boostedEmitters": 0,
+          "lumIndices": [],
+          "emitterCount": 25,
+          "multiplier": 1.4509453541079569
+        },
+        {
+          "lumCount": 1,
+          "combinations": 25,
+          "boostedEmitters": 8,
+          "lumIndices": [
+            6
+          ],
+          "emitterCount": 24,
+          "multiplier": 1.8108513934111534
+        },
+        {
+          "lumCount": 2,
+          "combinations": 300,
+          "boostedEmitters": 15,
+          "lumIndices": [
+            6,
+            18
+          ],
+          "emitterCount": 23,
+          "multiplier": 2.1942057171670815
+        },
+        {
+          "lumCount": 3,
+          "combinations": 2300,
+          "boostedEmitters": 18,
+          "lumIndices": [
+            0,
+            8,
+            16
+          ],
+          "emitterCount": 22,
+          "multiplier": 2.3622343159633834
+        },
+        {
+          "lumCount": 4,
+          "combinations": 12650,
+          "boostedEmitters": 21,
+          "lumIndices": [
+            6,
+            8,
+            16,
+            18
+          ],
+          "emitterCount": 21,
+          "multiplier": 2.5431302634282957
+        },
+        {
+          "lumCount": 5,
+          "combinations": 53130,
+          "boostedEmitters": 20,
+          "lumIndices": [
+            0,
+            1,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 20,
+          "multiplier": 2.4325699588008
+        },
+        {
+          "lumCount": 6,
+          "combinations": 177100,
+          "boostedEmitters": 19,
+          "lumIndices": [
+            0,
+            1,
+            2,
+            3,
+            15,
+            18
+          ],
+          "emitterCount": 19,
+          "multiplier": 2.326816164140609
+        }
+      ],
+      "proof": [
+        "固定 Lum 数 k，任意非 Lum 格都用本类型成熟正光环最大的一种。",
+        "每个被一株或多株 Lum 邻接覆盖的发射株只增强一次 1.03，因此乘积为 v^(25-k) × 1.03^covered。",
+        "完整枚举 k=0..6 的全部 Lum 子集，逐一计算覆盖数并取最高乘积。",
+        "k≥7 时，即便剩余全部发射株都被 Lum 覆盖，乘积也至多 (v×1.03)^18；该上界不超过已找到方案，因此同时排除 k=7..25。"
+      ],
+      "excludedLumCountLowerBound": 7,
+      "excludedLumCountUpperBoundMultiplier": 2.2256599207428494,
+      "limitations": [
+        "该倍率为成熟静态峰值；重种、成熟阶段差、助手救种、自然枯萎会改变实时倍率。",
+        "多田相同光环不叠加；无需在多块田重复堆同种全局光环来追求连乘。"
+      ],
+      "maintenanceRecommendation": {
+        "emitter": "Rindo",
+        "objective": "在指定成熟保护模板中提高全局光环，并保留 Petaya 的有效保活窗口",
+        "multiplier": 2.4325699588007996,
+        "emitterCount": 20,
+        "boostedEmitters": 20,
+        "lumCount": 4,
+        "lumIndices": [
+          6,
+          8,
+          16,
+          18
+        ],
+        "petayaIndices": [
+          0
+        ],
+        "grid": [
+          [
+            "Petaya",
+            "Rindo",
+            "Rindo",
+            "Rindo",
+            "Rindo"
+          ],
+          [
+            "Rindo",
+            "Lum",
+            "Rindo",
+            "Lum",
+            "Rindo"
+          ],
+          [
+            "Rindo",
+            "Rindo",
+            "Rindo",
+            "Rindo",
+            "Rindo"
+          ],
+          [
+            "Rindo",
+            "Lum",
+            "Rindo",
+            "Lum",
+            "Rindo"
+          ],
+          [
+            "Rindo",
+            "Rindo",
+            "Rindo",
+            "Rindo",
+            "Rindo"
+          ]
+        ],
+        "layout": {
+          "version": 1,
+          "name": "稀有拾取概率 Petaya 成熟保活窗口",
+          "cells": [
+            {
+              "role": "keep",
+              "berry": 64,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 19,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            },
+            {
+              "role": "keep",
+              "berry": 39,
+              "targetBerry": -1,
+              "mulch": -1,
+              "freezeStage": 4
+            }
+          ],
+          "notes": [
+            "固定模板的成熟保活窗口推荐，不是全部动态维护布局的全局最优证明。",
+            "Petaya 成熟且不冻时保护同田非 Petaya；Petaya 自己仍会衰败，临枯收获补种期间不能保证峰值。",
+            "保留全部光环株，不使用 Freeze；导入不会改变现场作物年龄。"
+          ]
+        },
+        "note": "固定模板为 Lum 6、8、16、18，Petaya 0，另 20 株光环发射株全部接受 Lum 增强；仅比较成熟时的该模板。",
+        "limitations": [
+          "该方案通过占用一格放入 Petaya，换取其成熟期间对其他植物的保活；倍率与无 Petaya 的数学峰值不同。",
+          "单株 Petaya 不能永久保护自身，其他 Petaya 也不能保护 Petaya；本方案没有承诺永久无缝维护。",
+          "布局只保存角色、树果和肥料，助手与负责范围必须另行设置。"
+        ]
+      }
+    }
+  ]
+}

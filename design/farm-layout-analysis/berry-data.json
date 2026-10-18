@@ -1,0 +1,1129 @@
+[
+  {
+    "id": 0,
+    "name": "Cheri",
+    "growthTime": [
+      5,
+      10,
+      20,
+      30,
+      60
+    ],
+    "harvestAmount": 2,
+    "farmValue": 5,
+    "aura": null
+  },
+  {
+    "id": 1,
+    "name": "Chesto",
+    "growthTime": [
+      5,
+      15,
+      25,
+      40,
+      80
+    ],
+    "harvestAmount": 3,
+    "farmValue": 6,
+    "aura": null
+  },
+  {
+    "id": 2,
+    "name": "Pecha",
+    "growthTime": [
+      10,
+      35,
+      50,
+      60,
+      120
+    ],
+    "harvestAmount": 4,
+    "farmValue": 7,
+    "aura": null
+  },
+  {
+    "id": 3,
+    "name": "Rawst",
+    "growthTime": [
+      15,
+      30,
+      45,
+      80,
+      160
+    ],
+    "harvestAmount": 5,
+    "farmValue": 8,
+    "aura": null
+  },
+  {
+    "id": 4,
+    "name": "Aspear",
+    "growthTime": [
+      10,
+      40,
+      60,
+      120,
+      240
+    ],
+    "harvestAmount": 6,
+    "farmValue": 9,
+    "aura": null
+  },
+  {
+    "id": 5,
+    "name": "Leppa",
+    "growthTime": [
+      100,
+      120,
+      140,
+      240,
+      480
+    ],
+    "harvestAmount": 7,
+    "farmValue": 10,
+    "aura": null
+  },
+  {
+    "id": 6,
+    "name": "Oran",
+    "growthTime": [
+      120,
+      180,
+      240,
+      300,
+      600
+    ],
+    "harvestAmount": 8,
+    "farmValue": 20,
+    "aura": null
+  },
+  {
+    "id": 7,
+    "name": "Sitrus",
+    "growthTime": [
+      150,
+      300,
+      450,
+      600,
+      1200
+    ],
+    "harvestAmount": 9,
+    "farmValue": 30,
+    "aura": null
+  },
+  {
+    "id": 8,
+    "name": "Persim",
+    "growthTime": [
+      20,
+      40,
+      50,
+      90,
+      180
+    ],
+    "harvestAmount": 5,
+    "farmValue": 10,
+    "aura": null
+  },
+  {
+    "id": 9,
+    "name": "Razz",
+    "growthTime": [
+      100,
+      150,
+      200,
+      250,
+      500
+    ],
+    "harvestAmount": 7,
+    "farmValue": 15,
+    "aura": null
+  },
+  {
+    "id": 10,
+    "name": "Bluk",
+    "growthTime": [
+      200,
+      250,
+      300,
+      330,
+      660
+    ],
+    "harvestAmount": 9,
+    "farmValue": 20,
+    "aura": null
+  },
+  {
+    "id": 11,
+    "name": "Nanab",
+    "growthTime": [
+      25,
+      30,
+      35,
+      250,
+      500
+    ],
+    "harvestAmount": 11,
+    "farmValue": 25,
+    "aura": null
+  },
+  {
+    "id": 12,
+    "name": "Wepear",
+    "growthTime": [
+      150,
+      350,
+      375,
+      400,
+      800
+    ],
+    "harvestAmount": 12,
+    "farmValue": 30,
+    "aura": null
+  },
+  {
+    "id": 13,
+    "name": "Pinap",
+    "growthTime": [
+      30,
+      60,
+      180,
+      240,
+      480
+    ],
+    "harvestAmount": 13,
+    "farmValue": 35,
+    "aura": null
+  },
+  {
+    "id": 14,
+    "name": "Figy",
+    "growthTime": [
+      40,
+      160,
+      230,
+      350,
+      700
+    ],
+    "harvestAmount": 14,
+    "farmValue": 40,
+    "aura": null
+  },
+  {
+    "id": 15,
+    "name": "Wiki",
+    "growthTime": [
+      40,
+      190,
+      210,
+      360,
+      720
+    ],
+    "harvestAmount": 15,
+    "farmValue": 45,
+    "aura": null
+  },
+  {
+    "id": 16,
+    "name": "Mago",
+    "growthTime": [
+      40,
+      180,
+      240,
+      370,
+      740
+    ],
+    "harvestAmount": 16,
+    "farmValue": 50,
+    "aura": null
+  },
+  {
+    "id": 17,
+    "name": "Aguav",
+    "growthTime": [
+      40,
+      170,
+      220,
+      350,
+      700
+    ],
+    "harvestAmount": 17,
+    "farmValue": 55,
+    "aura": null
+  },
+  {
+    "id": 18,
+    "name": "Iapapa",
+    "growthTime": [
+      40,
+      200,
+      230,
+      380,
+      760
+    ],
+    "harvestAmount": 18,
+    "farmValue": 60,
+    "aura": null
+  },
+  {
+    "id": 19,
+    "name": "Lum",
+    "growthTime": [
+      3000,
+      3200,
+      3400,
+      3600,
+      43200
+    ],
+    "harvestAmount": 1,
+    "farmValue": 540,
+    "aura": {
+      "type": "Boost",
+      "values": [
+        1.01,
+        1.02,
+        1.03
+      ]
+    }
+  },
+  {
+    "id": 20,
+    "name": "Pomeg",
+    "growthTime": [
+      200,
+      1200,
+      4000,
+      5400,
+      10800
+    ],
+    "harvestAmount": 20,
+    "farmValue": 500,
+    "aura": null
+  },
+  {
+    "id": 21,
+    "name": "Kelpsy",
+    "growthTime": [
+      240,
+      2000,
+      3400,
+      6000,
+      12000
+    ],
+    "harvestAmount": 21,
+    "farmValue": 525,
+    "aura": null
+  },
+  {
+    "id": 22,
+    "name": "Qualot",
+    "growthTime": [
+      230,
+      1000,
+      2500,
+      4800,
+      9600
+    ],
+    "harvestAmount": 22,
+    "farmValue": 550,
+    "aura": null
+  },
+  {
+    "id": 23,
+    "name": "Hondew",
+    "growthTime": [
+      1000,
+      2000,
+      5000,
+      10800,
+      21600
+    ],
+    "harvestAmount": 23,
+    "farmValue": 2000,
+    "aura": null
+  },
+  {
+    "id": 24,
+    "name": "Grepa",
+    "growthTime": [
+      300,
+      3400,
+      5600,
+      7200,
+      14400
+    ],
+    "harvestAmount": 24,
+    "farmValue": 600,
+    "aura": null
+  },
+  {
+    "id": 25,
+    "name": "Tamato",
+    "growthTime": [
+      430,
+      1400,
+      4000,
+      8640,
+      17280
+    ],
+    "harvestAmount": 25,
+    "farmValue": 625,
+    "aura": null
+  },
+  {
+    "id": 26,
+    "name": "Cornn",
+    "growthTime": [
+      1100,
+      4000,
+      8000,
+      9000,
+      18000
+    ],
+    "harvestAmount": 26,
+    "farmValue": 700,
+    "aura": null
+  },
+  {
+    "id": 27,
+    "name": "Magost",
+    "growthTime": [
+      2400,
+      6500,
+      10000,
+      14400,
+      28800
+    ],
+    "harvestAmount": 27,
+    "farmValue": 750,
+    "aura": null
+  },
+  {
+    "id": 28,
+    "name": "Rabuta",
+    "growthTime": [
+      2310,
+      5400,
+      9500,
+      12240,
+      24480
+    ],
+    "harvestAmount": 28,
+    "farmValue": 800,
+    "aura": null
+  },
+  {
+    "id": 29,
+    "name": "Nomel",
+    "growthTime": [
+      1240,
+      5200,
+      10500,
+      15120,
+      30240
+    ],
+    "harvestAmount": 29,
+    "farmValue": 850,
+    "aura": null
+  },
+  {
+    "id": 30,
+    "name": "Spelon",
+    "growthTime": [
+      2000,
+      7000,
+      12000,
+      15480,
+      30960
+    ],
+    "harvestAmount": 30,
+    "farmValue": 900,
+    "aura": null
+  },
+  {
+    "id": 31,
+    "name": "Pamtre",
+    "growthTime": [
+      3000,
+      10000,
+      16400,
+      18000,
+      36000
+    ],
+    "harvestAmount": 31,
+    "farmValue": 950,
+    "aura": null
+  },
+  {
+    "id": 32,
+    "name": "Watmel",
+    "growthTime": [
+      2300,
+      3400,
+      9800,
+      16560,
+      33120
+    ],
+    "harvestAmount": 32,
+    "farmValue": 1000,
+    "aura": null
+  },
+  {
+    "id": 33,
+    "name": "Durin",
+    "growthTime": [
+      10000,
+      14000,
+      18000,
+      21600,
+      43200
+    ],
+    "harvestAmount": 33,
+    "farmValue": 1050,
+    "aura": null
+  },
+  {
+    "id": 34,
+    "name": "Belue",
+    "growthTime": [
+      5000,
+      9800,
+      14500,
+      19800,
+      39600
+    ],
+    "harvestAmount": 20,
+    "farmValue": 1100,
+    "aura": null
+  },
+  {
+    "id": 35,
+    "name": "Pinkan",
+    "growthTime": [
+      1800,
+      3600,
+      7200,
+      14400,
+      28800
+    ],
+    "harvestAmount": 3,
+    "farmValue": 2500,
+    "aura": null
+  },
+  {
+    "id": 36,
+    "name": "Occa",
+    "growthTime": [
+      8090,
+      13200,
+      16000,
+      21960,
+      43920
+    ],
+    "harvestAmount": 21,
+    "farmValue": 1200,
+    "aura": null
+  },
+  {
+    "id": 37,
+    "name": "Passho",
+    "growthTime": [
+      490,
+      3600,
+      10800,
+      21600,
+      43200
+    ],
+    "harvestAmount": 22,
+    "farmValue": 1300,
+    "aura": {
+      "type": "Harvest",
+      "values": [
+        1.1,
+        1.2,
+        1.3
+      ]
+    }
+  },
+  {
+    "id": 38,
+    "name": "Wacan",
+    "growthTime": [
+      10,
+      180,
+      900,
+      1800,
+      3600
+    ],
+    "harvestAmount": 2,
+    "farmValue": 250,
+    "aura": {
+      "type": "Growth",
+      "values": [
+        1.1,
+        1.2,
+        1.3
+      ]
+    }
+  },
+  {
+    "id": 39,
+    "name": "Rindo",
+    "growthTime": [
+      3600,
+      7200,
+      16200,
+      28800,
+      57600
+    ],
+    "harvestAmount": 24,
+    "farmValue": 1400,
+    "aura": {
+      "type": "Pickup",
+      "values": [
+        1.005,
+        1.01,
+        1.015
+      ]
+    }
+  },
+  {
+    "id": 40,
+    "name": "Yache",
+    "growthTime": [
+      3600,
+      14400,
+      28800,
+      43200,
+      86400
+    ],
+    "harvestAmount": 25,
+    "farmValue": 1500,
+    "aura": {
+      "type": "Decay",
+      "values": [
+        0.9,
+        0.8,
+        0.7
+      ]
+    }
+  },
+  {
+    "id": 41,
+    "name": "Chople",
+    "growthTime": [
+      5400,
+      10800,
+      25200,
+      36000,
+      72000
+    ],
+    "harvestAmount": 26,
+    "farmValue": 1600,
+    "aura": {
+      "type": "Egg",
+      "values": [
+        1.01,
+        1.02,
+        1.03
+      ]
+    }
+  },
+  {
+    "id": 42,
+    "name": "Kebia",
+    "growthTime": [
+      100,
+      200,
+      400,
+      600,
+      86400
+    ],
+    "harvestAmount": 1,
+    "farmValue": 50,
+    "aura": {
+      "type": "Mutation",
+      "values": [
+        1.2,
+        1.4,
+        1.6
+      ]
+    }
+  },
+  {
+    "id": 43,
+    "name": "Shuca",
+    "growthTime": [
+      7200,
+      16200,
+      32400,
+      39600,
+      79200
+    ],
+    "harvestAmount": 28,
+    "farmValue": 1700,
+    "aura": {
+      "type": "Replant",
+      "values": [
+        1.01,
+        1.02,
+        1.03
+      ]
+    }
+  },
+  {
+    "id": 44,
+    "name": "Coba",
+    "growthTime": [
+      9000,
+      12600,
+      16200,
+      19800,
+      39600
+    ],
+    "harvestAmount": 29,
+    "farmValue": 1800,
+    "aura": null
+  },
+  {
+    "id": 45,
+    "name": "Payapa",
+    "growthTime": [
+      4680,
+      11880,
+      23400,
+      34200,
+      68400
+    ],
+    "harvestAmount": 30,
+    "farmValue": 1900,
+    "aura": {
+      "type": "Mutation",
+      "values": [
+        1.1,
+        1.2,
+        1.3
+      ]
+    }
+  },
+  {
+    "id": 46,
+    "name": "Tanga",
+    "growthTime": [
+      450,
+      900,
+      1800,
+      3600,
+      7200
+    ],
+    "harvestAmount": 3,
+    "farmValue": 500,
+    "aura": {
+      "type": "Harvest",
+      "values": [
+        0.9,
+        0.8,
+        0.7
+      ]
+    }
+  },
+  {
+    "id": 47,
+    "name": "Charti",
+    "growthTime": [
+      8600,
+      12960,
+      23040,
+      37800,
+      75600
+    ],
+    "harvestAmount": 32,
+    "farmValue": 2000,
+    "aura": {
+      "type": "Replant",
+      "values": [
+        0.99,
+        0.98,
+        0.97
+      ]
+    }
+  },
+  {
+    "id": 48,
+    "name": "Kasib",
+    "growthTime": [
+      30,
+      60,
+      120,
+      300,
+      86400
+    ],
+    "harvestAmount": 1,
+    "farmValue": 25,
+    "aura": {
+      "type": "Death",
+      "values": [
+        1.25,
+        1.5,
+        2
+      ]
+    }
+  },
+  {
+    "id": 49,
+    "name": "Haban",
+    "growthTime": [
+      10800,
+      21600,
+      43200,
+      86400,
+      172800
+    ],
+    "harvestAmount": 34,
+    "farmValue": 4000,
+    "aura": {
+      "type": "Decay",
+      "values": [
+        0.8,
+        0.6,
+        0.5
+      ]
+    }
+  },
+  {
+    "id": 50,
+    "name": "Colbur",
+    "growthTime": [
+      2880,
+      10080,
+      19440,
+      27000,
+      54000
+    ],
+    "harvestAmount": 35,
+    "farmValue": 2300,
+    "aura": null
+  },
+  {
+    "id": 51,
+    "name": "Babiri",
+    "growthTime": [
+      7200,
+      16200,
+      32400,
+      64800,
+      129600
+    ],
+    "harvestAmount": 36,
+    "farmValue": 2400,
+    "aura": {
+      "type": "Mutation",
+      "values": [
+        0.5,
+        0.25,
+        0
+      ]
+    }
+  },
+  {
+    "id": 52,
+    "name": "Chilan",
+    "growthTime": [
+      240,
+      1430,
+      2970,
+      7200,
+      14400
+    ],
+    "harvestAmount": 10,
+    "farmValue": 500,
+    "aura": {
+      "type": "Egg",
+      "values": [
+        0.99,
+        0.98,
+        0.97
+      ]
+    }
+  },
+  {
+    "id": 53,
+    "name": "Roseli",
+    "growthTime": [
+      2410,
+      5040,
+      12600,
+      25200,
+      50400
+    ],
+    "harvestAmount": 38,
+    "farmValue": 2500,
+    "aura": {
+      "type": "Attract",
+      "values": [
+        1.02,
+        1.04,
+        1.07
+      ]
+    }
+  },
+  {
+    "id": 54,
+    "name": "Snover",
+    "growthTime": [
+      3600,
+      7200,
+      10800,
+      14400,
+      28800
+    ],
+    "harvestAmount": 5,
+    "farmValue": 1250,
+    "aura": null
+  },
+  {
+    "id": 55,
+    "name": "Micle",
+    "growthTime": [
+      3960,
+      7920,
+      15840,
+      31680,
+      63360
+    ],
+    "harvestAmount": 1,
+    "farmValue": 2600,
+    "aura": {
+      "type": "Attract",
+      "values": [
+        0.99,
+        0.97,
+        0.95
+      ]
+    }
+  },
+  {
+    "id": 56,
+    "name": "Custap",
+    "growthTime": [
+      3240,
+      8280,
+      13320,
+      27360,
+      54720
+    ],
+    "harvestAmount": 1,
+    "farmValue": 2700,
+    "aura": {
+      "type": "Xp",
+      "values": [
+        1.005,
+        1.01,
+        1.015
+      ]
+    }
+  },
+  {
+    "id": 57,
+    "name": "Jaboca",
+    "growthTime": [
+      1875,
+      3750,
+      7500,
+      15000,
+      30000
+    ],
+    "harvestAmount": 1,
+    "farmValue": 2800,
+    "aura": {
+      "type": "Roaming",
+      "values": [
+        1.01,
+        1.02,
+        1.03
+      ]
+    }
+  },
+  {
+    "id": 58,
+    "name": "Rowap",
+    "growthTime": [
+      5760,
+      9000,
+      14040,
+      21240,
+      42480
+    ],
+    "harvestAmount": 1,
+    "farmValue": 2900,
+    "aura": {
+      "type": "Ev",
+      "values": [
+        1.005,
+        1.01,
+        1.015
+      ]
+    }
+  },
+  {
+    "id": 59,
+    "name": "Kee",
+    "growthTime": [
+      4680,
+      9360,
+      18360,
+      36360,
+      72720
+    ],
+    "harvestAmount": 1,
+    "farmValue": 3000,
+    "aura": null
+  },
+  {
+    "id": 60,
+    "name": "Maranga",
+    "growthTime": [
+      5040,
+      10080,
+      20160,
+      40320,
+      80640
+    ],
+    "harvestAmount": 1,
+    "farmValue": 8000,
+    "aura": null
+  },
+  {
+    "id": 61,
+    "name": "Liechi",
+    "growthTime": [
+      21600,
+      43200,
+      86400,
+      172800,
+      345600
+    ],
+    "harvestAmount": 0.5,
+    "farmValue": 10000,
+    "aura": null
+  },
+  {
+    "id": 62,
+    "name": "Ganlon",
+    "growthTime": [
+      21600,
+      43200,
+      86400,
+      172800,
+      345600
+    ],
+    "harvestAmount": 0.5,
+    "farmValue": 10000,
+    "aura": null
+  },
+  {
+    "id": 63,
+    "name": "Salac",
+    "growthTime": [
+      21600,
+      43200,
+      86400,
+      172800,
+      345600
+    ],
+    "harvestAmount": 0.5,
+    "farmValue": 10000,
+    "aura": null
+  },
+  {
+    "id": 64,
+    "name": "Petaya",
+    "growthTime": [
+      10800,
+      21600,
+      43200,
+      86400,
+      432000
+    ],
+    "harvestAmount": 0.5,
+    "farmValue": 15000,
+    "aura": null
+  },
+  {
+    "id": 65,
+    "name": "Apicot",
+    "growthTime": [
+      10800,
+      21600,
+      43200,
+      86400,
+      432000
+    ],
+    "harvestAmount": 0.5,
+    "farmValue": 15000,
+    "aura": null
+  },
+  {
+    "id": 66,
+    "name": "Lansat",
+    "growthTime": [
+      10800,
+      21600,
+      43200,
+      86400,
+      432000
+    ],
+    "harvestAmount": 0.5,
+    "farmValue": 15000,
+    "aura": null
+  },
+  {
+    "id": 67,
+    "name": "Starf",
+    "growthTime": [
+      10800,
+      21600,
+      43200,
+      86400,
+      432000
+    ],
+    "harvestAmount": 0.5,
+    "farmValue": 15000,
+    "aura": {
+      "type": "Shiny",
+      "values": [
+        1.005,
+        1.01,
+        1.015
+      ]
+    }
+  },
+  {
+    "id": 68,
+    "name": "Enigma",
+    "growthTime": [
+      10800,
+      21600,
+      43200,
+      86400,
+      604800
+    ],
+    "harvestAmount": 0.5,
+    "farmValue": 15000,
+    "aura": null
+  },
+  {
+    "id": 69,
+    "name": "Hopo",
+    "growthTime": [
+      10800,
+      21600,
+      43200,
+      86400,
+      604800
+    ],
+    "harvestAmount": 1,
+    "farmValue": 15000,
+    "aura": null
+  }
+]
