@@ -38,6 +38,35 @@ function adjacent(index: number): number[] {
 }
 
 describe('农场布局分享码与持久化意图', () => {
+    it('收藏逐项恢复，跳过损坏数据、重复编号和重复名称，保留完整任务副本', () => {
+        const first = FarmLayoutPlan.blank('收藏甲');
+        first.cells[0] = { role: 'evolve', berry: BerryType.Aspear, targetBerry: BerryType.Rabuta, mulch: MulchType.Surprise_Mulch, freezeStage: PlotStage.Berry };
+        first.notes = ['保留原株进化目标'];
+        const second = FarmLayoutPlan.blank('收藏乙');
+        const saved = FarmLayoutPlan.normalizeSavedLayouts([
+            null, { id: -1, plan: first }, { id: 1, plan: { version: 1 } },
+            { id: 1, plan: first }, { id: 1, plan: second },
+            { id: 2, plan: { ...first, name: ' 收藏甲 ' } }, { id: 3, plan: second },
+        ]);
+        expect(saved.map(item => item.id)).toEqual([1, 3]);
+        expect(saved[0].plan).toEqual(first);
+        expect(saved[0].plan).not.toBe(first);
+        expect(saved[0].plan.cells[0]).not.toBe(first.cells[0]);
+        expect(saved[0].plan.notes).not.toBe(first.notes);
+        first.cells[0].targetBerry = BerryType.Yache;
+        expect(saved[0].plan.cells[0].targetBerry).toBe(BerryType.Rabuta);
+        expect(FarmLayoutPlan.normalizeSavedLayouts(undefined)).toEqual([]);
+        expect(FarmLayoutPlan.normalizeSavedLayouts({ presets: [] })).toEqual([]);
+    });
+
+    it('收藏恢复遵守数量上限，旧档不生成任何默认收藏', () => {
+        const saved = FarmLayoutPlan.normalizeSavedLayouts(Array.from({ length: 101 }, (_, index) => ({
+            id: index + 1, plan: FarmLayoutPlan.blank(`收藏${index + 1}`),
+        })));
+        expect(saved).toHaveLength(FarmLayoutPlan.MAX_SAVED_LAYOUTS);
+        expect(FarmLayoutPlan.normalizeSavedLayouts([])).toEqual([]);
+    });
+
     it('导入真实 Lum 分享码且不携带年龄或模拟器库存', () => {
         const plan = FarmLayoutPlan.parse(WIKI_LUM);
         expect(plan.cells.filter(cell => cell.role === 'mutation')).toHaveLength(4);

@@ -171,6 +171,17 @@ npm --prefix desktop run smoke
 
 实际两台用户设备间的恢复验收仍按手册完成，测试替身不代表真实 GitHub 写入成功。
 
+农场界面专项验收可在安装根项目、桌面及 Worker 依赖后，从仓库根目录执行：
+
+```text
+node desktop/scripts/farm-performance.cjs
+node desktop/scripts/farm-ui-smoke.cjs
+```
+
+第一条使用人工农田数据、真实界面绑定和自动攻击计时器，检查折叠、展开、详情及布局页的刷新开销与提示订阅；可设置 `FARM_PERF_FULL=1`、`FARM_PERF_LAYOUT=1`、`FARM_PERF_EMPTY=1`、`FARM_PERF_FARMS=16` 覆盖完整界面及多田布局。`FARM_PERF_MS` 调整每状态测量毫秒数，`FARM_PERF_CPU` 可模拟 CPU 降速；低性能设备采样时传入 `--measure-only` 可只输出性能数据，页面异常仍会失败。该夹具不能代替完整游戏或用户现场的性能复核。
+
+第二条需要先运行 `gulp build`，会用完整游戏创建隔离新存档，验证收藏保存、跨田应用、开关窗口、子页签、提示销毁和窄屏。两条均默认使用 Edge 无界面浏览器、阻止外部网络，不读取真实存档。结果保存在 `output/playwright/farm-performance/`；依赖安装在其他工作目录时，可将 `FARM_PERF_DEPS` 指向含有 `node_modules`、`desktop/node_modules` 和 `cloud-save-worker/node_modules` 的仓库目录。
+
 ## 安全与更新边界
 
 - Renderer 启用 sandbox、context isolation、webSecurity，无 Node；仅固定 IPC 方法可请求云档。

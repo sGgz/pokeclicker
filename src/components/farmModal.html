@@ -2,14 +2,14 @@
      aria-labelledby="farmModalLabel"
      style="cursor:default">
     <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
-        <div class="modal-content">
+        <div class="modal-content" data-bind="if: DisplayObservables.modalState.farmModal !== 'hidden'">
             <div class="modal-header p-0">
                 <ul class="nav nav-tabs nav-fill">
-                    <li class="nav-item" onclick="FarmController.farmingModalTabSelected('berryFarmView')"><a data-toggle='tab' class='nav-link active' href="#berryFarmView">Farm</a></li>
-                    <li class='nav-item' onclick="FarmController.farmingModalTabSelected('farmHandsView')" data-bind="visible: App.game.farming.farmHands.isUnlocked()"><a data-toggle='tab' class='nav-link' href="#farmHandsView">Farm Hands</a></li>
-                    <li class="nav-item" onclick="FarmController.farmingModalTabSelected('farmLayoutView')"><a data-toggle="tab" class="nav-link" href="#farmLayoutView">布局</a></li>
-                    <li class='nav-item' onclick="FarmController.farmingModalTabSelected('berryDexView')"><a data-toggle='tab' class='nav-link' href="#berryDexView">Berrydex</a></li>
-                    <li class='nav-item' onclick="FarmController.farmingModalTabSelected('helpView')"><a data-toggle='tab' class='nav-link' href="#helpView">Help</a></li>
+                    <li class="nav-item" onclick="FarmController.farmingModalTabSelected('berryFarmView')"><a data-toggle='tab' class='nav-link' href="#berryFarmView" data-bind="css: { active: FarmController.farmingModalTabSelected() === 'berryFarmView' }">Farm</a></li>
+                    <li class='nav-item' onclick="FarmController.farmingModalTabSelected('farmHandsView')" data-bind="visible: App.game.farming.farmHands.isUnlocked()"><a data-toggle='tab' class='nav-link' href="#farmHandsView" data-bind="css: { active: FarmController.farmingModalTabSelected() === 'farmHandsView' }">Farm Hands</a></li>
+                    <li class="nav-item" onclick="FarmController.farmingModalTabSelected('farmLayoutView')"><a data-toggle="tab" class="nav-link" href="#farmLayoutView" data-bind="css: { active: FarmController.farmingModalTabSelected() === 'farmLayoutView' }">布局</a></li>
+                    <li class='nav-item' onclick="FarmController.farmingModalTabSelected('berryDexView')"><a data-toggle='tab' class='nav-link' href="#berryDexView" data-bind="css: { active: FarmController.farmingModalTabSelected() === 'berryDexView' }">Berrydex</a></li>
+                    <li class='nav-item' onclick="FarmController.farmingModalTabSelected('helpView')"><a data-toggle='tab' class='nav-link' href="#helpView" data-bind="css: { active: FarmController.farmingModalTabSelected() === 'helpView' }">Help</a></li>
                     <btn class="btn btn-primary">
                         <span data-bind="template: { name: 'currencyTemplate', data: {'amount': App.game.wallet.currencies[GameConstants.Currency.farmPoint](), 'currency': GameConstants.Currency.farmPoint}}"></span>
                     </btn>
@@ -54,18 +54,18 @@
                     </details>
                 </div>
 
-                <div id="berryFarmView" class="tab-pane fade in active show">
+                <div id="berryFarmView" class="tab-pane fade" data-bind="if: FarmController.farmingModalTabSelected() === 'berryFarmView', css: { active: FarmController.farmingModalTabSelected() === 'berryFarmView', show: FarmController.farmingModalTabSelected() === 'berryFarmView' }">
                     <div id="farmView" class="justify-content-center no-select row">
                         <div class="col-12 col-lg-4">
 
 
                             <ul class="nav nav-tabs nav-fill">
-                                <li class="nav-item"><a data-toggle='tab' class='nav-link active' href="#seeds" data-bind="click: () => FarmController.selectedFarmTool(FarmingTool.Berry) && FarmController.berryListVisible(true);">Berries</a></li>
-                                <li class='nav-item'><a data-toggle='tab' class='nav-link' href="#mulches" data-bind="click: () => FarmController.selectedFarmTool(FarmingTool.Mulch) && FarmController.berryListVisible(false);">Mulch</a></li>
+                                <li class="nav-item"><a data-toggle='tab' class='nav-link' href="#seeds" data-bind="click: () => FarmController.selectedFarmTool(FarmingTool.Berry) && FarmController.berryListVisible(true), css: { active: FarmController.berryListVisible() }">Berries</a></li>
+                                <li class='nav-item'><a data-toggle='tab' class='nav-link' href="#mulches" data-bind="click: () => FarmController.selectedFarmTool(FarmingTool.Mulch) && FarmController.berryListVisible(false), css: { active: !FarmController.berryListVisible() }">Mulch</a></li>
                             </ul>
 
                             <div class="tab-content">
-                                <div id="seeds" class="tab-pane active">
+                                <div id="seeds" class="tab-pane" data-bind="css: { active: FarmController.berryListVisible() }">
                                     <div class="input-group input-group-sm mt-1">
                                         <input type="text" class="form-control" placeholder="Search" data-bind="textInput: FarmController.berryListSearch" />
                                         <div class="input-group-append">
@@ -141,7 +141,7 @@
                                     </div>
                                 </div>
 
-                                <div id="mulches" class="tab-pane">
+                                <div id="mulches" class="tab-pane" data-bind="css: { active: !FarmController.berryListVisible() }">
                                     <ul id="mulchList" class="list-group p-0">
                                         <!-- ko foreach: Object.keys(MulchType).filter(value => !isNaN(value) && value != -1) -->
                                         <li class="list-group-item list-group-item-action seed-list-item p-2"
@@ -252,7 +252,7 @@
                                             <div class="plotButton"
                                                 data-bind="ifnot: $data.isEmpty(),
                                                 click: function(data, event){FarmController.plotClick($index(), event)},
-                                                tooltip: {title: $data.tooltip(), trigger: 'hover', animation: false, html: true}">
+                                                lazyTooltip: {title: () => $data.tooltip(), trigger: 'hover', animation: false, html: true}">
                                                 <img width="100%" height="100%" src=""
                                                     style="width: 68.75%; max-height: 100%; image-rendering: pixelated;"
                                                     data-bind="attr: { src: FarmController.getImage($index()) },
@@ -273,7 +273,7 @@
                     </div>
                 </div>
 
-                <div id="berryDexView" class="tab-pane fade">
+                <div id="berryDexView" class="tab-pane fade" data-bind="if: FarmController.farmingModalTabSelected() === 'berryDexView', css: { active: FarmController.farmingModalTabSelected() === 'berryDexView', show: FarmController.farmingModalTabSelected() === 'berryDexView' }">
                     <div data-bind="if: Settings.getSetting('berryDexMode').observableValue() === 'classic'">
                         <ul class="row justify-content-center p-0 m-0" data-bind="foreach: FarmController.getUnlockedBerryList()">
                             <li class="col-sm-4 col-md-3 col-lg-2 pokedexEntry"
@@ -447,7 +447,7 @@
                     </div>
                 </div>
 
-                <div id="helpView" class="tab-pane fade col-10 offset-1">
+                <div id="helpView" class="tab-pane fade col-10 offset-1" data-bind="if: FarmController.farmingModalTabSelected() === 'helpView', css: { active: FarmController.farmingModalTabSelected() === 'helpView', show: FarmController.farmingModalTabSelected() === 'helpView' }">
                     <h4 class="mt-3">多农田与助手等级</h4>
                     <p>首块田的 25 格全部解锁后，可用农田币逐块购买新田，最多 16 块。第 N 块田价格为 10,000 × (N − 1)²，新田直接解锁 25 格。库存和图鉴共用，变异、邻近光环和防枯萎效果仅在同一块田内生效。全局光环按种类取各田最强值。</p>
                     <p>同名助手共享等级经验，最高 Lv.50；各田的体力、配置和工资独立，每田最多雇 3 名。成功种植、收获、发起捕获分别获得 1、2、1 经验。升级增加速度、操作次数和体力上限，不自动补满体力。</p>
@@ -557,7 +557,7 @@
                     </p>
                 </div>
 
-                <div id="farmLayoutView" class="tab-pane fade p-3">
+                <div id="farmLayoutView" class="tab-pane fade p-3" data-bind="if: FarmController.farmingModalTabSelected() === 'farmLayoutView', css: { active: FarmController.farmingModalTabSelected() === 'farmLayoutView', show: FarmController.farmingModalTabSelected() === 'farmLayoutView' }">
                     <div class="farm-layout-heading">
                         <div>
                             <h5 class="mb-1">农场布局助手</h5>
@@ -566,20 +566,24 @@
                         <span class="badge p-2" data-bind="text: FarmLayoutController.layout().enabled() ? '已启用' : '预览 / 已暂停', css: { 'badge-success': FarmLayoutController.layout().enabled(), 'badge-secondary': !FarmLayoutController.layout().enabled() }"></span>
                     </div>
 
-                    <div class="farm-layout-preset border rounded p-2 mt-3">
+                    <div id="farmLayoutSavedLayouts" class="farm-layout-preset border rounded p-2 mt-3">
                         <div class="farm-layout-controls">
                             <div class="farm-layout-field">
-                                <label for="farmLayoutPreset" class="small mb-1">选择布局预设</label>
-                                <select id="farmLayoutPreset" class="custom-select custom-select-sm" data-bind="options: FarmLayoutController.presets, optionsText: 'name', optionsValue: 'id', value: FarmLayoutController.selectedPreset"></select>
+                                <label for="farmLayoutSaved" class="small mb-1">已保存布局</label>
+                                <select id="farmLayoutSaved" class="custom-select custom-select-sm" data-bind="options: FarmLayoutController.savedLayouts, optionsText: saved => saved.plan.name, optionsValue: 'id', optionsCaption: FarmLayoutController.savedLayouts().length ? '选择已保存布局' : '暂无已保存布局', value: FarmLayoutController.selectedSavedId, valueAllowUnset: true, event: { change: () => FarmLayoutController.selectSavedLayout() }"></select>
                             </div>
-                            <div class="farm-layout-field" data-bind="visible: FarmLayoutController.needsProductionBerry()">
-                                <label for="farmLayoutProductionBerry" class="small mb-1">生产目标树果</label>
-                                <select id="farmLayoutProductionBerry" class="custom-select custom-select-sm" data-bind="options: FarmLayoutController.berryOptions(), optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.productionBerry"></select>
-                            </div>
-                            <button type="button" class="btn btn-outline-primary btn-sm" data-bind="click: () => FarmLayoutController.generate()">生成预览</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bind="click: () => FarmLayoutController.applySavedLayout(), enable: !!FarmLayoutController.selectedSavedLayout()">应用为预览</button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" data-bind="click: () => FarmLayoutController.deleteSavedLayout(), enable: !!FarmLayoutController.selectedSavedLayout()">删除收藏</button>
                         </div>
-                        <p class="small mb-1 mt-2" data-bind="text: FarmLayoutController.preset()?.description"></p>
-                        <a class="small" target="_blank" rel="noopener noreferrer" data-bind="visible: !!FarmLayoutController.preset()?.source, attr: { href: FarmLayoutController.preset()?.source }">查看 Wiki 配方依据 ↗</a>
+                        <div class="farm-layout-controls mt-2">
+                            <div class="farm-layout-field">
+                                <label for="farmLayoutSavedName" class="small mb-1">收藏名称</label>
+                                <input id="farmLayoutSavedName" class="form-control form-control-sm" maxlength="80" placeholder="为当前布局命名" data-bind="textInput: FarmLayoutController.savedLayoutName" />
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bind="click: () => FarmLayoutController.saveCurrentLayout(), enable: FarmLayoutController.savedLayoutName().trim().length > 0">保存当前布局</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-bind="click: () => FarmLayoutController.renameSavedLayout(), enable: !!FarmLayoutController.selectedSavedLayout() && FarmLayoutController.savedLayoutName().trim().length > 0">重命名所选</button>
+                        </div>
+                        <p class="small text-muted mb-0 mt-2">保存编辑器中的 25 格任务、树果、突变目标和肥料安排；收藏随本存档保存，所有农田共用。应用后先暂停预览，核对后再启用。</p>
                     </div>
 
                     <p class="small mt-2 mb-0">突变阵先种长周期原料，再错峰补种短周期原料；量产阵按生产株剩余成熟时间安排增产光环，短周期生产株也会等慢辅助株。关键种子未回收或原料受阻时先等待，每轮按现场年龄和生长倍率重新计算。</p>
@@ -615,7 +619,7 @@
                         <div>
                             <div class="small text-muted mb-2">点击格子编辑 · 顺序与农田一致 · 红色边框表示当前格受阻</div>
                             <div class="farm-layout-grid" role="group" aria-label="5 行 5 列布局预览" data-bind="foreach: FarmLayoutController.layout().plan().cells">
-                                <button type="button" class="farm-layout-cell" data-bind="click: () => FarmLayoutController.selectedCell($index()), attr: { 'data-role': $data.role, 'aria-label': FarmLayoutController.cellLabel($index()), 'aria-pressed': FarmLayoutController.selectedCell() === $index(), title: FarmLayoutController.layout().status($index()) }, css: { 'farm-layout-selected': FarmLayoutController.selectedCell() === $index(), 'farm-layout-blocked': FarmLayoutController.blocked($index()) }">
+                                <button type="button" class="farm-layout-cell" data-bind="click: () => FarmLayoutController.selectedCell($index()), attr: { 'data-role': $data.role, 'aria-label': FarmLayoutController.cellLabel($index()), 'aria-pressed': FarmLayoutController.selectedCell() === $index(), title: FarmLayoutController.status($index()) }, css: { 'farm-layout-selected': FarmLayoutController.selectedCell() === $index(), 'farm-layout-blocked': FarmLayoutController.blocked($index()) }">
                                     <span class="farm-layout-cell-position" data-bind="text: `${Math.floor($index() / 5) + 1} · ${$index() % 5 + 1}`"></span>
                                     <span class="farm-layout-cell-role" data-bind="text: FarmLayoutController.roleText($index())"></span>
                                     <strong class="farm-layout-cell-berry" data-bind="text: FarmLayoutController.berryText($index())"></strong>
@@ -627,7 +631,7 @@
 
                         <div class="farm-layout-editor border rounded p-2">
                             <h6 data-bind="text: `编辑第 ${Math.floor(FarmLayoutController.selectedCell() / 5) + 1} 行第 ${FarmLayoutController.selectedCell() % 5 + 1} 列`"></h6>
-                            <p class="small mb-2" aria-live="polite" data-bind="text: FarmLayoutController.layout().status(FarmLayoutController.selectedCell())"></p>
+                            <p class="small mb-2" aria-live="polite" data-bind="text: FarmLayoutController.status(FarmLayoutController.selectedCell())"></p>
                             <label for="farmLayoutRole" class="small mb-1">格子任务</label>
                             <select id="farmLayoutRole" class="custom-select custom-select-sm mb-2" data-bind="options: FarmLayoutController.roles, optionsText: 'text', optionsValue: 'value', value: FarmLayoutController.role"></select>
                             <div data-bind="visible: ['keep', 'cycle', 'evolve'].includes(FarmLayoutController.role())">
@@ -663,7 +667,7 @@
                             <li>不托管的格子沿用助手普通规则。暂停布局后，整田恢复普通规则，请留意助手是否会收获原料。</li>
                             <li>安全锁和未解锁格会跳过；突变原料有错种、被冻结的幼苗、缺种或未分配助手时，会暂缓同阵原料补种，并显示原因。</li>
                             <li>Freeze 仅在成熟后施加，会关闭光环；Rich 仅在收获前施加。助手按工作周期提前续肥；现有异种肥料会等耗尽，不会自动铲除。</li>
-                            <li>光环来源必须保持正常生长。保留任务和安全锁都不能阻止枯萎或寄生，预设中的防枯萎条件仍需满足。</li>
+                            <li>光环来源必须保持正常生长。保留任务和安全锁都不能阻止枯萎或寄生，布局中的防枯萎条件仍需满足。</li>
                             <li>当前助手来不及完成短寿命原料的首次冻结时，会暂停该格的新播种并提示；请换更快的助手或先手动完成成熟与冻结。成熟 Petaya 已保活的原料不受此限制；冻结优先处理快枯萎或快断肥的原料。</li>
                         </ul>
                     </details>
@@ -675,7 +679,7 @@
                     </details>
                 </div>
 
-                <div id="farmHandsView" class="tab-pane fade">
+                <div id="farmHandsView" class="tab-pane fade" data-bind="if: FarmController.farmingModalTabSelected() === 'farmHandsView', css: { active: FarmController.farmingModalTabSelected() === 'farmHandsView', show: FarmController.farmingModalTabSelected() === 'farmHandsView' }">
                     <div class="p-2">
                         <p class="small mb-2">同名助手共享等级经验；每块田的体力、工作配置、工资分别计算。每块田最多 3 名助手。</p>
                         <button class="btn btn-outline-primary btn-sm text-nowrap" title="将当前田的助手配置复制到所选范围。" data-bind="click: () => FarmController.copyHands(), enable: FarmController.targetFarms().some(id => id !== App.game.farming.selectedFarm())">复制助手配置</button>

@@ -24,7 +24,7 @@
         </div>
     </div>
     <!-- /ko -->
-    <div id="plotListCard" class="card-body p-0 px-2 show" data-bind="css: { ShiftPressed: GameController.keyHeld.Shift() }">
+    <div id="plotListCard" class="card-body p-0 px-2 show" data-bind="if: DisplayObservables.collapseState.plotListCard !== 'hidden', css: { ShiftPressed: GameController.keyHeld.Shift() }">
       <select class="custom-select custom-select-sm my-1" aria-label="当前农田" data-bind="options: App.game.farming.farms, optionsText: farm => `${farm.id + 1}. ${farm.name()}`, optionsValue: 'id', value: App.game.farming.selectedFarm, visible: App.game.farming.farms().length > 1"></select>
       <!-- ko if: Settings.getSetting('showFarmModule').observableValue() === 'extended' -->
       <div class="row py-0 mt-1">
@@ -165,7 +165,7 @@
                         <div class="plotButton"
                         data-bind="ifnot: $data.isEmpty(),
                         click: function(data, event){FarmController.plotClickMini($index(), event)},
-                        tooltip: {title: $data.tooltip(), trigger: 'hover', animation: false, html: true}">
+                        lazyTooltip: {title: () => $data.tooltip(), trigger: 'hover', animation: false, html: true}">
                         <img width="100%" height="100%" src=""
                             style="width: 68.75%; max-height: 100%; image-rendering: pixelated;"
                             data-bind="attr: { src: FarmController.getImage($index()) },

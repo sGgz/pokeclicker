@@ -121,6 +121,144 @@ function advanceLayoutFarm(farming, seconds: number, farmId = 0) {
     }
 }
 
+describe('农场布局收藏', () => {
+    it('保存编辑器完整意图，保留角色、目标和说明，并与当前布局和现场作物独立', () => {
+        const { farming, unlockFirst, FarmLayoutController, ripe } = setup();
+        unlockFirst();
+        const layout = enableLayout(farming, {
+            0: { role: 'keep', berry: BerryType.Passho, mulch: MulchType.Freeze_Mulch },
+            1: { role: 'cycle', berry: BerryType.Cheri, mulch: MulchType.Rich_Mulch },
+            2: { role: 'mutation', targetBerry: BerryType.Lum, mulch: MulchType.Surprise_Mulch },
+            3: { role: 'evolve', berry: BerryType.Aspear, targetBerry: BerryType.Rabuta, mulch: MulchType.Surprise_Mulch },
+            4: { role: 'empty' },
+        });
+        layout.plan({ ...layout.plan(), notes: ['这是编辑器中的任务说明'] });
+        ripe(0, 0, BerryType.Pecha);
+        const plots = JSON.stringify(farming.plotList.map(plot => plot.toJSON()));
+        const intent = JSON.parse(JSON.stringify(layout.plan()));
+        FarmLayoutController.savedLayoutName(' 我的混合阵 ');
+        FarmLayoutController.saveCurrentLayout();
+        expect(farming.savedLayouts()).toHaveLength(1);
+        const saved = farming.savedLayouts()[0];
+        expect(saved.plan).toEqual({ ...intent, name: '我的混合阵' });
+        expect(saved.plan.cells[0].berry).toBe(BerryType.Passho);
+        expect(layout.enabled()).toBe(true);
+        expect(layout.plan()).toEqual(intent);
+        expect(JSON.stringify(farming.plotList.map(plot => plot.toJSON()))).toBe(plots);
+        FarmLayoutController.selectedCell(0);
+        FarmLayoutController.editCell({ berry: BerryType.Cheri });
+        expect(saved.plan.cells[0].berry).toBe(BerryType.Passho);
+    });
+
+    it('收藏跨田应用为独立的暂停预览，选择本身不会应用，也不改现场植物', () => {
+        const { farming, addFarm, FarmLayoutController, ripe } = setup();
+        const source = enableLayout(farming, { 0: { role: 'cycle', berry: BerryType.Cheri } });
+        FarmLayoutController.savedLayoutName('跨田生产阵');
+        FarmLayoutController.saveCurrentLayout();
+        const saved = farming.savedLayouts()[0];
+        addFarm();
+        farming.selectedFarm(1);
+        const target = enableLayout(farming, { 0: { role: 'keep', berry: BerryType.Chesto } }, 1);
+        ripe(1, 0, BerryType.Pecha);
+        const plots = JSON.stringify(farming.farms().map(farm => farm.plots.map(plot => plot.toJSON())));
+        FarmLayoutController.selectedSavedId(saved.id);
+        FarmLayoutController.selectSavedLayout();
+        expect(target.plan().cells[0].berry).toBe(BerryType.Chesto);
+        expect(target.enabled()).toBe(true);
+        FarmLayoutController.applySavedLayout();
+        expect(target.enabled()).toBe(false);
+        expect(source.enabled()).toBe(true);
+        expect(target.plan()).toEqual(saved.plan);
+        expect(target.plan()).not.toBe(saved.plan);
+        expect(target.plan().cells[0]).not.toBe(saved.plan.cells[0]);
+        expect(JSON.stringify(farming.farms().map(farm => farm.plots.map(plot => plot.toJSON())))).toBe(plots);
+        FarmLayoutController.editCell({ berry: BerryType.Oran });
+        expect(saved.plan.cells[0].berry).toBe(BerryType.Cheri);
+        expect(source.plan().cells[0].berry).toBe(BerryType.Cheri);
+    });
+
+    it('收藏随存档保存，旧档为空，坏收藏不影响已有当前布局', () => {
+        const first = setup();
+        enableLayout(first.farming, { 0: { role: 'evolve', berry: BerryType.Aspear, targetBerry: BerryType.Rabuta } });
+        first.FarmLayoutController.savedLayoutName('持久化进化阵');
+        first.FarmLayoutController.saveCurrentLayout();
+        const saved = JSON.parse(JSON.stringify(first.farming.toJSON()));
+        const second = setup();
+        second.farming.fromJSON(saved);
+        expect(second.farming.savedLayouts()).toEqual(saved.savedLayouts);
+        expect(second.farming.farms()[0].layout.plan()).toEqual(saved.farms[0].layout.plan);
+        expect(second.farming.farms()[0].layout.enabled()).toBe(true);
+        second.farming.fromJSON({ ...saved, savedLayouts: undefined });
+        expect(second.farming.savedLayouts()).toEqual([]);
+        expect(second.farming.farms()[0].layout.plan()).toEqual(saved.farms[0].layout.plan);
+        second.farming.fromJSON({ ...saved, savedLayouts: [{ id: 9, plan: { cells: '损坏数据' } }, ...saved.savedLayouts] });
+        expect(second.farming.savedLayouts()).toEqual(saved.savedLayouts);
+        expect(second.farming.farms()[0].layout.plan()).toEqual(saved.farms[0].layout.plan);
+        expect(second.farming.farms()[0].layout.enabled()).toBe(true);
+    });
+
+    it('新建和重命名拒绝重名，删除只移除所选收藏，不改当前布局与启用状态', () => {
+        const { farming, FarmLayoutController } = setup();
+        const layout = enableLayout(farming, { 0: { role: 'cycle', berry: BerryType.Cheri } });
+        FarmLayoutController.savedLayoutName('收藏甲');
+        FarmLayoutController.saveCurrentLayout();
+        const firstId = FarmLayoutController.selectedSavedId();
+        FarmLayoutController.saveCurrentLayout();
+        expect(FarmLayoutController.hasError()).toBe(true);
+        expect(farming.savedLayouts()).toHaveLength(1);
+        FarmLayoutController.savedLayoutName('收藏乙');
+        FarmLayoutController.saveCurrentLayout();
+        FarmLayoutController.selectedSavedId(firstId);
+        FarmLayoutController.savedLayoutName('收藏乙');
+        FarmLayoutController.renameSavedLayout();
+        expect(FarmLayoutController.hasError()).toBe(true);
+        expect(farming.savedLayouts().map(item => item.plan.name)).toEqual(['收藏甲', '收藏乙']);
+        FarmLayoutController.savedLayoutName('收藏甲改名');
+        FarmLayoutController.renameSavedLayout();
+        expect(farming.savedLayouts()[0].plan.name).toBe('收藏甲改名');
+        const current = JSON.stringify(layout.plan());
+        FarmLayoutController.deleteSavedLayout();
+        expect(farming.savedLayouts().map(item => item.plan.name)).toEqual(['收藏乙']);
+        expect(FarmLayoutController.selectedSavedId()).toBeUndefined();
+        expect(JSON.stringify(layout.plan())).toBe(current);
+        expect(layout.enabled()).toBe(true);
+    });
+
+    it('收藏管理真实绑定替换默认预设，可命名保存、选择并暂停应用', () => {
+        const { farming, FarmLayoutController } = setup();
+        const layout = enableLayout(farming, { 0: { role: 'cycle', berry: BerryType.Cheri } });
+        const template = document.createElement('div');
+        template.innerHTML = readFileSync('src/components/farmModal.html', 'utf8');
+        expect(template.querySelector('#farmLayoutPreset')).toBeNull();
+        const panel = template.querySelector('#farmLayoutSavedLayouts').cloneNode(true) as HTMLElement;
+        ko.applyBindings({ FarmLayoutController }, panel);
+        const select = panel.querySelector('select') as HTMLSelectElement;
+        const input = panel.querySelector('input') as HTMLInputElement;
+        expect(select.options).toHaveLength(1);
+        expect(select.options[0].textContent).toContain('暂无已保存布局');
+        input.value = '界面收藏';
+        input.dispatchEvent(new Event('input'));
+        const buttons = Array.from(panel.querySelectorAll('button'));
+        buttons.find(button => button.textContent === '保存当前布局').click();
+        expect(farming.savedLayouts()).toHaveLength(1);
+        expect(select.options).toHaveLength(2);
+        const id = farming.savedLayouts()[0].id;
+        select.value = '';
+        select.dispatchEvent(new Event('change'));
+        expect(FarmLayoutController.selectedSavedId()).toBeUndefined();
+        select.value = String(id);
+        select.dispatchEvent(new Event('change'));
+        expect(FarmLayoutController.selectedSavedId()).toBe(id);
+        expect(typeof FarmLayoutController.selectedSavedId()).toBe('number');
+        expect(FarmLayoutController.savedLayoutName()).toBe('界面收藏');
+        expect(layout.enabled()).toBe(true);
+        buttons.find(button => button.textContent === '应用为预览').click();
+        expect(layout.enabled()).toBe(false);
+        expect(layout.plan().name).toBe('界面收藏');
+        ko.cleanNode(panel);
+    });
+});
+
 describe('农场布局助手真实作业', () => {
     it('突变时机：目标下拉框保留数字类型，编辑暂停布局且导出保存目标', () => {
         const { farming, unlockFirst, FarmLayoutController } = setup();

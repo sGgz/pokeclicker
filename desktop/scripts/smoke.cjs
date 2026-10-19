@@ -193,17 +193,25 @@ async function run() {
         const layout = page.locator('#farmLayoutView');
         await modal.locator('a[href="#farmLayoutView"]').click();
         assert.equal(await layout.locator('.farm-layout-cell').count(), 25);
-        assert.equal(await layout.locator('#farmLayoutPreset option').count(), 10);
-        assert.equal(await layout.locator('#farmLayoutPreset option[value="rabuta-mutation"]').count(), 1);
-        await layout.locator('#farmLayoutPreset').selectOption('lum-mutation');
-        await layout.getByRole('button', { name: '生成预览', exact: true }).click();
+        assert.equal(await layout.locator('#farmLayoutPreset').count(), 0);
+        assert.equal(await layout.locator('#farmLayoutSaved option').count(), 1);
+        // 固定读取官方分享码，初始布局通过真实导入入口准备。
+        const source = await fs.readFile(path.join(root, 'src/modules/farming/FarmLayoutPlan.test.ts'), 'utf8');
+        const wikiCode = source.match(/const WIKI_LUM = '([^']+)';/)?.[1];
+        assert.ok(wikiCode, 'Missing official Lum simulator fixture');
+        await layout.getByText('从 Wiki 模拟器代码或助手布局导入', { exact: true }).click();
+        await layout.locator('#farmLayoutImport').fill(wikiCode);
+        await layout.getByRole('button', { name: '导入为预览', exact: true }).click();
+        await layout.locator('#farmLayoutSavedName').fill('验收 Lum');
+        await layout.getByRole('button', { name: '保存当前布局', exact: true }).click();
+        const savedId = await page.evaluate(() => App.game.farming.savedLayouts()[0].id);
         assert.equal(await layout.locator('[data-role="mutation"]').count(), 4);
         assert.deepEqual(await page.evaluate(() => ({ enabled: App.game.farming.farms()[0].layout.enabled(),
             berry: App.game.farming.getFarmPlots(0)[0].berry === BerryType.Liechi,
             age: App.game.farming.getFarmPlots(0)[0].age, seeds: App.game.farming.berryInventory[BerryType.Liechi]() })),
         { enabled: false, berry: true, age: 17, seeds: 0 });
         assert.equal(await layout.locator('.farm-layout-cell').first().evaluate(element => element.classList.contains('farm-layout-blocked')), true);
-        checks.push('农场布局在实际 EXE 显示 5×5 预览和 Lum 四个突变位；生成预设保留唯一 Liechi、年龄与种子，并标记现有作物冲突。');
+        checks.push('农场布局无默认预设，可导入并保存 Lum 收藏，显示 5×5 预览和四个突变位；保留唯一 Liechi、年龄与种子，并标记现有作物冲突。');
 
         const ids = await page.evaluate(() => ({ passho: BerryType.Passho, yache: BerryType.Yache, liechi: BerryType.Liechi }));
         await layout.locator('.farm-layout-cell').nth(6).click();
@@ -229,10 +237,6 @@ async function run() {
         checks.push('农场布局逐格编辑保留数字类型的树果与进化目标；启用按钮生效，编辑后自动暂停，导出保留角色。');
 
         // 固定读取单元测试中的官方分享码，避免用实现自产的布局冒充外部兼容样本。
-        const source = await fs.readFile(path.join(root, 'src/modules/farming/FarmLayoutPlan.test.ts'), 'utf8');
-        const wikiCode = source.match(/const WIKI_LUM = '([^']+)';/)?.[1];
-        assert.ok(wikiCode, 'Missing official Lum simulator fixture');
-        await layout.getByText('从 Wiki 模拟器代码或助手布局导入', { exact: true }).click();
         await layout.locator('#farmLayoutImport').fill(wikiCode);
         await layout.getByRole('button', { name: '导入为预览', exact: true }).click();
         assert.equal(await layout.locator('[data-role="mutation"]').count(), 4);
@@ -248,23 +252,31 @@ async function run() {
         await modal.getByRole('button', { name: /购买下一块田/ }).click();
         assert.equal(await page.evaluate(() => App.game.farming.selectedFarm()), 1);
         assert.equal(await page.evaluate(() => App.game.farming.farms()[1].layout.plan().cells.every(cell => cell.role === 'ignore')), true);
-        await layout.locator('#farmLayoutPreset').selectOption('enigma-directions');
-        await layout.getByRole('button', { name: '生成预览', exact: true }).click();
+        await layout.locator('#farmLayoutSaved').selectOption(String(savedId));
+        assert.equal(await page.evaluate(() => App.game.farming.farms()[1].layout.plan().cells.every(cell => cell.role === 'ignore')), true);
+        await layout.getByRole('button', { name: '应用为预览', exact: true }).click();
+        assert.equal(await layout.locator('[data-role="mutation"]').count(), 4);
+        assert.equal(await page.evaluate(() => App.game.farming.farms()[1].layout.enabled()), false);
+        const enigma = await page.evaluate(() => JSON.stringify(FarmLayoutPlan.createPreset('enigma-directions')));
+        await layout.locator('#farmLayoutImport').fill(enigma);
+        await layout.getByRole('button', { name: '导入为预览', exact: true }).click();
         assert.equal(await page.evaluate(() => {
             const cells = App.game.farming.farms()[1].layout.plan().cells;
             const requirements = EnigmaMutation.getReqs();
             return [6, 18].every(index => [index - 5, index - 1, index + 1, index + 5].every((position, direction) => cells[position].berry === requirements[direction]));
         }), true);
-        await layout.locator('#farmLayoutPreset').selectOption('passho-ring');
-        await layout.locator('#farmLayoutProductionBerry').selectOption(String(ids.liechi));
-        await layout.getByRole('button', { name: '生成预览', exact: true }).click();
+        const production = await page.evaluate(() => JSON.stringify(FarmLayoutPlan.createPreset('passho-ring', BerryType.Cheri)));
+        await layout.locator('#farmLayoutImport').fill(production);
+        await layout.getByRole('button', { name: '导入为预览', exact: true }).click();
+        await layout.locator('.farm-layout-cell').nth(12).click();
+        await layout.locator('#farmLayoutBerry').selectOption(String(ids.liechi));
         assert.deepEqual(await page.evaluate(() => {
             const cell = App.game.farming.farms()[1].layout.plan().cells[12];
             return { role: cell.role, berry: cell.berry === BerryType.Liechi, type: typeof cell.berry };
         }), { role: 'cycle', berry: true, type: 'number' });
         await modal.locator('#activeFarm').selectOption('0');
         assert.equal(await layout.locator('[data-role="mutation"]').count(), 4);
-        checks.push('农场布局在新田独立且默认停用；Enigma 预设读取当前存档四向需求，生产下拉框保留数字树果，切田恢复各自布局。');
+        checks.push('农场收藏跨田选择不隐式应用，应用后暂停；布局导入保留 Enigma 四向需求，逐格编辑保留数字树果，切田恢复各自布局。');
 
         const runtime = await page.evaluate(() => {
             const farming = App.game.farming;
@@ -1565,13 +1577,14 @@ async function run() {
         assert.equal(await help.locator('#farm-layout-handbook').innerText(), '农场布局导入与助手托管');
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('Rich 只在准备收获时施一份'));
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('暂停布局会恢复普通助手规则'));
-        assert.ok((await help.locator('#private-gameplay').innerText()).includes('十种预设'));
+        assert.ok((await help.locator('#private-gameplay').innerText()).includes('保存当前布局'));
+        assert.ok((await help.locator('#private-gameplay').innerText()).includes('应用为预览'));
         assert.ok((await help.locator('#private-gameplay').innerText()).includes('Rabuta'));
         assert.ok((await help.locator('.meta').innerText()).includes('桌面程序 ' + desktopVersion));
         await help.locator('#private-gameplay').evaluate(element => element.scrollIntoView());
         await captureWindow(b, help, 'private-gameplay-manual.png');
         checks.push('The Chinese operation manual, including private gameplay instructions, opens locally while offline.');
-        checks.push('农场布局离线手册包含十种预设、Rabuta、暂停恢复普通策略和成熟前不铺满 Rich 的操作说明。');
+        checks.push('农场布局离线手册包含收藏保存与应用、Rabuta、暂停恢复普通策略和成熟前不铺满 Rich 的操作说明。');
         await quit(b); await quit(a);
         assert.deepEqual(errors, []);
         checks.push('No uncaught renderer errors during the desktop acceptance flow.');

@@ -20,6 +20,11 @@ export interface LayoutPlan {
     notes?: string[];
 }
 
+export interface SavedLayout {
+    id: number;
+    plan: LayoutPlan;
+}
+
 const PLOT_COUNT = 25;
 const MAX_TEXT_LENGTH = 64_000;
 const NONE = BerryType.None;
@@ -130,6 +135,8 @@ function wikiPlan(value: Record<string, unknown>): LayoutPlan {
 }
 
 export default class FarmLayoutPlan {
+    static readonly MAX_SAVED_LAYOUTS = 100;
+
     static readonly roles: Array<{ value: LayoutRole; text: string }> = [
         { value: 'ignore', text: '不托管' },
         { value: 'empty', text: '隔离留空' },
@@ -161,6 +168,27 @@ export default class FarmLayoutPlan {
         { id: 'wacan-lum', name: 'Wacan＋Lum：单株生长', description: '中心所选树果使用 Boost，成熟后保留不收；八株 Wacan 与外侧四株 Lum 保留光环。', source: 'https://wiki.pokeclicker.com/#!Farm/Setups' },
         { id: 'enigma-directions', name: 'Enigma：个人四向配方', description: '按本存档的北、西、东、南配方构造两个十字突变区；配方不可套用他人存档。', source: 'https://wiki.pokeclicker.com/#!Berries/Enigma' },
     ];
+
+    static normalizeSavedLayouts(value: unknown): SavedLayout[] {
+        if (!Array.isArray(value)) {
+            return [];
+        }
+        const saved: SavedLayout[] = [];
+        value.forEach((entry) => {
+            if (saved.length >= this.MAX_SAVED_LAYOUTS || !record(entry) || !Number.isSafeInteger(entry.id) || (entry.id as number) < 1) {
+                return;
+            }
+            try {
+                const plan = this.normalize(entry.plan);
+                if (!saved.some(item => item.id === entry.id || item.plan.name === plan.name)) {
+                    saved.push({ id: entry.id as number, plan });
+                }
+            } catch {
+                // 损坏收藏逐项跳过，不能阻止其他收藏或当前农田布局恢复。
+            }
+        });
+        return saved;
+    }
 
     static blank(name = '自定义布局'): LayoutPlan {
         return this.normalize({ version: 1, name, cells: Array.from({ length: PLOT_COUNT }, () => cell('ignore')) });

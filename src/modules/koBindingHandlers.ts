@@ -229,10 +229,49 @@ const tooltipHandler = {
     },
 };
 
+// 高开销提示只在实际显示期间订阅，避免每个隐藏格子持续计算详细内容。
+const lazyTooltipHandler = {
+    init: function (element, valueAccessor) {
+        const options = { ...ko.bindingHandlers.tooltip.options, ...ko.utils.unwrapObservable(valueAccessor()) };
+        const source = options.title;
+        const title = ko.pureComputed(() => ko.utils.unwrapObservable(typeof source === 'function' ? source.call(element) : source)).extend({ rateLimit: 250 });
+        let subscription: KnockoutSubscription;
+        const $element = $(element);
+        const stop = () => {
+            subscription?.dispose();
+            subscription = undefined;
+        };
+        $element.tooltip({ ...options, title: () => title.peek() });
+        $element.on('show.bs.tooltip.farmLazyTooltip', () => {
+            if (!subscription) {
+                subscription = title.subscribe(value => {
+                    const tooltip = $element.data('bs.tooltip');
+                    const inner = tooltip?.tip?.querySelector('.tooltip-inner');
+                    if (inner) {
+                        if (options.html) {
+                            inner.innerHTML = value ?? '';
+                        } else {
+                            inner.textContent = value ?? '';
+                        }
+                    }
+                });
+            }
+        });
+        $element.on('hidden.bs.tooltip.farmLazyTooltip', stop);
+        ko.utils.domNodeDisposal.addDisposeCallback(element, () => {
+            stop();
+            title.dispose();
+            $element.off('.farmLazyTooltip');
+            $element.tooltip('dispose');
+        });
+    },
+};
+
 Object.assign(ko.bindingHandlers, {
     contentEditable: contentEditableHandler,
     playerSpriteMove: playerSpriteMoveHandler,
     sortable: sortableHandler,
     resizable: resizableHandler,
     tooltip: tooltipHandler,
+    lazyTooltip: lazyTooltipHandler,
 });

@@ -20,6 +20,7 @@ class Farming implements Feature {
     static readonly MAX_FARMS = 16;
     farms = ko.observableArray<FarmField>([]);
     selectedFarm = ko.observable(0);
+    savedLayouts = ko.observableArray<{ id: number; plan: ReturnType<typeof FarmLayoutPlan.blank> }>([]);
 
     get plotList(): Plot[] {
         return this.getFarmPlots(this.selectedFarm());
@@ -1163,6 +1164,7 @@ class Farming implements Feature {
                 layout: farm.layout.toJSON(),
             })),
             selectedFarm: this.selectedFarm(),
+            savedLayouts: FarmLayoutPlan.normalizeSavedLayouts(this.savedLayouts()),
             farmHandExperience: Object.fromEntries(FarmHands.list.map(hand => [hand.name, hand.experience()])),
             shovelAmt: this.shovelAmt(),
             mulchShovelAmt: this.mulchShovelAmt(),
@@ -1175,6 +1177,7 @@ class Farming implements Feature {
         if (json == null) {
             return;
         }
+        this.savedLayouts(FarmLayoutPlan.normalizeSavedLayouts(json.savedLayouts));
         FarmHands.list.forEach(hand => {
             const experience = Number(json.farmHandExperience?.[hand.name]);
             hand.experience(Number.isFinite(experience) ? Math.max(0, Math.min(122_500, Math.floor(experience))) : 0);

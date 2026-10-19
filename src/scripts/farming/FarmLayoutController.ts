@@ -1,6 +1,7 @@
 class FarmLayoutController {
-    public static selectedPreset = ko.observable('lum-mutation');
-    public static productionBerry = ko.observable(BerryType.Liechi);
+    public static selectedSavedId = ko.observable<number>();
+    public static savedLayoutName = ko.observable('');
+    public static savedLayouts = ko.pureComputed(() => App.game.farming.savedLayouts());
     public static selectedCell = ko.observable(0);
     public static importText = ko.observable('');
     private static feedbackText = ko.observable('');
@@ -19,8 +20,14 @@ class FarmLayoutController {
         return farming.farms()[farming.selectedFarm()].layout;
     }
 
-    public static get presets() {
-        return FarmLayoutPlan.presets;
+    // 同一份状态供格子标题和无障碍说明共用，倒计时刷新最多每秒四次。
+    public static statuses = ko.pureComputed(() => {
+        const layout = FarmLayoutController.layout();
+        return layout.plan().cells.map((_, index) => layout.status(index));
+    }).extend({ rateLimit: 250 });
+
+    public static status(index: number): string {
+        return this.statuses()[index];
     }
 
     public static get roles() {
@@ -31,12 +38,86 @@ class FarmLayoutController {
         return FarmLayoutPlan.mulches;
     }
 
-    public static preset() {
-        return this.presets.find(preset => preset.id === this.selectedPreset());
+    public static selectedSavedLayout() {
+        return this.savedLayouts().find(saved => saved.id === this.selectedSavedId());
     }
 
-    public static needsProductionBerry(): boolean {
-        return ['passho-rows', 'passho-ring', 'wacan-lum'].includes(this.selectedPreset());
+    public static selectSavedLayout() {
+        this.savedLayoutName(this.selectedSavedLayout()?.plan.name ?? '');
+    }
+
+    private static namedSavedPlan(plan: ReturnType<typeof FarmLayoutPlan.blank>, exceptId?: number) {
+        const named = FarmLayoutPlan.normalize({ ...plan, name: this.savedLayoutName() });
+        if (this.savedLayouts().some(saved => saved.id !== exceptId && saved.plan.name === named.name)) {
+            throw new Error('已有同名收藏，请使用其他名称。');
+        }
+        return named;
+    }
+
+    public static saveCurrentLayout() {
+        try {
+            const saved = App.game.farming.savedLayouts;
+            if (saved().length >= FarmLayoutPlan.MAX_SAVED_LAYOUTS) {
+                throw new Error(`最多保存 ${FarmLayoutPlan.MAX_SAVED_LAYOUTS} 份布局，请先删除不需要的收藏。`);
+            }
+            // 复制编辑器中的完整任务意图，不从现场植物或肥料推断角色。
+            const plan = this.namedSavedPlan(this.layout().plan());
+            let id = 1;
+            while (saved().some(item => item.id === id)) {
+                id++;
+            }
+            saved.push({ id, plan });
+            this.selectedSavedId(id);
+            this.savedLayoutName(plan.name);
+            this.hasError(false);
+            this.feedback(`已保存收藏“${plan.name}”。`);
+        } catch (error) {
+            this.showError(error);
+        }
+    }
+
+    public static applySavedLayout() {
+        try {
+            const saved = this.selectedSavedLayout();
+            if (!saved) {
+                throw new Error('请先选择已保存的布局。');
+            }
+            this.layout().setPlan(saved.plan);
+            this.selectedCell(0);
+            this.hasError(false);
+            this.feedback(`已应用“${saved.plan.name}”为暂停预览，核对后可启用布局。`);
+        } catch (error) {
+            this.showError(error);
+        }
+    }
+
+    public static renameSavedLayout() {
+        try {
+            const saved = this.selectedSavedLayout();
+            if (!saved) {
+                throw new Error('请先选择要重命名的布局。');
+            }
+            const plan = this.namedSavedPlan(saved.plan, saved.id);
+            const collection = App.game.farming.savedLayouts;
+            collection.splice(collection().findIndex(item => item.id === saved.id), 1, { id: saved.id, plan });
+            this.savedLayoutName(plan.name);
+            this.hasError(false);
+            this.feedback(`收藏已重命名为“${plan.name}”。`);
+        } catch (error) {
+            this.showError(error);
+        }
+    }
+
+    public static deleteSavedLayout() {
+        const saved = this.selectedSavedLayout();
+        if (!saved) {
+            return;
+        }
+        App.game.farming.savedLayouts.remove(saved);
+        this.selectedSavedId(undefined);
+        this.savedLayoutName('');
+        this.hasError(false);
+        this.feedback(`已删除收藏“${saved.plan.name}”，当前田的布局保持原样。`);
     }
 
     public static berryOptions(emptyText = '请选择树果') {
@@ -98,18 +179,6 @@ class FarmLayoutController {
     public static editCell(change: Partial<ReturnType<typeof FarmLayoutPlan.blank>['cells'][number]>) {
         const cells = this.layout().plan().cells.map((cell, index) => index === this.selectedCell() ? { ...cell, ...change } : { ...cell });
         this.editPlan({ cells });
-    }
-
-    public static generate() {
-        try {
-            const requirements = this.selectedPreset() === 'enigma-directions' ? EnigmaMutation.getReqs() : undefined;
-            this.layout().setPlan(FarmLayoutPlan.createPreset(this.selectedPreset(), this.productionBerry(), requirements));
-            this.selectedCell(0);
-            this.hasError(false);
-            this.feedback('预设已载入当前田的布局预览。现有作物和肥料未被改动。');
-        } catch (error) {
-            this.showError(error);
-        }
     }
 
     public static importPlan() {
@@ -213,6 +282,6 @@ class FarmLayoutController {
     }
 
     public static cellLabel(index: number): string {
-        return `第 ${Math.floor(index / 5) + 1} 行第 ${index % 5 + 1} 列，${this.roleText(index)}，${this.berryText(index)}，${this.currentText(index)}，${this.layout().status(index)}`;
+        return `第 ${Math.floor(index / 5) + 1} 行第 ${index % 5 + 1} 列，${this.roleText(index)}，${this.berryText(index)}，${this.currentText(index)}，${this.status(index)}`;
     }
 }
