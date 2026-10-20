@@ -180,6 +180,8 @@ node desktop/scripts/farm-ui-smoke.cjs
 
 第一条使用人工农田数据、真实界面绑定和自动攻击计时器，检查折叠、展开、详情及布局页的刷新开销与提示订阅；可设置 `FARM_PERF_FULL=1`、`FARM_PERF_LAYOUT=1`、`FARM_PERF_EMPTY=1`、`FARM_PERF_FARMS=16` 覆盖完整界面及多田布局。`FARM_PERF_MS` 调整每状态测量毫秒数，`FARM_PERF_CPU` 可模拟 CPU 降速；低性能设备采样时传入 `--measure-only` 可只输出性能数据，页面异常仍会失败。该夹具不能代替完整游戏或用户现场的性能复核。
 
+设置 `FARM_PERF_FULL=1`、`FARM_PERF_MIXED=1`、`FARM_PERF_FARMS=16` 可补测五类混合布局和 48 名满级助手同步巡田。每种界面状态都恢复同一份人工作物、库存和助手快照，再按真实周期触发一轮工作；默认每状态测量 6 秒，并断言实际发生种植、采收和施肥。该模式包含同步工作峰值，以相同负载下折叠状态为基线，要求其他状态攻击频率至少达到基线的 80%；普通模式继续使用 16 次／秒下限。随机变异与游荡仍被夹具关闭，此模式不覆盖随机产物和游荡捕获。
+
 第二条需要先运行 `gulp build`，会用完整游戏创建隔离新存档，验证收藏保存、跨田应用、开关窗口、子页签、提示销毁和窄屏。两条均默认使用 Edge 无界面浏览器、阻止外部网络，不读取真实存档。结果保存在 `output/playwright/farm-performance/`；依赖安装在其他工作目录时，可将 `FARM_PERF_DEPS` 指向含有 `node_modules`、`desktop/node_modules` 和 `cloud-save-worker/node_modules` 的仓库目录。
 
 ## 安全与更新边界

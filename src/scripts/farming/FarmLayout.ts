@@ -31,7 +31,7 @@ class FarmLayout {
         const errors: string[] = [];
         const cells = this.plan().cells;
         if (cells.every(cell => cell.role === 'ignore')) {
-            errors.push('请先选择预设、导入布局或编辑格子。');
+            errors.push('请先应用收藏、导入布局或编辑格子。');
         }
         cells.forEach((cell, index) => {
             const position = `${Math.floor(index / 5) + 1} 行 ${index % 5 + 1} 列`;

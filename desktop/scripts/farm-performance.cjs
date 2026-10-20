@@ -65,7 +65,7 @@ function bootstrap() {
         Rand: { chance: () => false, fromArray: values => values[0] },
         player: { trainerId: '12345', lowerItemMultipliers: () => {}, highestRegion: () => 0 },
         PokemonHelper: { getPokemonByName: () => ({ id: 1 }), displayName: name => name },
-        Notifier: { notify: () => {} }, NotificationConstants: { NotificationOption: {}, NotificationSetting: { Farming: {} } },
+        Notifier: { notify: () => {} }, NotificationConstants: { NotificationOption: {}, NotificationSetting: { Farming: {} }, NotificationSound: { Farming: {} } },
         MultiplierDecreaser: { Berry: 0 }, WandererPokemon: { fromJSON: () => undefined },
         PrivateGameplay: { autoClickEnabled: () => true, autoClickRate: () => 20, autoMineEnabled: () => false },
         Battle: battle,
@@ -96,19 +96,39 @@ function bootstrap() {
             plot.plant(plants[index % plants.length]);
             plot.age = BerryList[plot.berry].growthTime[2] + 1;
         }));
-        if (fixture.layout) {
-            const plan = FarmLayoutPlan.createPreset('passho-rows', BerryType.Liechi);
-            farming.farms().forEach(farm => {
+        if (fixture.layout || fixture.mixed) {
+            const plans = fixture.mixed ? [
+                FarmLayoutPlan.createPreset('passho-rows', BerryType.Cheri),
+                FarmLayoutPlan.createPreset('passho-ring', BerryType.Liechi),
+                FarmLayoutPlan.createPreset('wacan-lum', BerryType.Maranga),
+                FarmLayoutPlan.createPreset('lum-mutation'),
+                FarmLayoutPlan.createPreset('rabuta-mutation'),
+            ] : [FarmLayoutPlan.createPreset('passho-rows', BerryType.Liechi)];
+            farming.mulchList.forEach(value => value(1e6));
+            farming.farms().forEach((farm, farmIndex) => {
+                const plan = plans[farmIndex % plans.length];
                 farm.layout.setPlan(plan);
-                const hand = farm.hands.list.find(candidate => candidate.name === 'Jessie');
-                hand.gainExperience(122500);
-                hand.plots(Array.from({ length: 25 }, (_, index) => index));
-                hand.hired(true);
+                const names = fixture.mixed ? ['Jessie', 'Riley', 'Jamie'] : ['Jessie'];
+                names.forEach((name, handIndex) => {
+                    const hand = farm.hands.list.find(candidate => candidate.name === name);
+                    hand.gainExperience(122500);
+                    hand.plots(Array.from({ length: 25 }, (_, index) => index).filter(index => index % names.length === handIndex));
+                    hand.hired(true);
+                    hand.energy(hand.maxEnergy);
+                    const work = hand.work;
+                    hand.work = function () {
+                        counts.assistantWork = (counts.assistantWork || 0) + 1;
+                        fixture.worked.add(`${this.farmId}:${this.name}`);
+                        return work.call(this);
+                    };
+                });
                 farm.layout.enabled(true);
                 farm.plots.forEach((plot, index) => {
-                    plot.plant(plan.cells[index].berry);
-                    if (fixture.empty && index % 5 === 2) plot.berry = BerryType.None;
-                    else plot.age = BerryList[plot.berry].growthTime[2] + 1;
+                    plot.berry = BerryType.None;
+                    if (plan.cells[index].berry >= 0 && !(fixture.empty && index % 5 === 2)) {
+                        plot.plant(plan.cells[index].berry);
+                        plot.age = BerryList[plot.berry].growthTime[fixture.mixed ? PlotStage.Bloom : PlotStage.Taller] + 1;
+                    }
                 });
             });
         }
@@ -116,6 +136,21 @@ function bootstrap() {
             const original = farming[name];
             farming[name] = function (...args) { counts[name] = (counts[name] || 0) + 1; return original.apply(this, args); };
         }
+        for (const name of ['plant', 'harvest']) {
+            const original = farming[name];
+            farming[name] = function (...args) {
+                const result = original.apply(this, args);
+                if (result) counts[`${name}Actions`] = (counts[`${name}Actions`] || 0) + 1;
+                return result;
+            };
+        }
+        const addMulch = farming.addMulch;
+        farming.addMulch = function (index, mulch, ...args) {
+            const before = this.mulchList[mulch]();
+            const result = addMulch.call(this, index, mulch, ...args);
+            if (this.mulchList[mulch]() < before) counts.mulchActions = (counts.mulchActions || 0) + 1;
+            return result;
+        };
         for (const mutation of farming.mutations) {
             const original = mutation.getMutationPlots;
             mutation.getMutationPlots = function (...args) { counts.mutationScans = (counts.mutationScans || 0) + 1; return original.apply(this, args); };
@@ -127,10 +162,27 @@ function bootstrap() {
             const tooltip = plot.tooltip;
             plot.tooltip = () => { counts.tooltipEvaluations = (counts.tooltipEvaluations || 0) + 1; return tooltip(); };
         }));
+        if (fixture.mixed) {
+            const initial = JSON.parse(JSON.stringify(farming.toJSON()));
+            fixture.restore = () => {
+                farming.berryInventory.forEach((value, index) => value(initial.berryInventory[index]));
+                farming.mulchList.forEach((value, index) => value(initial.mulchList[index]));
+                farming.farms().forEach((farm, index) => {
+                    farm.plots.forEach((plot, plotIndex) => plot.fromJSON(initial.farms[index].plotList[plotIndex]));
+                    farm.hands.fromJSON(initial.farms[index].farmHands);
+                    farm.layout.setPlan(initial.farms[index].layout.plan);
+                    farm.layout.enabled(initial.farms[index].layout.enabled);
+                });
+                farming.mutationCounter = 0;
+                farming.wanderCounter = 0;
+                farming.mulchCounter = 0;
+            };
+        }
     };
     fixture.bind = (kind, markup) => {
         const target = document.getElementById('fixture');
         ko.cleanNode(target);
+        fixture.restore?.();
         fixture.collapsed(kind === 'collapsed' ? 'hidden' : 'show');
         fixture.modalShown(kind === 'modal' || kind === 'layout' ? 'show' : 'hidden');
         FarmController.farmingModalTabSelected(kind === 'layout' ? 'farmLayoutView' : 'berryFarmView');
@@ -143,6 +195,11 @@ function bootstrap() {
     fixture.measure = async (milliseconds) => {
         Object.keys(counts).forEach(key => { counts[key] = 0; });
         fixture.attacks = 0;
+        fixture.worked = new Set();
+        if (fixture.mixed) {
+            // 将真实巡田周期的起点对齐到下一帧，覆盖 48 名助手同时工作的峰值。
+            fixture.farming.farms().forEach(farm => farm.hands.hired().forEach(hand => hand.workTicks(hand.workTick - GameConstants.TICK_TIME)));
+        }
         const tickDurations = [];
         const started = performance.now();
         let ticks = 0;
@@ -162,7 +219,7 @@ function bootstrap() {
             attacksPerSecond: fixture.attacks / elapsed * 1000,
             tickMean: tickDurations.reduce((a, b) => a + b, 0) / Math.max(1, ticks),
             tickP95: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] || 0,
-            counts: { ...counts }, domNodes: document.querySelectorAll('*').length };
+            counts: { ...counts }, uniqueAssistants: fixture.worked.size, domNodes: document.querySelectorAll('*').length };
     };
 }
 
@@ -205,12 +262,13 @@ async function main() {
         }
         await page.addScriptTag({ content: browserBundle() });
         await page.evaluate(options => { Object.assign(fixture, options); fixture.initialize(); },
-            { farms: +(process.env.FARM_PERF_FARMS || 1), layout: process.env.FARM_PERF_LAYOUT === '1', empty: process.env.FARM_PERF_EMPTY === '1' });
+            { farms: +(process.env.FARM_PERF_FARMS || 1), layout: process.env.FARM_PERF_LAYOUT === '1', empty: process.env.FARM_PERF_EMPTY === '1', mixed: process.env.FARM_PERF_MIXED === '1' });
         for (const kind of ['collapsed', 'expanded', 'modal', 'layout', 'collapsedAgain']) {
-            const markup = process.env.FARM_PERF_FULL === '1' ? display + modalSource : kind === 'modal' ? modal : display;
+            const full = process.env.FARM_PERF_FULL === '1' || process.env.FARM_PERF_MIXED === '1';
+            const markup = full ? display + modalSource : kind === 'modal' ? modal : display;
             await page.evaluate(({ kind, markup }) => fixture.bind(kind === 'collapsedAgain' ? 'collapsed' : kind, markup), { kind, markup });
             await page.waitForTimeout(100);
-            results[kind] = await page.evaluate(duration => fixture.measure(duration), +(process.env.FARM_PERF_MS || 1800));
+            results[kind] = await page.evaluate(duration => fixture.measure(duration), +(process.env.FARM_PERF_MS || (process.env.FARM_PERF_MIXED === '1' ? 6000 : 1800)));
             console.log(kind, JSON.stringify(results[kind]));
         }
         const expandedRatio = results.expanded.tickMean / results.collapsed.tickMean;
@@ -218,17 +276,27 @@ async function main() {
         console.log(`展开/折叠 tick 耗时比 ${expandedRatio.toFixed(2)}，折叠恢复 ${recovery.toFixed(2)} 次攻击/秒。`);
         const output = path.join(root, 'output/playwright/farm-performance');
         fs.mkdirSync(output, { recursive: true });
-        fs.writeFileSync(path.join(output, 'latest.json'), JSON.stringify({ farms: +(process.env.FARM_PERF_FARMS || 1), results, expandedRatio, errors }, null, 2), 'utf8');
+        fs.writeFileSync(path.join(output, 'latest.json'), JSON.stringify({ farms: +(process.env.FARM_PERF_FARMS || 1), mixed: process.env.FARM_PERF_MIXED === '1', results, expandedRatio, errors }, null, 2), 'utf8');
         assert.deepEqual(errors, [], '性能测量期间不应发生页面异常');
         if (!process.argv.includes('--measure-only')) {
-            assert.ok(results.collapsed.attacksPerSecond >= 16, '隔离基线应接近 20 次攻击/秒');
-            assert.ok(results.expanded.attacksPerSecond >= 16, '展开农场后不应拖慢自动攻击至 16 次/秒以下');
-            assert.ok(results.modal.attacksPerSecond >= 16, '农场详情不应拖慢自动攻击至 16 次/秒以下');
-            assert.ok(results.layout.attacksPerSecond >= 16, '布局页不应拖慢自动攻击至 16 次/秒以下');
-            assert.ok(recovery >= 16, '关闭详情并折叠后应恢复正常自动攻击');
+            const mixed = process.env.FARM_PERF_MIXED === '1';
+            // 同步巡田包含真实工作峰值，以相同负载的折叠基线衡量界面额外影响。
+            const minimumAttacks = mixed ? results.collapsed.attacksPerSecond * 0.8 : 16;
+            assert.ok(results.collapsed.attacks > 0, '折叠基线必须产生自动攻击');
+            if (!mixed) assert.ok(results.collapsed.attacksPerSecond >= 16, '隔离基线应接近 20 次攻击/秒');
+            assert.ok(results.expanded.attacksPerSecond >= minimumAttacks, '展开农场后攻击频率低于验收阈值');
+            assert.ok(results.modal.attacksPerSecond >= minimumAttacks, '农场详情的攻击频率低于验收阈值');
+            assert.ok(results.layout.attacksPerSecond >= minimumAttacks, '布局页的攻击频率低于验收阈值');
+            assert.ok(recovery >= minimumAttacks, '关闭详情并折叠后应恢复正常自动攻击');
             assert.ok(expandedRatio < 4, '展开农场后每 tick 耗时不应达到折叠时的四倍');
             for (const result of Object.values(results)) {
                 assert.equal(result.counts.tooltipEvaluations || 0, 0, '未悬停时不应计算农田格子提示');
+                if (process.env.FARM_PERF_MIXED === '1') {
+                    assert.equal(result.uniqueAssistants, +(process.env.FARM_PERF_FARMS || 1) * 3, '混合布局测量必须覆盖所有已雇用助手的真实工作');
+                    for (const name of ['plantActions', 'harvestActions', 'mulchActions']) {
+                        assert.ok(result.counts[name] > 0, `混合布局测量必须发生实际操作：${name}`);
+                    }
+                }
             }
         }
     } finally {
